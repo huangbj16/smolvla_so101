@@ -1,0 +1,52 @@
+# --- Secrets (never commit) ---
+.env
+.env.*
+*.token
+hf_token*
+.netrc
+.huggingface/
+wandb/settings
+
+# --- Large or regenerable data (datasets and checkpoints live on the HF Hub) ---
+dq_cache.npz
+*.npz
+*.npy
+*.parquet
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.engine
+data/
+datasets/
+outputs/
+checkpoints/
+wandb/
+runs/
+lightning_logs/
+
+# --- Rollout / recording videos (keep them on HF or external backup) ---
+*.mp4
+*.avi
+*.mkv
+*.webm
+
+# --- Python / Jupyter ---
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+Zone.Identifier
+*:Zone.Identifier
