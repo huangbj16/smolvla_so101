@@ -386,5 +386,5 @@ memory sources, GPU pricing, laptop vs. desktop, and SO-101 repeatability.
 1. **Infrastructure** (8 h): Ubuntu dual-boot, LeRobot, envs, lighting control. Step-by-step:
    [Details/ubuntu_env_setup.md](Details/ubuntu_env_setup.md).
 2. **Toolkit-assembly task card** (2 h).
-3. **Phase 0.5 camera test** (4 h, §A.4).
+3. **Phase 0.5 camera test** (4 h, §A.4). Teleop with both cameras: [01](01_setup_robot.md) Step 6 (follower `/dev/ttyACM0`, leader `/dev/ttyACM1`).
 4. **Read RINSE + PSD, then CUPID** (§A.2), plus a summary.
