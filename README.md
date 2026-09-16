@@ -8,7 +8,7 @@ flow-matching action expert, chunking).
 
 | | |
 |---|---|
-| OS | Windows 11 (native — SO-101 motors appear as **COM ports**, no WSL passthrough) |
+| OS | **Ubuntu 24.04** on the RTX 5080 laptop since 2026-09-15 (was Windows 11). Arms: follower `/dev/ttyACM0`, leader `/dev/ttyACM1` |
 | Env | conda env **`lerobot`** (lerobot **0.5.2**, editable install) |
 | lerobot source | `D:\SOARM101-Testing\lerobot\src\lerobot\` |
 | Robot | SO-101 **leader + follower** pair |

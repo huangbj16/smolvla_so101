@@ -184,9 +184,12 @@ print(f"Uploaded -> https://huggingface.co/{MODEL_REPO_ID}")
 
 `lerobot-record` doubles as the rollout runner — pass a `--policy.path` and it runs inference on the
 real robot (recording the rollout so you can review it):
+
+> Ubuntu: blocks marked `powershell` are from the Windows runs. Ports are updated; on Ubuntu swap the `` ` `` / `^` line endings for `\` and use the camera paths from 01.
+
 ```powershell
 lerobot-record ^
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower ^
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower ^
   --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30} }" ^
   --dataset.repo_id=bingjian/so101_eval_pickplace ^
   --dataset.single_task="Pick up the cube and place it in the box" ^
@@ -213,7 +216,7 @@ lerobot-rollout `
   --policy.device=cuda `
   --task="Pick up the blue PCB and place it in the white fixture pocket" `
   --robot.type=so101_follower `
-  --robot.port=COM5 `
+  --robot.port=/dev/ttyACM0 `
   --robot.id=my_follower `
   --robot.cameras="{ camera1: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30} }" `
   --display_data=true

@@ -3,86 +3,94 @@
 Goal: a working teleoperation loop — you move the **leader**, the **follower** mirrors, and a
 camera streams. Everything downstream (data collection, deployment) depends on this.
 
-> Windows note: SO-101 arms connect over USB and appear as **COM ports** (e.g. `COM5`).
-> No WSL/usbipd needed on native Windows. Run everything with `conda activate lerobot` first.
-> Every command has a `--help`; when an arg here differs from your 0.5.2, trust `--help` and the
+> **Ubuntu 24.04 (RTX 5080 laptop), lerobot 0.6.1.** Env install: [Details/ubuntu_env_setup.md](Details/ubuntu_env_setup.md).
+> Run `conda activate lerobot` first. Your user must be in `dialout` (check with `groups`).
+> Every command has a `--help`; when an arg here differs from 0.6.1, trust `--help` and the
 > official guide: https://huggingface.co/docs/lerobot/en/so101
+
+**Your ports (found 2026-09-16):**
+
+| Arm | Port | id |
+|---|---|---|
+| Follower | `/dev/ttyACM0` | `my_follower` |
+| Leader | `/dev/ttyACM1` | `my_leader` |
+
+`ttyACM` numbers follow plug order. **Plug in the follower first, then the leader**, every session. If
+they come up swapped, check `ls -l /dev/serial/by-id/` and use those stable paths instead.
 
 ## Step 0 — plug in one arm at a time
 
-Plug in **only the follower** first (so the port it grabs is unambiguous), then repeat for the leader.
+Plug in **only the follower** first (so the port it grabs is unambiguous), then the leader.
 
 ## Step 1 — find the serial ports
 
-```powershell
+```bash
 lerobot-find-port
+ls -l /dev/ttyACM* /dev/serial/by-id/
 ```
-It lists ports, asks you to unplug the arm, and tells you which COM port disappeared → that's the
-arm's port. Do it once with only the follower plugged, note e.g. `COM5`; then only the leader, note
-e.g. `COM6`. **Write both down.**
+`lerobot-find-port` asks you to unplug the arm and reports which port disappeared. Done: follower
+`/dev/ttyACM0`, leader `/dev/ttyACM1`. If the port vanishes right after plugging in, or the first
+command times out, see the `brltty` / ModemManager fixes in [ubuntu_env_setup §8](Details/ubuntu_env_setup.md).
 
 ## Step 2 — set up the motors (assign IDs)  [needed once per arm, if not already done]
 
-Each Feetech servo needs a unique ID written to it. If you bought a kit that's already ID'd, or you
-already did this, skip. Otherwise:
-```powershell
-lerobot-setup-motors --robot.type=so101_follower --robot.port=COM5
-lerobot-setup-motors --teleop.type=so101_leader  --teleop.port=COM6
+Each Feetech servo needs a unique ID written to it. The arms were already set up on Windows, so skip
+this. Only for a new or replaced motor:
+```bash
+lerobot-setup-motors --robot.type=so101_follower --robot.port=/dev/ttyACM0
+lerobot-setup-motors --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1
 ```
-Follow the prompts (it walks you through connecting motors one by one). Check `--help` for the exact
-flags in 0.5.2.
 
-## Step 3 — find your camera index
+## Step 3 — find your camera paths
 
-```powershell
-lerobot-find-cameras
+```bash
+lerobot-find-cameras opencv
+ls -l /dev/v4l/by-id/
 ```
-It enumerates connected cameras and shows an index/path and resolution for each. Note the index of
-your USB webcam (often `0` or `1`), plus a working `width`/`height`/`fps` (e.g. 640×480 @ 30).
+The built-in webcam takes `/dev/video0–3`, so the C920 (top) and C922 (wrist) get higher numbers. Use
+the `/dev/v4l/by-id/...-video-index0` paths, which don't change with plug order. Apply the wrist-cam
+focus/exposure settings from [ubuntu_env_setup §10](Details/ubuntu_env_setup.md) after each replug.
 
 ## Step 4 — calibrate both arms
 
 Calibration records each joint's range so leader and follower agree on angles. Do **both** arms:
-```powershell
-lerobot-calibrate --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower
-lerobot-calibrate --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader
+```bash
+lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower
+lerobot-calibrate --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader
 ```
-- `--robot.id` / `--teleop.id` name the calibration profile; reuse the **same id** later so your
-  saved calibration is picked up (stored under the lerobot calibration dir).
-- Follow the on-screen prompts: move each joint through its full range, set the rest/zero pose.
+- Reuse the **same ids** later so the saved calibration is picked up
+  (`~/.cache/huggingface/lerobot/calibration/`).
+- Follow the prompts: move each joint through its full range, set the rest/zero pose.
 
 ## Step 5 — test teleoperation (no camera yet)
 
-Confirm the mechanical loop before adding vision:
-```powershell
-lerobot-teleoperate `
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower `
-  --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader
+```bash
+lerobot-teleoperate \
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower \
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader
 ```
-Move the leader arm — the follower should mirror it in real time. If it's mirrored/inverted or a
-joint is off, re-run calibration for that arm. (`^` is the PowerShell/cmd line-continuation; you can
-also put it all on one line.)
+Move the leader — the follower should mirror it. If a joint is inverted or off, recalibrate that arm.
 
-## Step 6 — teleoperation WITH the camera
+## Step 6 — teleoperation WITH both cameras
 
-Add the camera so you see what the policy will see. Camera config is a small dict; verify the exact
-syntax with `lerobot-teleoperate --help` (look for `--robot.cameras`):
-```powershell
-lerobot-teleoperate ^
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower ^
-  --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader ^
-  --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30} }" ^
+```bash
+TOP=/dev/v4l/by-id/<C920>-video-index0
+WRIST=/dev/v4l/by-id/<C922>-video-index0
+
+lerobot-teleoperate \
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower \
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader \
+  --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30} }" \
   --display_data=true
 ```
-- `index_or_path: 0` → the webcam index from Step 3.
-- `front` is a camera name you choose; remember it — the **same name must be used at record and
-  train time** so the model's image key is consistent.
-- `--display_data=true` opens a live view (uses rerun); drop it if it's not installed.
+- `top` / `wrist` are the camera names (see 06). The **same names must be used at record and train
+  time** so the image keys match.
+- `--display_data=true` opens a live rerun view; drop it if rerun isn't installed.
 
 ## Done when
 
 - Leader → follower mirroring is smooth and correctly oriented.
-- The camera view shows up and tracks your scene.
-- You noted: follower port, leader port, camera index, and the `--robot.id`/`--teleop.id` you used.
+- Both camera views show up and track the scene.
+- You noted: ports, camera paths, and the ids above.
 
 Keep these values handy — every later command reuses them. Next: **[02_read_source_code.md](02_read_source_code.md)**.

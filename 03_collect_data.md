@@ -4,8 +4,9 @@ You'll record episodes of you teleoperating the follower (via the leader) to do 
 the camera streaming. These `(observation, action-chunk)` windows become SmolVLA's training data —
 exactly the "sliding windows of teleop trajectories" from your knowledge notes.
 
-> Prereq: [01_setup_robot.md](01_setup_robot.md) done — you have follower/leader COM ports, the
-> camera index, and calibration ids. `conda activate lerobot` first.
+> Prereq: [01_setup_robot.md](01_setup_robot.md) done — you have the follower (`/dev/ttyACM0`) / leader (`/dev/ttyACM1`) ports, the
+> camera paths, and calibration ids. `conda activate lerobot` first.
+> Ubuntu: blocks marked `powershell` are from the Windows runs. Ports are updated; on Ubuntu swap the `` ` `` / `^` line endings for `\` and use the camera paths from 01.
 
 ## The task (v1 — see [00_end_to_end_arc.md](00_end_to_end_arc.md) § ① for the full spec)
 
@@ -19,8 +20,8 @@ generalization axis = far less data needed and a real chance of learning on mode
 
 ```powershell
 lerobot-record `
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower `
-  --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader `
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower `
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader `
   --robot.cameras="{ front: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30} }" `
   --dataset.repo_id=HALDijkstraaa/so101_pick_place_pcb `
   --dataset.single_task="Pick up the blue PCB and place it in the white fixture pocket" `
@@ -36,8 +37,8 @@ lerobot-record `
 update command with two cameras (top-down and wrist):
 ```powershell
 lerobot-record `
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower `
-  --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader `
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower `
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader `
   --robot.cameras="{ camera1: {type: opencv, index_or_path: 2, width: 640, height: 480, fps: 30}, camera2: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30} }" `
   --dataset.repo_id=HALDijkstraaa/so101_pick_place_pcb_v2_test `
   --dataset.single_task="Pick up the blue PCB and place it in the white fixture pocket" `
@@ -92,7 +93,7 @@ lerobot-dataset-viz --repo-id=HALDijkstraaa/so101_pick_place_pcb
 Replay an episode on the robot (sanity-check the recorded actions actually do the task):
 ```powershell
 lerobot-replay `
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower `
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower `
   --dataset.repo_id=HALDijkstraaa/so101_pick_place_pcb `
   --dataset.episode=0
 ```
@@ -121,7 +122,7 @@ multiplies into 50 wasted episodes. Record **~5**, then run the gate below. It's
 **3. `lerobot-replay --dataset.episode=0` on the robot (the open-loop check):**
 - [ ] Replaying the *recorded actions* reproduces the task (grabs the connector, places, seats).
 - If replay **fails**, the problem is hardware/calibration/recording — **not** anything you'll fix by
-  collecting more data. Re-check calibration (`--robot.id=my_follower`) and COM ports before continuing.
+  collecting more data. Re-check calibration (`--robot.id=my_follower`) and ports before continuing.
   (This is the same "remove the policy, replay a known-good episode" isolation move from the debugging
   framework — it splits "is it the data or the robot?" in one test.)
 
@@ -133,7 +134,7 @@ multiplies into 50 wasted episodes. Record **~5**, then run the gate below. It's
 | jittery action traces | moved too fast | slow down to a 30 Hz-trackable speed |
 | flat idle stretches | dwelling/pausing | keep moving; trim start/end idle |
 | gripper opens/closes repeatedly | grip fumble saved | enforce one-shot grip; re-record on any slip |
-| replay misses the task | calibration/port drift | recalibrate; verify `COM5/COM6`, camera index `1` |
+| replay misses the task | calibration/port drift | recalibrate; verify `/dev/ttyACM0` / `/dev/ttyACM1`, camera paths |
 
 **Decision gate:** 5 clean + replay works → continue to 50, spot-checking every ~10 episodes. Any
 systematic issue → fix the setup first; a clean 20 beats a messy 50.

@@ -14,6 +14,7 @@ via wide position variation, and (c) adding **negatives** so "no object → don'
 > Prereqs: [01_setup_robot.md](01_setup_robot.md), [03_collect_data.md](03_collect_data.md) done.
 > `conda activate lerobot`. Reuse your ports/camera index/ids. Eval protocol lives in
 > [05_eval_and_design.md](05_eval_and_design.md).
+> Ubuntu: blocks marked `powershell` are from the Windows runs. Ports are updated; on Ubuntu swap the `` ` `` / `^` line endings for `\` and use the camera paths from 01. `--dataset.root` paths below are Windows paths too.
 
 ---
 
@@ -94,8 +95,8 @@ tries to write into the read-only Hub snapshot cache and aborts with
 ### Record a positive batch (one spot = one session, resume on)
 ```powershell
 lerobot-record `
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower `
-  --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader `
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower `
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader `
   --robot.cameras="{ front: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30} }" `
   --dataset.repo_id=HALDijkstraaa/so101_pick_place_pcb_20260721_183543 `
   --dataset.root="C:/Users/bingjian/.cache/huggingface/lerobot/HALDijkstraaa/so101_pick_place_pcb_20260721_183543" `
@@ -113,8 +114,8 @@ lerobot-record `
 ### Record a negatives batch (shorter episodes, no PCB)
 ```powershell
 lerobot-record `
-  --robot.type=so101_follower --robot.port=COM5 --robot.id=my_follower `
-  --teleop.type=so101_leader  --teleop.port=COM6 --teleop.id=my_leader `
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower `
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader `
   --robot.cameras="{ front: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30} }" `
   --dataset.repo_id=HALDijkstraaa/so101_pick_place_pcb_20260721_183543 `
   --dataset.root="C:/Users/bingjian/.cache/huggingface/lerobot/HALDijkstraaa/so101_pick_place_pcb_20260721_183543" `

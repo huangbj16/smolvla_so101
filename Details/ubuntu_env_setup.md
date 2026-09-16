@@ -119,9 +119,10 @@ lerobot-find-port
 ls -l /dev/serial/by-id/
 ```
 
-- **Use the `/dev/serial/by-id/...` paths**, not `/dev/ttyACM0/1`. The ACM numbers swap depending on
-  plug order; the by-id name is tied to the board's serial number, so follower and leader can't be
-  mixed up between sessions.
+**Found 2026-09-16: follower `/dev/ttyACM0`, leader `/dev/ttyACM1`.** The docs use these.
+
+- ACM numbers follow plug order, so **plug in the follower before the leader**. If they swap, use the
+  `/dev/serial/by-id/...` paths, which are tied to each board's serial number.
 - **Port disappears a second after plugging in:** check `sudo dmesg | tail`. If `brltty` claimed it, run
   `sudo apt remove brltty`.
 - **First commands after plugging in time out:** ModemManager is probing the port. Run
@@ -132,8 +133,8 @@ ls -l /dev/serial/by-id/
 Keep the same IDs as on Windows (`my_follower`, `my_leader`) so they match the dataset metadata:
 
 ```bash
-lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/serial/by-id/<follower> --robot.id=my_follower
-lerobot-calibrate --teleop.type=so101_leader  --teleop.port=/dev/serial/by-id/<leader>   --teleop.id=my_leader
+lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower
+lerobot-calibrate --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader
 ```
 
 Files land in `~/.cache/huggingface/lerobot/calibration/`. **Copy them into the project with the date**
