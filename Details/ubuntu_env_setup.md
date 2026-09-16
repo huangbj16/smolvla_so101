@@ -148,14 +148,18 @@ The built-in HP webcam takes `/dev/video0–3`, so the C920/C922 get higher numb
 ```bash
 lerobot-find-cameras opencv
 ls -l /dev/v4l/by-id/
-v4l2-ctl -d /dev/v4l/by-id/<C922>-video-index0 --list-ctrls
+v4l2-ctl -d /dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 --list-ctrls
 ```
 
 Reapply the 06 wrist-cam settings on Linux (the Windows percentages don't map 1:1):
 
 ```bash
-v4l2-ctl -d <C922> -c focus_automatic_continuous=0 -c focus_absolute=110 \
+TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0
+WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0
+
+v4l2-ctl -d $WRIST -c focus_automatic_continuous=0 -c focus_absolute=110 \
                    -c auto_exposure=1 -c exposure_time_absolute=83
+v4l2-ctl -d $TOP   -c focus_automatic_continuous=0 -c focus_absolute=0 -c auto_exposure=3
 ```
 
 - **Focus:** 0–255 in steps of 5; 44% ≈ 110–115.
@@ -163,7 +167,7 @@ v4l2-ctl -d <C922> -c focus_automatic_continuous=0 -c focus_absolute=110 \
 - **ISO 600:** has no v4l2 equivalent. Adjust `gain` until the image brightness matches old frames.
 - **Top C920:** autofocus off, `focus_absolute=0`, auto exposure.
 - **Before recording:** these settings reset on replug, and OpenCV can reset some of them when it opens
-  the camera. Check with `v4l2-ctl -d <cam> -C focus_absolute,exposure_time_absolute` while LeRobot is
+  the camera. Check with `v4l2-ctl -d $WRIST -C focus_absolute,exposure_time_absolute` while LeRobot is
   running. Store the commands in a script.
 
 Then the gate from 08 week 1: `lerobot-teleoperate` works with both cameras.

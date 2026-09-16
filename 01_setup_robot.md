@@ -48,7 +48,14 @@ lerobot-find-cameras opencv
 ls -l /dev/v4l/by-id/
 ```
 The built-in webcam takes `/dev/video0–3`, so the C920 (top) and C922 (wrist) get higher numbers. Use
-the `/dev/v4l/by-id/...-video-index0` paths, which don't change with plug order. Apply the wrist-cam
+the `/dev/v4l/by-id/...-video-index0` paths, which don't change with plug order.
+
+| Camera | Path (found 2026-09-16) |
+|---|---|
+| Top (C920) | `/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0` (now `video6`) |
+| Wrist (C922) | `/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0` (now `video4`) |
+
+Always use `index0`; `index1` is the metadata node and won't stream. Apply the wrist-cam
 focus/exposure settings from [ubuntu_env_setup §10](Details/ubuntu_env_setup.md) after each replug.
 
 ## Step 4 — calibrate both arms
@@ -74,8 +81,8 @@ Move the leader — the follower should mirror it. If a joint is inverted or off
 ## Step 6 — teleoperation WITH both cameras
 
 ```bash
-TOP=/dev/v4l/by-id/<C920>-video-index0
-WRIST=/dev/v4l/by-id/<C922>-video-index0
+TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0
+WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0
 
 lerobot-teleoperate \
   --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower \
