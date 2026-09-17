@@ -151,23 +151,31 @@ ls -l /dev/v4l/by-id/
 v4l2-ctl -d /dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 --list-ctrls
 ```
 
-Reapply the 06 wrist-cam settings on Linux (the Windows percentages don't map 1:1):
+**Current procedure: Cameractrls presets.** Settings are saved as presets in the Cameractrls app
+(installed from Flathub as `hu.irl.cameractrls`). The cameras forget their settings when unplugged, so
+every session:
 
-```bash
-TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0
-WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0
+1. Plug in the cameras, then run `flatpak run hu.irl.cameractrls`.
+2. Pick **HD Pro Webcam C920** (top) and load **preset 1**. Pick **C922 Pro Stream Webcam** (wrist) and
+   load **preset 2**.
+3. Start teleop ([01](../01_setup_robot.md) Step 6). In the rerun viewer, the gripper tip must be sharp in
+   `wrist` and `top` must not be too dark. If not, adjust in Cameractrls while teleop runs (don't press
+   its preview button; the camera can only stream to one program) and re-save the preset.
 
-v4l2-ctl -d $WRIST -c focus_automatic_continuous=0 -c focus_absolute=110 \
-                   -c auto_exposure=1 -c exposure_time_absolute=83
-v4l2-ctl -d $TOP   -c focus_automatic_continuous=0 -c focus_absolute=0 -c auto_exposure=3
-```
+What the presets set (from the 06 settings):
+- **Wrist C922:** autofocus off, manual focus close enough for a sharp gripper tip (0–250, higher =
+  closer); manual exposure ≈ 83 (1/120 s, in 100 µs units) against motion blur; raise gain if dark.
+- **Top C920:** autofocus off, focus 0; brighter via brightness/gain or manual exposure (≤ ~300 at 30 fps).
+- **Both:** dynamic framerate off, so the cameras hold 30 fps in dim light.
 
-- **Focus:** 0–255 in steps of 5; 44% ≈ 110–115.
-- **Exposure:** set in 100 µs units, so 1/120 s = 83.
-- **ISO 600:** has no v4l2 equivalent. Adjust `gain` until the image brightness matches old frames.
-- **Top C920:** autofocus off, `focus_absolute=0`, auto exposure.
-- **Before recording:** these settings reset on replug, and OpenCV can reset some of them when it opens
-  the camera. Check with `v4l2-ctl -d $WRIST -C focus_absolute,exposure_time_absolute` while LeRobot is
-  running. Store the commands in a script.
+Checks:
+- **Blank preview in Cameractrls:** usually the wrong device (the HP webcam is video0–3). To test streaming
+  on its own, close LeRobot and run `ffplay -f v4l2 -input_format mjpeg -video_size 640x480 -framerate 30 <path>`
+  for each camera, both at once.
+- **Before recording:** OpenCV can reset some settings when LeRobot opens the camera. Check with
+  `v4l2-ctl -d <path> -C focus_absolute,exposure_time_absolute,gain` while LeRobot is running.
+- **Fallback without the app:** `v4l2-ctl -c ...`. Turn the auto modes off in one command
+  (`focus_automatic_continuous=0 auto_exposure=1`) and set manual values in a second; in one combined
+  command the manual values fail with "Permission denied".
 
 Then the gate from 08 week 1: `lerobot-teleoperate` works with both cameras.

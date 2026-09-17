@@ -55,8 +55,8 @@ the `/dev/v4l/by-id/...-video-index0` paths, which don't change with plug order.
 | Top (C920) | `/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0` (now `video6`) |
 | Wrist (C922) | `/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0` (now `video4`) |
 
-Always use `index0`; `index1` is the metadata node and won't stream. Apply the wrist-cam
-focus/exposure settings from [ubuntu_env_setup §10](Details/ubuntu_env_setup.md) after each replug.
+Always use `index0`; `index1` is the metadata node and won't stream. Camera settings (focus, exposure)
+come from Cameractrls presets, loaded in Step 6. Setup details: [ubuntu_env_setup §10](Details/ubuntu_env_setup.md).
 
 ## Step 4 — calibrate both arms
 
