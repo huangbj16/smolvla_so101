@@ -187,27 +187,60 @@ over 10 taped positions. Full card (success stages, fixed factors, episode proto
 
 ### Phase 0.5 — Second-camera test (week 1, 4 h)
 
-**Hypothesis.** Some states look alike from the top camera but differ from the gripper camera. With both
-views:
-- **Visual state diversity rises:** aliased states separate.
-- **Action divergence falls:** nearest neighbors are truly similar states.
+**Question.** Does adding the wrist (gripper) camera to the top camera make the observation tell apart
+states that need different actions? Extends 07 §3.
 
-This extends 07 §3.
+**Data (recorded 2026-09-17).** 50 clean (D0) episodes, one operator, 10 cylinder positions × 5, both
+cameras, 25 s on average (628–880 frames).
+- Hub: [HALDijkstraaa/so101_toolkit_cylinder_20260917_165544](https://huggingface.co/datasets/HALDijkstraaa/so101_toolkit_cylinder_20260917_165544)
+- Local copy used for analysis: `~/.cache/huggingface/lerobot/HALDijkstraaa/so101_toolkit_cylinder_20260917_165544`
+- `..._163836` (5 episodes) and `..._164823` (3 episodes) in the same folder are test runs; don't use them.
 
-- **Data:** 50 toolkit-task episodes, recorded with both cameras (2 h): 5 rounds × 10 positions, each
-  round in a shuffled order. Record one round per run. Command below.
-- **Analysis (2 h):** paired. The same episodes are embedded three ways: top only, gripper only, top +
-  gripper. Each view gets DINOv2 embeddings, L2-normalized, then concatenated.
-  - For each set, compute visual diversity and k-NN action divergence (k = 5, 10, 20). Robot-state
-    divergence is the reference.
-  - **Control:** top + a *copy* of top, so dimensionality alone can't explain a drop.
-  - **Aliasing count:** frame pairs close in top-cam space but far in gripper-cam space, with different
-    actions.
-- **Pass:** top + gripper divergence falls below top-only by more than the control does, at every k.
+**Hypotheses.** All episodes are clean demos from one operator. So when similar-looking frames have
+different actions, the cause is mostly what the camera can't see, not inconsistent teleoperation.
+1. **H-a — Wrist beats top where precision matters.** In the grasp and insertion phases, wrist-only action
+   divergence is lower than top-only. *Why:* the next move depends on the gripper's offset from the
+   cylinder or hole, a few mm. That fills the wrist image but is a few pixels in the top image, and the arm
+   often hides it from above.
+2. **H-b — Top beats wrist during reach and transport.** In the first part of the episode, wrist-only
+   divergence is higher than top-only. *Why:* before the cylinder is in the wrist view, wrist frames show
+   similar table surface for all 10 positions, so they can't tell which way to go. The top view shows
+   where the cylinder is.
+3. **H-c — The two views complement each other (the pass test).** Top + wrist has lower divergence than
+   either view alone, over the whole episode, at every k. The drop is larger than for the control (top +
+   wrist embeddings shuffled between frames). *Why:* following H-a and H-b, each view resolves the
+   ambiguity the other can't. The shuffled control has the same size and value range but no matching
+   information, so it can't help.
+4. **H-d — Aliasing exists and sits in the fine phases.** Some frame pairs from different episodes are close
+   in top space but far in wrist space, with different actions. They cluster in grasp and insertion.
+   *Why:* same reasoning as H-a. Showing these pairs side by side is the direct evidence.
+5. **H-e — Joint state alone is ambiguous at the start.** Robot-state divergence is highest early in the
+   episode, where top-camera divergence is low. *Why:* every episode starts from the same home pose, but
+   the cylinder is in one of 10 places. The joints can't know where to go; the top camera can. Later, the
+   pose itself mostly sets the action, so state divergence falls. State is a reference, not a competitor.
+6. **H-f — Wrist frames are more varied.** Visual diversity is higher for wrist than top. *Why:* the wrist
+   camera moves with the arm, so its whole image changes; the top view is mostly a static scene. Treat
+   this as descriptive only: raw cosine distances aren't on the same scale across two cameras.
 
-**Recording (lerobot 0.6.1).** First load the camera presets and check the images ([01](01_setup_robot.md)
-Step 6). Round 1 creates the dataset; for rounds 2–5 add `--resume=true` (then `num_episodes` means
-episodes *added*). Keys: **→** ends the episode early, **←** re-records it, **Esc** stops.
+**Analysis (notebook [phase05_second_camera.ipynb](phase05_second_camera.ipynb)).** Paired: the same
+frames are embedded as top, wrist, top + wrist and controls, with DINOv2, L2-normalized, then concatenated.
+Divergence is reported at k = 5, 10, 20, by episode phase, with bootstrap intervals over episodes.
+Changes from the 07 notebook:
+- **Trim idle frames:** static frames at the start and end of each episode are cut before sampling.
+- **Neighbors from other episodes only:** neighbors from the same episode are nearly identical frames a few
+  hundredths of a second apart, and would make every space look consistent.
+- **Action = where the arm goes next** (commanded position 10 frames ahead minus the current position),
+  not the absolute command. The absolute command is almost the current pose, so any space that
+  encodes the pose would look consistent. Absolute actions are still reported, to compare with 07.
+- **Control = shuffled wrist, not a copy of top.** With normalized embeddings, top + a copy of top has
+  exactly the same neighbors as top, so it would always "pass". The copy is kept only as a sanity check.
+
+**Pass:** at every k, with episode-bootstrap intervals above zero, top + wrist divergence is (1) lower
+than top-only and (2) lower than top + shuffled wrist. A test run showed shuffled dims *raise* divergence,
+so subtracting the control's change from the gain would make the test too easy.
+
+**Recording (lerobot 0.6.1)**, as run. First load the camera presets and check the images
+([01](01_setup_robot.md) Step 6). Keys: **→** ends the episode early, **←** re-records it, **Esc** stops.
 
 ```bash
 TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0
@@ -217,12 +250,11 @@ lerobot-record \
   --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower \
   --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader \
   --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" \
-  --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_p05 \
-  --dataset.no_stamp=true \
-  --dataset.single_task="Pick up the white cylinder and place it in the top-left hole of the black fixture" \
-  --dataset.num_episodes=10 \
+  --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder \
+  --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" \
+  --dataset.num_episodes=50 \
   --dataset.episode_time_s=30 \
-  --dataset.reset_time_s=15 \
+  --dataset.reset_time_s=3 \
   --dataset.fps=30 \
   --dataset.push_to_hub=true \
   --dataset.private=true \
@@ -232,9 +264,10 @@ lerobot-record \
 Changes from the 03 command:
 - **Ports and cameras:** Ubuntu ports, `/dev/v4l/by-id` paths, names `top`/`wrist`.
 - **MJPG:** `fourcc: MJPG` so two cameras fit on USB bandwidth.
-- **`no_stamp=true`:** 0.6.1 appends a date-time tag to `repo_id` by default. That would give each round
-  its own dataset name, and `--resume` would need the stamped one.
-- **Timing:** 30 s episodes to match the success window; 15 s reset to move the cylinder.
+- **One run of 50 episodes.** Without `--dataset.no_stamp`, 0.6.1 appends the start time to `repo_id`, so
+  the dataset is `so101_toolkit_cylinder_20260917_165544`. To add episodes later, pass that full name with
+  `--resume=true`.
+- **Timing:** 30 s episodes to match the success window; 3 s reset.
 
 ### Dials: sim and real data with known defects
 

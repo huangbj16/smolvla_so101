@@ -9,7 +9,7 @@ fixed.
 Pick up the **white cylinder** from the table and place it in the **top-left hole** of the **black fixture**.
 
 Task string (use verbatim in every recording):
-`Pick up the white cylinder and place it in the top-left hole of the black fixture`
+`Pick up the white cylinder and place it in the hole of the black fixture` (as recorded 2026-09-17)
 
 ## Success
 
@@ -39,13 +39,14 @@ Task string (use verbatim in every recording):
   stops at 30 s regardless.
 - **Failed demo:** press **←** to re-record it right away. For dial data later, keep failures and log
   them instead.
-- **Reset:** place the cylinder on the next scheduled position during the reset window (15 s).
+- **Reset:** place the cylinder on the next scheduled position during the reset window (3 s, as recorded).
 
 ## Phase 0.5 schedule: 50 episodes
 
 - **5 rounds × 10 positions.** Each round visits P1–P10 once, in a shuffled order written down before
   recording. This spreads any drift over the day (lighting, fatigue) evenly across positions.
-- One `lerobot-record` run per round (`num_episodes=10`), so episode indices line up with the list.
+- Recorded 2026-09-17 in one `lerobot-record` run of 50 episodes:
+  `HALDijkstraaa/so101_toolkit_cylinder_20260917_165544`.
 - Check with the first round that the cylinder stays visible in the wrist camera during the approach.
 
 ## Per-episode log
