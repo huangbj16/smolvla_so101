@@ -90,6 +90,10 @@ lerobot-teleoperate \
   --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30} }" \
   --display_data=true
 ```
+- **Camera settings:** open the Cameractrls app (`flatpak run hu.irl.cameractrls`) and load **preset 1
+  for the C920** (top) and **preset 2 for the C922** (wrist). Settings reset on replug, so do this every
+  session. Then check the rerun viewer: both images must be clear (gripper tip sharp in `wrist`, `top`
+  not too dark) before you continue.
 - `top` / `wrist` are the camera names (see 06). The **same names must be used at record and train
   time** so the image keys match.
 - `--display_data=true` opens a live rerun view; drop it if rerun isn't installed.
