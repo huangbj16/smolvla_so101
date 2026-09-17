@@ -178,6 +178,13 @@ and caveats: [Details/robomimic_dataset.md](Details/robomimic_dataset.md).
 
 ## A.4 — Designs
 
+### Real task: toolkit assembly (task card)
+
+Pick up the white cylinder from the table and place it upright in the top-left hole of the fixed black
+fixture. Success means it is fully seated and released within 30 s. Only the cylinder's position varies,
+over 10 taped positions. Full card (success stages, fixed factors, episode protocol, log format):
+[Details/toolkit_task_card.md](Details/toolkit_task_card.md).
+
 ### Phase 0.5 — Second-camera test (week 1, 4 h)
 
 **Hypothesis.** Some states look alike from the top camera but differ from the gripper camera. With both
@@ -187,7 +194,8 @@ views:
 
 This extends 07 §3.
 
-- **Data:** ~30–40 toolkit-task episodes, recorded with both cameras (2 h).
+- **Data:** 50 toolkit-task episodes, recorded with both cameras (2 h): 5 rounds × 10 positions, each
+  round in a shuffled order. Record one round per run. Command below.
 - **Analysis (2 h):** paired. The same episodes are embedded three ways: top only, gripper only, top +
   gripper. Each view gets DINOv2 embeddings, L2-normalized, then concatenated.
   - For each set, compute visual diversity and k-NN action divergence (k = 5, 10, 20). Robot-state
@@ -196,6 +204,37 @@ This extends 07 §3.
   - **Aliasing count:** frame pairs close in top-cam space but far in gripper-cam space, with different
     actions.
 - **Pass:** top + gripper divergence falls below top-only by more than the control does, at every k.
+
+**Recording (lerobot 0.6.1).** First load the camera presets and check the images ([01](01_setup_robot.md)
+Step 6). Round 1 creates the dataset; for rounds 2–5 add `--resume=true` (then `num_episodes` means
+episodes *added*). Keys: **→** ends the episode early, **←** re-records it, **Esc** stops.
+
+```bash
+TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0
+WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0
+
+lerobot-record \
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower \
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader \
+  --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" \
+  --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_p05 \
+  --dataset.no_stamp=true \
+  --dataset.single_task="Pick up the white cylinder and place it in the top-left hole of the black fixture" \
+  --dataset.num_episodes=10 \
+  --dataset.episode_time_s=30 \
+  --dataset.reset_time_s=15 \
+  --dataset.fps=30 \
+  --dataset.push_to_hub=true \
+  --dataset.private=true \
+  --display_data=true
+```
+
+Changes from the 03 command:
+- **Ports and cameras:** Ubuntu ports, `/dev/v4l/by-id` paths, names `top`/`wrist`.
+- **MJPG:** `fourcc: MJPG` so two cameras fit on USB bandwidth.
+- **`no_stamp=true`:** 0.6.1 appends a date-time tag to `repo_id` by default. That would give each round
+  its own dataset name, and `--resume` would need the stamped one.
+- **Timing:** 30 s episodes to match the success window; 15 s reset to move the cylinder.
 
 ### Dials: sim and real data with known defects
 
@@ -328,7 +367,7 @@ This extends 07 §3.
 
 **Settled:**
 - **Operator:** you (data collection).
-- **Real task:** toolkit assembly, defined in week 1.
+- **Real task:** toolkit assembly: white cylinder into the fixture's top-left hole ([task card](Details/toolkit_task_card.md)).
 - **π0.5:** sim + real on the 5080.
 - **Cloud:** 4090 + A100.
 - **Rater:** available.
@@ -385,6 +424,6 @@ memory sources, GPU pricing, laptop vs. desktop, and SO-101 repeatability.
 
 1. **Infrastructure** (8 h): Ubuntu dual-boot, LeRobot, envs, lighting control. Step-by-step:
    [Details/ubuntu_env_setup.md](Details/ubuntu_env_setup.md).
-2. **Toolkit-assembly task card** (2 h).
+2. **Toolkit-assembly task card** (2 h). Done: [Details/toolkit_task_card.md](Details/toolkit_task_card.md).
 3. **Phase 0.5 camera test** (4 h, §A.4). Teleop with both cameras: [01](01_setup_robot.md) Step 6 (follower `/dev/ttyACM0`, leader `/dev/ttyACM1`).
 4. **Read RINSE + PSD, then CUPID** (§A.2), plus a summary.
