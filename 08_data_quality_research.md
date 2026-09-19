@@ -20,7 +20,7 @@ The rest now lives in [09](09_home_deployment_and_hardware.md):
 
 | ID | Question | When |
 |---|---|---|
-| **C1** Second camera | Does adding the gripper camera raise visual state diversity and lower action divergence? | Week 1 |
+| **C1** Second camera | Does adding the gripper camera raise visual state diversity and lower action divergence? | Week 1 — [done, passed](Details/phase05_camera_test_results.md) |
 | **Q0** Defects | Which data defects (jerky, hesitant, fumbled, inconsistent) hurt closed-loop success, and by how much? | Sim wk 3–5 · real wk 6–7 |
 | **Q1** Ranking | Does training on the top-N episodes by metric M beat random-N and bottom-N? | Sim wk 3–5 · real wk 6–7 |
 | **Q2** Policy transfer | Do Q0/Q1 hold across ACT, SmolVLA and π0.5? | Sim wk 3–5 · real wk 6–7 |
@@ -238,6 +238,12 @@ Changes from the 07 notebook:
 **Pass:** at every k, with episode-bootstrap intervals above zero, top + wrist divergence is (1) lower
 than top-only and (2) lower than top + shuffled wrist. A test run showed shuffled dims *raise* divergence,
 so subtracting the control's change from the gain would make the test too easy.
+
+**Result (2026-09-19): C1 passes — the wrist camera helps — but the surprises are bigger than the result.**
+The top camera, not the wrist camera, is the aliased view (it loses to wrist and even to joint state in
+every phase but grasp/insert), and top+wrist beats wrist alone by only 0.023. Per-phase numbers are
+confounded by action scale, so H-a/H-b stay provisional. Full numbers, verdicts per hypothesis and
+reasoning: [Details/phase05_camera_test_results.md](Details/phase05_camera_test_results.md).
 
 **Recording (lerobot 0.6.1)**, as run. First load the camera presets and check the images
 ([01](01_setup_robot.md) Step 6). Keys: **→** ends the episode early, **←** re-records it, **Esc** stops.
