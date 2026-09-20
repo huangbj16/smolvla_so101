@@ -296,7 +296,10 @@ appears.
 # Caveats
 
 - One operator, one session, clean (D0) demos only: this is about observability, not operator consistency.
-- No per-episode position log, so nothing separates the 10 cylinder positions.
+- No per-episode position log was kept, but the recording order recovers it: episodes were collected
+  one position at a time, `ep 0-4 = P1 … 45-49 = P10`. A per-position breakdown is therefore possible,
+  with the caveat that **position is confounded with session time**. Nothing in the results above is
+  broken down by position, so the conclusions stand.
 - Phases are defined from the gripper signal, which makes "the wrist camera predicts the phase" partly
   circular.
 - Bootstrap intervals resample episodes but reuse fixed neighbor sets, so they are slightly optimistic.

@@ -43,9 +43,17 @@ Task string (use verbatim in every recording):
 
 ## Phase 0.5 schedule: 50 episodes
 
-- **5 rounds × 10 positions.** Each round visits P1–P10 once, in a shuffled order written down before
-  recording. This spreads any drift over the day (lighting, fatigue) evenly across positions.
-- Recorded 2026-09-17 in one `lerobot-record` run of 50 episodes:
+- **As recorded (2026-09-17): 10 position blocks × 5 episodes**, one position at a time, P1 through P10
+  in order — *not* the shuffled rounds this card originally proposed. Episode index maps to position
+  directly: `ep 0-4 = P1 · 5-9 = P2 · … · 45-49 = P10`.
+- **Consequence — position is confounded with session time.** Anything that drifted over the recording
+  session (lighting, operator fatigue) varies with position index, so a per-position result cannot be
+  separated from a time-of-session result. It also breaks lerobot's default train/eval split, which holds
+  out the last episodes and would therefore hold out all of P10: see
+  [phase06_camera_ablation_training.md §2](phase06_camera_ablation_training.md).
+- **For the next collection, shuffle**: 5 rounds visiting P1–P10 once each in a written-down shuffled
+  order, so drift spreads evenly across positions.
+- Recorded in one `lerobot-record` run of 50 episodes:
   `HALDijkstraaa/so101_toolkit_cylinder_20260917_165544`.
 - Check with the first round that the cylinder stays visible in the wrist camera during the approach.
 

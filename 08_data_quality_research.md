@@ -191,7 +191,8 @@ over 10 taped positions. Full card (success stages, fixed factors, episode proto
 **Question.** Does adding the wrist (gripper) camera to the top camera make the observation tell apart
 states that need different actions? Extends 07 §3.
 
-**Data (recorded 2026-09-17).** 50 clean (D0) episodes, one operator, 10 cylinder positions × 5, both
+**Data (recorded 2026-09-17).** 50 clean (D0) episodes, one operator, 10 cylinder positions × 5
+recorded in position blocks (`ep 0-4 = P1 … 45-49 = P10`, so position is confounded with session time), both
 cameras, 25 s on average (628–880 frames).
 - Hub: [HALDijkstraaa/so101_toolkit_cylinder_20260917_165544](https://huggingface.co/datasets/HALDijkstraaa/so101_toolkit_cylinder_20260917_165544)
 - Local copy used for analysis: `~/.cache/huggingface/lerobot/HALDijkstraaa/so101_toolkit_cylinder_20260917_165544`
@@ -288,9 +289,14 @@ on the robot. It is also the first test of whether action divergence predicts po
 
 Masking a camera at inference on a single jointly-trained policy does **not** work: in lerobot's ACT each
 camera adds ~300 tokens to one encoder sequence, so dropping one is an out-of-distribution input rather
-than an ablation. Measured on the 5080 laptop, each 100k-step run takes ~3.7 h (batch 8, 3.5 of 16 GiB),
-so all three fit in one overnight and no cloud GPU is needed; the bottleneck is the ~90 interleaved
-robot trials.
+than an ablation. Measured on the 5080 laptop at batch 8: 72 ms/step single-camera, 134 ms/step with both,
+so all three 60k-step runs take **~4.6 h sequentially** and no cloud GPU is needed. Training is GPU-bound,
+so larger batches and parallel runs both buy nothing (three concurrent runs finish 8% *later*).
+
+Pass 1 is one seed and 30 rollouts, aimed at the **emergent behavior** of a top-only vs wrist-only
+policy rather than at success rates; the statistical comparison is a later pass. Note the run book also
+fixes the train/eval split: episodes were recorded in position blocks, so lerobot's default "last 5"
+holdout would have removed position P10 from training entirely.
 
 Full run book — held-fixed table, step-by-step training scripts, eval protocol, pre-registered
 predictions: [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
