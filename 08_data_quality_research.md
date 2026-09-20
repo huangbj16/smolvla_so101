@@ -21,6 +21,7 @@ The rest now lives in [09](09_home_deployment_and_hardware.md):
 | ID | Question | When |
 |---|---|---|
 | **C1** Second camera | Does adding the gripper camera raise visual state diversity and lower action divergence? | Week 1 — [done, passed](Details/phase05_camera_test_results.md) |
+| **C1b** Camera ablation | Does the wrist camera actually raise ACT success rate, and does divergence predict it? | Week 2 — [run book](Details/phase06_camera_ablation_training.md) |
 | **Q0** Defects | Which data defects (jerky, hesitant, fumbled, inconsistent) hurt closed-loop success, and by how much? | Sim wk 3–5 · real wk 6–7 |
 | **Q1** Ranking | Does training on the top-N episodes by metric M beat random-N and bottom-N? | Sim wk 3–5 · real wk 6–7 |
 | **Q2** Policy transfer | Do Q0/Q1 hold across ACT, SmolVLA and π0.5? | Sim wk 3–5 · real wk 6–7 |
@@ -279,6 +280,23 @@ Changes from the 03 command:
   `--resume=true`.
 - **Timing:** 30 s episodes to match the success window; 3 s reset.
 
+### Phase 0.6 — Camera ablation: train and evaluate (week 2)
+
+**Question.** Phase 0.5 measured whether the second camera *should* help. This phase measures whether it
+*does*: train ACT three times — `top`, `wrist`, `top+wrist` — on the same 50 episodes and compare success
+on the robot. It is also the first test of whether action divergence predicts policy performance.
+
+Masking a camera at inference on a single jointly-trained policy does **not** work: in lerobot's ACT each
+camera adds ~300 tokens to one encoder sequence, so dropping one is an out-of-distribution input rather
+than an ablation. Measured on the 5080 laptop, each 100k-step run takes ~3.7 h (batch 8, 3.5 of 16 GiB),
+so all three fit in one overnight and no cloud GPU is needed; the bottleneck is the ~90 interleaved
+robot trials.
+
+Full run book — held-fixed table, step-by-step training scripts, eval protocol, pre-registered
+predictions: [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
+Scripts: [`scripts/train_camera_ablation.sh`](scripts/train_camera_ablation.sh),
+[`scripts/make_eval_schedule.py`](scripts/make_eval_schedule.py).
+
 ### Dials: sim and real data with known defects
 
 | Dial | Instruction | Should be flagged by | Sim / real episodes |
@@ -359,7 +377,7 @@ Changes from the 03 command:
 | Week | Tasks (hours) | Output / gate |
 |---|---|---|
 | **1** · ~34 h | Infrastructure: Ubuntu, LeRobot, envs, lighting control (8) · define toolkit-assembly task (2) · Phase 0.5 camera test (4) · read Belkhale, RINSE, PSD, CUPID (16) + summary (4) | Teleop works on Ubuntu · task card · C1 result · paper notes |
-| **2** · ~30 h | Read Demo-SCORE, Consistency Matters, Cuan et al.; finalize metrics (12) · (+) implement integrity + Tier 1 metrics, port Tier 2 from notebook (6) · Isaac Sim + LeIsaac, teleop `so101_pick_orange` (4) · eval + logging harness; small-scale check: 40 clean episodes → ACT on the 5080 → 50 rollouts (8) | **Gate:** harness runs unattended; clean ACT at 50–80% success (else adjust N or task randomization) |
+| **2** · ~30 h | Read Demo-SCORE, Consistency Matters, Cuan et al.; finalize metrics (12) · (+) implement integrity + Tier 1 metrics, port Tier 2 from notebook (6) · Isaac Sim + LeIsaac, teleop `so101_pick_orange` (4) · eval + logging harness; **Phase 0.6 camera ablation**: 3 ACT runs on the 5080 (~11 h unattended) + 90 interleaved rollouts (8) | **Gate:** harness runs unattended; clean ACT at 50–80% success (else adjust N or task randomization) · C1b result |
 | **3** · ~30 h | Sim collection, ~400 episodes (20) · score, bin into manifests, pre-register (4) · cloud training recipes (6) · ACT grid, 57 runs in background (1–2 days on parallel 4090s) | Manifests + pre-registration committed |
 | **4** · ~25 h | ACT sim eval + findings (8) · launch 8 SmolVLA + 4 π0.5 runs (4) · haptic hardware: order FPC/PCB + motors, print mounts (8) · (+) chip-task card + recruit participants (3) · buffer (2) | ACT Q0/Q1 results |
 | **5** · ~30 h | SmolVLA + π0.5 sim eval (4) · review sim results; pick the 2 worst dials + best metric for real (8) · (+) lock real rig + collection protocol (8) · start real collection (10) | Sim report (Q0–Q2) · real conditions frozen |
@@ -470,3 +488,5 @@ memory sources, GPU pricing, laptop vs. desktop, and SO-101 repeatability.
 2. **Toolkit-assembly task card** (2 h). Done: [Details/toolkit_task_card.md](Details/toolkit_task_card.md).
 3. **Phase 0.5 camera test** (4 h, §A.4). Teleop with both cameras: [01](01_setup_robot.md) Step 6 (follower `/dev/ttyACM0`, leader `/dev/ttyACM1`).
 4. **Read RINSE + PSD, then CUPID** (§A.2), plus a summary.
+5. **Phase 0.6 camera ablation** (week 2, §A.4). Train three ACT policies overnight, then evaluate:
+   [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
