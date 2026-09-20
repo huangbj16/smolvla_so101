@@ -194,7 +194,42 @@ temporal context (Section 11).
 | **H-b** top wins in reach | **Supported** in the same analysis, and strongly in transport |
 | **H-c** top+wrist beats top | Still confirmed; the gain over wrist alone stays small because the views are redundant, not because of weighting |
 | **H-e** state ambiguous | Still refuted — state is the strongest single space, with a dimensionality caveat |
-| **H-d** aliasing | Re-tested in Section 13 with temporal embeddings (not yet run) |
+| **H-d** aliasing | **Refuted as stated.** With temporal embeddings the aliased share drops to 0.1–0.6% and same-phase matching rises: most single-frame "aliasing" was phase confusion, not two different states that look alike |
+
+## 13 — Aliasing with temporal embeddings
+
+| Scan (neighbors from any phase, k=10) | same-phase neighbors | aliased | reach | grasp | transport | insert | retreat |
+|---|---|---|---|---|---|---|---|
+| top → wrist, single frame | 0.701 | 0.007 | 0.005 | 0.000 | 0.011 | 0.000 | 0.008 |
+| top → wrist, history | **0.792** | 0.001 | 0.001 | 0.000 | 0.002 | 0.000 | 0.001 |
+| wrist → top, single frame | 0.850 | 0.009 | 0.005 | 0.019 | 0.014 | 0.005 | 0.005 |
+| wrist → top, history | **0.885** | 0.006 | 0.004 | 0.013 | 0.009 | 0.005 | 0.004 |
+
+- **History makes the matches sane.** Same-phase neighbor share rises (top 0.701 → 0.792, wrist 0.850 →
+  0.885) and the aliased share falls (top 0.007 → 0.001). So most of what Section 6 counted as "aliasing"
+  was the single frame confusing one *stage* of the task with another, not two genuinely different states.
+- **The top camera still can't separate reach from transport**, because the arm occludes the cylinder from
+  that viewpoint — visible in the Section 13b pairs, where "A transport" and "B reach" look nearly identical
+  from the top and differ obviously at the wrist (cylinder held between the fingers vs. empty gripper above
+  the table). This is the clearest picture of what the second camera buys.
+- **The wrist camera is close to a phase detector**, which is unsurprising: the phases were *defined* from the
+  gripper signal, and the wrist view shows the gripper and whatever is between the fingers. Its same-phase
+  rate is the highest even on single frames (0.850).
+
+### Artifact worth knowing: the background is not constant
+
+In the wrist → top pairs, the strongest "difference in the top camera" is often **a dog walking through the
+background**, plus a hand at the frame edge and changing light. Consequences:
+
+- **The visual-diversity numbers for the top camera partly measure the room**, not the task. Treat Section 7
+  (H-f) as even softer than stated.
+- **For training it is probably mild augmentation rather than harm**: the distractors are uncorrelated with
+  the cylinder position and with the phase, so a policy has no incentive to key on them, and they add the
+  kind of nuisance variation domain randomization aims for. It would only hurt if a distractor correlated
+  with the task (e.g. someone always reaching in at the same moment).
+- **For metrics it is noise that must be controlled**: it inflates top-camera distances and can push genuinely
+  similar frames apart. If a future batch is used for careful measurement, either keep the background clear
+  or crop the top view before embedding (Section 12 shows cropping costs nothing on divergence).
 
 ## Open questions
 
