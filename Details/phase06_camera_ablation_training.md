@@ -27,8 +27,8 @@ Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.s
 - **Run the three sequentially, not in parallel.** Measured: training is GPU-bound, so three concurrent
   processes each drop to ~1/3 speed and the set finishes **8% later** than back to back. VRAM was never
   the constraint (§5).
-- **Total ~4.6 h at 60k steps** (top 1.2 h + wrist 1.2 h + top+wrist 2.2 h) on the 5080 laptop. No cloud
-  GPU needed.
+- **Total ~6.3 h at 60k steps** (top 1.6 h + wrist 1.6 h + top+wrist 3.1 h) on the 5080 laptop, measured
+  from the real trainer in fp32. No cloud GPU needed.
 - **Larger batches buy nothing.** Throughput is flat at ~59 samples/s from batch 8 to 32 — the GPU is
   saturated at batch 8 (§5).
 - **The default holdout had to be fixed.** Episodes were recorded position-block by position-block
@@ -41,7 +41,7 @@ Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.s
 |---|---|---|---|
 | 0 | Preflight checks | 5 min | yes |
 | 1 | Smoke test, 500 steps × 3 | ~5 min | yes |
-| 2 | Three training runs, 60k steps, sequential | ~4.6 h | no |
+| 2 | Three training runs, 60k steps, sequential | ~6.3 h | no |
 | 3 | Checkpoint selection | 10 min | yes |
 | 4 | Behavior pass: 30 rollouts, video recorded | ~45 min | yes |
 | 5 | Watch the video, write up behavioral differences | ~1 h | yes |
@@ -116,7 +116,7 @@ differ, resume:
 lerobot-train --config_path=outputs/train/act_both_s1000/checkpoints/last/pretrained_model/train_config.json --resume=true --steps=100000
 ```
 
-Cost of the choice: 60k is ~4.6 h for all three, 100k is ~7.7 h. Both are one unattended session, so if
+Cost of the choice: 60k is ~6.3 h for all three, 100k is ~10.5 h. Both are one unattended session, so if
 you would rather not think about it, run `STEPS=100000` and skip the question.
 
 Disk: each ACT checkpoint is ~620 MB (51.6M params plus Adam state), so 6 checkpoints × 3 runs ≈ **11 GB**.
@@ -147,7 +147,12 @@ holdout = 9, 19, 29, 39, 49      # the last episode of P2, P4, P6, P8, P10
 Every position keeps at least 4 episodes in training. Verified end to end: 45 train / 5 eval, eval
 episodes exactly `[9, 19, 29, 39, 49]`, and P10 retains episodes 45–48 in training.
 
-To skip validation entirely and train on all 50, pass `EVAL_SPLIT=0`. The validation loss is a sanity
+**`eval_steps` must be set too.** lerobot defaults to `eval_steps=0`, which builds the eval dataloader and
+then never runs it (`is_eval_step = cfg.eval_steps > 0 and ...`) — the holdout episodes would be dropped
+from training and produce nothing in return. The script passes `--eval_steps=5000`.
+
+To skip validation entirely and train on all 50, pass `EVAL_SPLIT=0` (the script then also forces
+`eval_steps=0`, since `eval_steps > 0` with `eval_split == 0` raises). The validation loss is a sanity
 check for divergence only — action-prediction L1 correlates weakly with task behavior, and it cannot
 settle this ablation either way.
 
@@ -179,7 +184,11 @@ STEPS=500 SAVE_FREQ=500 OUT=outputs/smoke ./scripts/train_camera_ablation.sh
 
 Check in the log that each run prints `Train/eval split: 45 train, 5 eval` and the right input features
 (`observation.images.top` only, `observation.images.wrist` only, then both), and that loss is falling.
-Then delete `outputs/smoke`.
+`num_learnable_params` should read **51,597,190 for all three** — the shared-backbone property from §1,
+confirmed empirically. Then delete `outputs/smoke`.
+
+Verified 2026-09-20: all three split 45/5, correct features, loss 6.89 → 2.97 over 500 steps, identical
+parameter counts, 591 MB per checkpoint.
 
 ### Step 2 — the three runs
 
@@ -187,7 +196,7 @@ Then delete `outputs/smoke`.
 ./scripts/train_camera_ablation.sh
 ```
 
-Runs `top`, `wrist`, `both` **sequentially** at 60k steps each, ~4.6 h total, logging to
+Runs `top`, `wrist`, `both` **sequentially** at 60k steps each, ~6.3 h total, logging to
 `outputs/train/act_<cond>_s1000.log`. Useful variants:
 
 ```bash
@@ -205,7 +214,7 @@ SEED=1001 ./scripts/train_camera_ablation.sh wrist
 The script is a thin wrapper; the single command it issues for the top-only condition is:
 
 ```bash
-lerobot-train --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episodes="[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 9, 19, 29, 39, 49]" --dataset.eval_split=0.1 --policy.type=act --policy.device=cuda --policy.push_to_hub=false --policy.input_features="{'observation.state': {'type': 'STATE', 'shape': [6]}, 'observation.images.top': {'type': 'VISUAL', 'shape': [3, 480, 640]}}" --batch_size=8 --steps=60000 --num_workers=8 --seed=1000 --save_freq=10000 --output_dir=outputs/train/act_top_s1000 --job_name=act_top_s1000 --wandb.enable=false
+lerobot-train --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episodes="[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 9, 19, 29, 39, 49]" --dataset.eval_split=0.1 --eval_steps=5000 --policy.type=act --policy.device=cuda --policy.push_to_hub=false --policy.input_features="{'observation.state': {'type': 'STATE', 'shape': [6]}, 'observation.images.top': {'type': 'VISUAL', 'shape': [3, 480, 640]}}" --batch_size=8 --steps=60000 --num_workers=8 --seed=1000 --save_freq=10000 --output_dir=outputs/train/act_top_s1000 --job_name=act_top_s1000 --wandb.enable=false
 ```
 
 The `wrist` condition swaps the image key; the `both` condition **omits `--policy.input_features`
@@ -221,7 +230,7 @@ entirely**, since both cameras is the default.
 tail -f outputs/train/act_both_s1000.log
 ```
 
-Expect ~13.9 it/s for the single-camera runs and ~7.5 it/s for `both`, with a smoothly falling L1 loss.
+Expect ~10.6 it/s for the single-camera runs and ~5.4 it/s for `both`, with a smoothly falling L1 loss.
 Take the **final checkpoint** of each run for the behavior pass, and keep the 40k one for the
 convergence check in §2:
 
@@ -279,42 +288,64 @@ Everything above is too small to compare success rates. When you want numbers:
 | **Ordering** | Interleaved blocks (`--trials-per-position 3`) | Blocked evaluation hands all session drift to whichever policy ran last |
 | **Scoring** | From video, **blind to condition**, after the session | You will unconsciously favour the condition you expect to win |
 
-Nine training runs (3 conditions × 3 seeds) is ~14 h sequentially here at 60k steps — still one overnight
-plus a morning, or ~2 h on rented GPUs in parallel.
+Nine training runs (3 conditions × 3 seeds) is ~19 h sequentially here at 60k steps — two nights, or a
+couple of hours on rented GPUs in parallel.
 
 ---
 
 # 5 — Compute: measured on this machine
 
-Benchmarked 2026-09-20 on the RTX 5080 Laptop (16 GB), driver 595.84, torch 2.11+cu130, 24 CPU cores —
-real dataloader, real forward/backward, bf16 autocast, this dataset.
+RTX 5080 Laptop (16 GB), driver 595.84, torch 2.11+cu130, 24 CPU cores. Two sets of numbers below:
+**as-run** figures come from the real trainer in fp32 (lerobot's `use_amp` default), **bench** figures
+come from an isolated harness under bf16 autocast, which is ~1.3× optimistic. Trust the as-run column for
+planning; the bench rows are for the batch-size, worker and parallelism *comparisons*, where the ratio is
+what matters and the precision is held constant.
 
-### Batch size and workers
+### As run — plan from these
 
-| Cameras | Batch | Workers | ms/step | it/s | **samples/s** | Peak VRAM | 60k steps | 100k steps |
-|---|---|---|---|---|---|---|---|---|
-| one (`top`) | 8 | 8 | 72 | 13.9 | **111** | 2.0 GiB | **1.2 h** | 2.0 h |
-| one (`top`) | 8 | 16 | 72 | 13.8 | 111 | 2.0 GiB | 1.2 h | 2.0 h |
-| two | 8 | 8 | 134 | 7.5 | **60** | 3.5 GiB | **2.2 h** | 3.7 h |
-| two | 8 | 16 | 134 | 7.5 | 60 | 3.5 GiB | 2.2 h | 3.7 h |
-| two | 16 | 8 | 269 | 3.7 | 59 | 6.3 GiB | 4.5 h | 7.5 h |
-| two | 32 | 8 | 549 | 1.8 | 58 | 11.9 GiB | 9.1 h | 15.2 h |
+Measured from the smoke run, 2026-09-20, steady-state rate (the first ~200 steps are slower while the
+dataloader fills):
 
-**Three findings:**
+| Condition | it/s | samples/s | VRAM | 60k steps | 100k steps |
+|---|---|---|---|---|---|
+| `top` | 10.6 | 85 | 2.1 GiB | **1.6 h** | 2.6 h |
+| `wrist` | 10.4 | 84 | 2.1 GiB | **1.6 h** | 2.7 h |
+| `top+wrist` | 5.4 | 43 | 3.7 GiB | **3.1 h** | 5.2 h |
+| **Total, sequential** | | | | **~6.3 h** | **~10.5 h** |
+
+Add a few minutes for periodic validation on the 5 held-out episodes every 5000 steps.
+
+**`--policy.use_amp=true` is ~1.3× faster** (it drives Accelerate's `mixed_precision` to bf16), which
+would bring the set to ~4.6 h. It is **not** enabled by default here: it changes the numerics of the
+reference recipe, and nothing has verified ACT converges identically under it on this data. If you turn it
+on, turn it on for all three conditions.
+
+### Bench — batch size and workers (bf16 harness)
+
+| Cameras | Batch | Workers | ms/step | **samples/s** | Peak VRAM |
+|---|---|---|---|---|---|
+| one (`top`) | 8 | 8 | 72 | **111** | 2.0 GiB |
+| one (`top`) | 8 | 16 | 72 | 111 | 2.0 GiB |
+| two | 8 | 8 | 134 | **60** | 3.5 GiB |
+| two | 8 | 16 | 134 | 60 | 3.5 GiB |
+| two | 16 | 8 | 269 | 59 | 6.3 GiB |
+| two | 32 | 8 | 549 | 58 | 11.9 GiB |
+
+**Two findings:**
 
 1. **Larger batches buy nothing.** Throughput is flat at 58–60 samples/s across batch 8, 16 and 32 —
    step time scales exactly linearly with batch size. The GPU is already saturated at batch 8. Bigger
    batches only cost VRAM (11.9 of 16 GiB at batch 32) and change the optimization recipe. **Stay at 8.**
 2. **The bottleneck is the GPU, not video decoding.** Doubling workers from 8 to 16 changes nothing, and
-   a single-camera run is almost exactly **twice** as fast (72 vs 134 ms/step) — which is the cost of one
-   ResNet18 pass and 300 tokens, not of decoding. Both videos are decoded either way (`LeRobotDataset` has
-   no column selection), so if decoding were the limit the single-camera run would not have sped up.
+   a single-camera run is almost exactly **twice** as fast — which is the cost of one ResNet18 pass and
+   300 tokens, not of decoding. Both videos are decoded either way (`LeRobotDataset` has no column
+   selection), so if decoding were the limit the single-camera run would not have sped up.
    *This corrects an earlier note in this doc that said all three runs would cost the same wall clock.*
-3. **Total for the three runs, sequential: 1.2 + 1.2 + 2.2 = ~4.6 h** at 60k steps (~7.7 h at 100k).
 
 ### Can the three run in parallel on 16 GB? Measured: yes, but don't
 
-Three concurrent processes, batch 8, 6 workers each:
+Three concurrent processes, batch 8, 6 workers each (bf16 harness, so compare the two rows to each other,
+not to the as-run table):
 
 | | ms/step each | samples/s each | 60k steps |
 |---|---|---|---|
@@ -327,7 +358,8 @@ Three concurrent processes, batch 8, 6 workers each:
   with the context-switching overhead as the loss. Note also that in parallel all three run at the *same*
   295 ms/step even though `both` does twice the work of `top`: the scheduler is dividing the GPU evenly,
   not doing more work.
-- **Verdict: run them sequentially.** Parallelism only pays on separate GPUs.
+- **Verdict: run them sequentially**, which is what the script does. Parallelism only pays on separate
+  GPUs.
 
 This supersedes the "ACT · ~5 GB @ bs 8 · train on cloud 4090" row in
 [08 §D.1](../08_data_quality_research.md) for the small real-track datasets: measured, ACT trains
@@ -382,4 +414,5 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 | Fixture moved between training data and eval | Re-check the taped outline against the top view before starting |
 | Single-camera policy errors on the extra camera key | Verify on the first rollout (§4a); fall back to dropping the camera from `--robot.cameras` |
 | Reading 10 trials per condition as a success rate | It is ±16 points. Pass 1 is for behavior; §4b is for numbers |
-| Overnight run dies silently | The script `tee`s logs; check `outputs/train/*.log` before starting eval |
+| Overnight run dies silently | The script `tee`s logs; check `outputs/train/*.log` before starting eval. The loop does not abort on a failed run |
+| Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |

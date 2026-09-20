@@ -3,11 +3,14 @@
 # Everything except the camera set is identical across the three runs.
 # Docs: Details/phase06_camera_ablation_training.md
 #
-#   ./scripts/train_camera_ablation.sh                            # all three, 60k steps, ~4.6 h
+#   ./scripts/train_camera_ablation.sh                            # all three, 60k steps, ~6.3 h
 #   STEPS=500 SAVE_FREQ=500 OUT=outputs/smoke ./scripts/train_camera_ablation.sh   # smoke test
-#   STEPS=100000 ./scripts/train_camera_ablation.sh               # the full ACT recipe, ~7.7 h
+#   STEPS=100000 ./scripts/train_camera_ablation.sh               # the full ACT recipe, ~10.5 h
 #   EVAL_SPLIT=0 ./scripts/train_camera_ablation.sh               # train on all 50 episodes
 #   SEED=1001 ./scripts/train_camera_ablation.sh wrist            # one condition, second seed
+#
+# Runs in fp32, the lerobot default. --policy.use_amp=true is ~1.3x faster but changes the numerics;
+# it is not enabled here so the recipe stays the reference one.
 #
 # Run the three SEQUENTIALLY, as this script does. Measured: training is GPU-bound, so three concurrent
 # processes each slow to ~1/3 speed and finish 8% LATER than back to back (see the run book, section 5).
@@ -20,6 +23,10 @@ SEED=${SEED:-1000}
 WORKERS=${WORKERS:-8}
 SAVE_FREQ=${SAVE_FREQ:-10000}
 EVAL_SPLIT=${EVAL_SPLIT:-0.1}   # set to 0 to train on all 50 episodes
+# eval_steps=0 (lerobot's default) builds the eval dataloader and never uses it: the holdout episodes
+# would just be dropped from training for nothing. Must be 0 when EVAL_SPLIT is 0, or validate() raises.
+EVAL_STEPS=${EVAL_STEPS:-5000}
+if [ "$EVAL_SPLIT" = "0" ] || [ "$EVAL_SPLIT" = "0.0" ]; then EVAL_STEPS=0; fi
 OUT=${OUT:-outputs/train}
 
 # The 50 episodes were recorded position-block by position-block: P1 = ep 0-4, P2 = 5-9, ... P10 = 45-49.
@@ -46,6 +53,7 @@ run_one () {
     --dataset.repo_id="$DS" \
     --dataset.episodes="$EPISODES" \
     --dataset.eval_split="$EVAL_SPLIT" \
+    --eval_steps="$EVAL_STEPS" \
     --policy.type=act \
     --policy.device=cuda \
     --policy.push_to_hub=false \

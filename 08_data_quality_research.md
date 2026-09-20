@@ -290,8 +290,8 @@ on the robot. It is also the first test of whether action divergence predicts po
 Masking a camera at inference on a single jointly-trained policy does **not** work: in lerobot's ACT each
 camera adds ~300 tokens to one encoder sequence, so dropping one is an out-of-distribution input rather
 than an ablation. Measured on the 5080 laptop at batch 8: 72 ms/step single-camera, 134 ms/step with both,
-so all three 60k-step runs take **~4.6 h sequentially** and no cloud GPU is needed. Training is GPU-bound,
-so larger batches and parallel runs both buy nothing (three concurrent runs finish 8% *later*).
+so all three 60k-step runs take **~6.3 h sequentially** in fp32 and no cloud GPU is needed. Training is
+GPU-bound, so larger batches and parallel runs both buy nothing (three concurrent runs finish 8% *later*).
 
 Pass 1 is one seed and 30 rollouts, aimed at the **emergent behavior** of a top-only vs wrist-only
 policy rather than at success rates; the statistical comparison is a later pass. Note the run book also
