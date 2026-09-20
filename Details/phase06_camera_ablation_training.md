@@ -27,8 +27,10 @@ Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.s
 - **Run the three sequentially, not in parallel.** Measured: training is GPU-bound, so three concurrent
   processes each drop to ~1/3 speed and the set finishes **8% later** than back to back. VRAM was never
   the constraint (§5).
-- **Total ~6.3 h at 60k steps** (top 1.6 h + wrist 1.6 h + top+wrist 3.1 h) on the 5080 laptop, measured
-  from the real trainer in fp32. No cloud GPU needed.
+- **Total ~7 h at 60k steps** (top 1.6 h + wrist 1.6 h + top+wrist 3.1 h, plus ~30 min of validation
+  passes) on the 5080 laptop, measured from the real trainer in fp32. No cloud GPU needed.
+- **Tracked in wandb** (project `phase06-camera-ablation`, one run per condition so the curves overlay)
+  and **pushed to the Hub as private repos** at the end of each run.
 - **Larger batches buy nothing.** Throughput is flat at ~59 samples/s from batch 8 to 32 — the GPU is
   saturated at batch 8 (§5).
 - **The default holdout had to be fixed.** Episodes were recorded position-block by position-block
@@ -41,7 +43,7 @@ Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.s
 |---|---|---|---|
 | 0 | Preflight checks | 5 min | yes |
 | 1 | Smoke test, 500 steps × 3 | ~5 min | yes |
-| 2 | Three training runs, 60k steps, sequential | ~6.3 h | no |
+| 2 | Three training runs, 60k steps, sequential | ~7 h | no |
 | 3 | Checkpoint selection | 10 min | yes |
 | 4 | Behavior pass: 30 rollouts, video recorded | ~45 min | yes |
 | 5 | Watch the video, write up behavioral differences | ~1 h | yes |
@@ -149,7 +151,14 @@ episodes exactly `[9, 19, 29, 39, 49]`, and P10 retains episodes 45–48 in trai
 
 **`eval_steps` must be set too.** lerobot defaults to `eval_steps=0`, which builds the eval dataloader and
 then never runs it (`is_eval_step = cfg.eval_steps > 0 and ...`) — the holdout episodes would be dropped
-from training and produce nothing in return. The script passes `--eval_steps=5000`.
+from training and produce nothing in return. The script passes **`--eval_steps=2000`**: measured at ~30 s
+per pass over the full 5-episode holdout with two cameras (~15 s with one), that is 30 points on the wandb
+curve for about 8% extra wall clock.
+
+> **Do not set `--max_eval_samples`.** It looks like a way to make validation cheaper, but it slices
+> `frames[:per_task]` — the **first** n frames of the holdout, not a sample of it. With one task that means
+> the opening of episode 9 and nothing else: you would be validating on the reach phase of a single
+> position. Leave it at 0 and use the whole holdout.
 
 To skip validation entirely and train on all 50, pass `EVAL_SPLIT=0` (the script then also forces
 `eval_steps=0`, since `eval_steps > 0` with `eval_split == 0` raises). The validation loss is a sanity
@@ -179,7 +188,7 @@ and there is disk room for ~11 GB of checkpoints.
 Five minutes now beats discovering a typo after an overnight run. This runs 500 steps of each condition:
 
 ```bash
-STEPS=500 SAVE_FREQ=500 OUT=outputs/smoke ./scripts/train_camera_ablation.sh
+STEPS=500 SAVE_FREQ=500 EVAL_STEPS=250 OUT=outputs/smoke ./scripts/train_camera_ablation.sh
 ```
 
 Check in the log that each run prints `Train/eval split: 45 train, 5 eval` and the right input features
@@ -190,14 +199,18 @@ confirmed empirically. Then delete `outputs/smoke`.
 Verified 2026-09-20: all three split 45/5, correct features, loss 6.89 → 2.97 over 500 steps, identical
 parameter counts, 591 MB per checkpoint.
 
+The smoke run also exercises wandb. It does **not** push to the Hub: the script refuses to push when
+`STEPS < 10000`, so a forgotten `PUSH_TO_HUB` cannot litter your HF account with 500-step models.
+
 ### Step 2 — the three runs
 
 ```bash
 ./scripts/train_camera_ablation.sh
 ```
 
-Runs `top`, `wrist`, `both` **sequentially** at 60k steps each, ~6.3 h total, logging to
-`outputs/train/act_<cond>_s1000.log`. Useful variants:
+Runs `top`, `wrist`, `both` **sequentially** at 60k steps each, ~7 h total, logging to
+`outputs/train/act_<cond>_s1000.log`, streaming to wandb, and pushing each final model to a private Hub
+repo `HALDijkstraaa/act_toolkit_cylinder_<cond>_s1000`. Useful variants:
 
 ```bash
 STEPS=100000 ./scripts/train_camera_ablation.sh
@@ -211,10 +224,14 @@ EVAL_SPLIT=0 ./scripts/train_camera_ablation.sh
 SEED=1001 ./scripts/train_camera_ablation.sh wrist
 ```
 
+```bash
+WANDB=false PUSH_TO_HUB=false ./scripts/train_camera_ablation.sh
+```
+
 The script is a thin wrapper; the single command it issues for the top-only condition is:
 
 ```bash
-lerobot-train --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episodes="[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 9, 19, 29, 39, 49]" --dataset.eval_split=0.1 --eval_steps=5000 --policy.type=act --policy.device=cuda --policy.push_to_hub=false --policy.input_features="{'observation.state': {'type': 'STATE', 'shape': [6]}, 'observation.images.top': {'type': 'VISUAL', 'shape': [3, 480, 640]}}" --batch_size=8 --steps=60000 --num_workers=8 --seed=1000 --save_freq=10000 --output_dir=outputs/train/act_top_s1000 --job_name=act_top_s1000 --wandb.enable=false
+lerobot-train --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episodes="[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 9, 19, 29, 39, 49]" --dataset.eval_split=0.1 --eval_steps=2000 --policy.type=act --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_toolkit_cylinder_top_s1000 --policy.private=true --policy.input_features="{'observation.state': {'type': 'STATE', 'shape': [6]}, 'observation.images.top': {'type': 'VISUAL', 'shape': [3, 480, 640]}}" --batch_size=8 --steps=60000 --num_workers=8 --seed=1000 --save_freq=10000 --log_freq=100 --output_dir=outputs/train/act_top_s1000 --job_name=act_top_s1000 --wandb.enable=true --wandb.project=phase06-camera-ablation
 ```
 
 The `wrist` condition swaps the image key; the `both` condition **omits `--policy.input_features`
@@ -225,6 +242,9 @@ entirely**, since both cameras is the default.
 > cameras" — this is the mechanism.
 
 ### Step 3 — monitor and select
+
+Watch it in wandb — all three runs land in project `phase06-camera-ablation`, named `act_top_s1000`,
+`act_wrist_s1000`, `act_both_s1000`, so `train/loss` and `eval_loss` overlay on one chart. Or locally:
 
 ```bash
 tail -f outputs/train/act_both_s1000.log
@@ -352,6 +372,8 @@ not to the as-run table):
 | Three in parallel | 295 / 295 / 299 | 27 | **5.0 h** (all finish together) |
 | Sequential, back to back | 72 / 72 / 134 | 111 / 111 / 60 | **4.6 h** |
 
+(Both rows exclude validation passes, which add ~30 min across the three runs at `eval_steps=2000`.)
+
 - **Memory is not the problem**: the three allocator peaks sum to 7.5 GiB of 16 GiB.
 - **Speed is.** Each process drops to roughly a third of its solo speed — the exact signature of three
   jobs time-slicing one saturated GPU — and the set finishes **8% later** than running them back to back,
@@ -415,4 +437,6 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 | Single-camera policy errors on the extra camera key | Verify on the first rollout (§4a); fall back to dropping the camera from `--robot.cameras` |
 | Reading 10 trials per condition as a success rate | It is ±16 points. Pass 1 is for behavior; §4b is for numbers |
 | Overnight run dies silently | The script `tee`s logs; check `outputs/train/*.log` before starting eval. The loop does not abort on a failed run |
-| Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
+| Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=2000` |
+| Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
+| A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |
