@@ -242,8 +242,12 @@ so subtracting the control's change from the gain would make the test too easy.
 **Result (2026-09-19): C1 passes — the wrist camera helps — but the surprises are bigger than the result.**
 The top camera, not the wrist camera, is the aliased view (it loses to wrist and even to joint state in
 every phase but grasp/insert), and top+wrist beats wrist alone by only 0.023. Per-phase numbers are
-confounded by action scale, so H-a/H-b stay provisional. Full numbers, verdicts per hypothesis and
-reasoning: [Details/phase05_camera_test_results.md](Details/phase05_camera_test_results.md).
+confounded by action scale, so H-a/H-b stay provisional. Follow-ups (notebook §9–13) then showed the
+phase picture reverses once divergence is normalized *within* each phase (top wins reach/transport, wrist
+wins grasp/insert), that a short frame history is the single biggest gain, and that in the fine phases no
+observation beats chance — which sets a data-collection guideline: spend episodes and discipline on grasp
+and insert. Full numbers, verdicts and reasoning:
+[Details/phase05_camera_test_results.md](Details/phase05_camera_test_results.md).
 
 **Recording (lerobot 0.6.1)**, as run. First load the camera presets and check the images
 ([01](01_setup_robot.md) Step 6). Keys: **→** ends the episode early, **←** re-records it, **Esc** stops.
