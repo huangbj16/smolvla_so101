@@ -1,13 +1,98 @@
-# Phase 0.5 results — does the wrist camera help? (C1)
+# Phase 0.5 — second-camera test (C1): findings
 
-Run 2026-09-19 with [phase05_second_camera.ipynb](../phase05_second_camera.ipynb) on
-`HALDijkstraaa/so101_toolkit_cylinder_20260917_165544` (50 clean episodes, 4000 sampled frames after
-trimming idle frames). Hypotheses and method: [08 §A.4](../08_data_quality_research.md).
+Dataset `HALDijkstraaa/so101_toolkit_cylinder_20260917_165544` (50 clean episodes, both cameras, 4000
+sampled frames). Notebook: [phase05_second_camera.ipynb](../phase05_second_camera.ipynb) · Plan:
+[08 §A.4](../08_data_quality_research.md) · Task: [toolkit_task_card.md](toolkit_task_card.md).
+Baseline run 2026-09-19, follow-ups 2026-09-20.
 
-Action divergence = spread of the next motion among a frame's k nearest neighbors **from other episodes**,
-divided by the spread over all frames. Lower = the observation tells apart states that need different actions.
+---
 
-## Headline numbers (motion target)
+# Summary
+
+**The problem.** Is one camera enough for this task, and how would we know *before* spending GPU-hours on
+training? The proxy: **action divergence** — take a frame, find the k frames from *other* episodes that look
+most similar, and measure how differently the demonstrator moved next. Low = the observation determines the
+action. High = the policy has to guess.
+
+![Episode phases from the gripper signal](figs/01_phases_from_gripper.png)
+
+*Every episode is trimmed to its moving part and split into five phases from the gripper trace: reach,
+grasp (1 s before to 0.5 s after closing), transport, insert (same window around release), retreat.*
+
+![The two cameras at each phase](figs/00_phases_two_cameras.png)
+
+*The two views at the middle of each phase. Top (front-side, wide) vs wrist (eye-in-hand).*
+
+**What we hypothesized** (08 §A.4) and **what happened**:
+
+| | Hypothesis | Verdict |
+|---|---|---|
+| **H-c** | top+wrist lowers divergence vs top alone, beyond a shuffled control | **Confirmed** at every k, bootstrap CI clear of 0 |
+| **H-a** | wrist wins in grasp/insert | **Confirmed**, but only after normalizing *within* phase |
+| **H-b** | top wins in reach | **Confirmed** (and strongest in transport), same caveat |
+| **H-f** | wrist frames are more varied | **Confirmed** (0.468 vs 0.186), descriptive only |
+| **H-e** | joint state is most ambiguous at the start | **Refuted** — state is the *strongest* single space |
+| **H-d** | aliased pairs concentrate in grasp/insert | **Refuted as stated** — single-frame "aliasing" was mostly phase confusion; with temporal context it nearly vanishes |
+
+**Main results, in order of importance:**
+
+- **Both cameras are worth keeping, but they are largely redundant.** top+wrist 0.499 vs wrist alone 0.522
+  (k=10). Not a weighting artifact: sweeping the top/wrist weight is flat (best 0.498 at 0.6 vs 0.499 at
+  equal), so **keep the equal 50/50 concatenation**.
+- **Each camera wins where its geometry says it should** — once divergence is normalized within each phase:
+  top in reach and transport, wrist in grasp and insert.
+- **A short frame history is the single biggest gain**, bigger than adding the second camera: top alone
+  improves 0.641 → 0.508, and top+wrist+history is the best space at 0.479.
+- **In grasp and insert, no observation beats chance.** Every space sits near the random baseline there.
+- **Neither a bigger encoder (`dinov2-base`) nor cropping the top view changes anything** — the top camera's
+  weakness was missing temporal context, not resolution or background clutter.
+
+![Divergence by space](figs/02_divergence_by_space.png)
+
+*Baseline run: joint state is the strongest single space; top+wrist is best overall; the shuffled-wrist
+control (grey) is far worse, which is what makes the comparison meaningful.*
+
+![Top vs wrist by phase](figs/04_top_vs_wrist_by_phase.png)
+
+*The clean phase result (same-phase neighbors, phase-normalized): top is better by 0.025 in reach and 0.093
+in transport; wrist by 0.029 in grasp and 0.039 in insert.*
+
+![Does a short history help](figs/06_history_effect.png)
+
+*History (t, t−10, t−20 in separate blocks) helps every space, and helps the weak top camera most. The blue
+and orange bars use different normalizations — compare within a colour only.*
+
+**Guidelines that follow** (details in [Guidelines](#guidelines-for-collection-and-analysis)): spend the
+extra episodes and the discipline on grasp and insert; use temporal embeddings for any future divergence
+measurement; keep equal weighting; always report a control and a random baseline; keep the background clean
+when a batch is meant for measurement.
+
+---
+
+# The metric, precisely
+
+For each sampled frame, in each observation space:
+
+1. distance to every other sampled frame — cosine for image embeddings (DINOv2, L2-normalized), Euclidean
+   for z-scored joints;
+2. **neighbors from the same episode are excluded** (they are the same moment a few hundredths of a second
+   apart and would trivially agree);
+3. take the k nearest, k ∈ {5, 10, 20};
+4. **divergence** = √(mean over joints of the variance of their *next motion*) ÷ the same quantity over all
+   frames. Next motion = commanded pose 10 frames (⅓ s) ahead minus the current pose;
+5. uncertainty by bootstrap over **episodes**, not frames.
+
+Two normalizations appear, and they are **not comparable with each other**:
+
+- **global** (Sections 3–5): divided by the spread over the whole dataset;
+- **within-phase** (Sections 9+): divided by the spread inside that phase, so 1.0 always means "no
+  information". The random baseline lands at ≈0.90–0.94, and *that*, not 1.0, is the zero line.
+
+---
+
+# Results in detail
+
+## 1. Both cameras, and the control (baseline run)
 
 | Space | k=5 | k=10 | k=20 |
 |---|---|---|---|
@@ -17,71 +102,17 @@ divided by the spread over all frames. Lower = the observation tells apart state
 | **top+wrist** | **0.440** | **0.499** | **0.553** |
 | top + shuffled wrist (control) | 0.750 | 0.834 | 0.884 |
 
-By phase (k = 10):
+Gain of top+wrist over top: 0.142 at k=10, CI [0.127, 0.156] — H-c passes at every k. The gain over *wrist*
+is only 0.023, because the two views overlap: once the arm is aimed at the cylinder, the wrist image implies
+much of what the top view shows.
 
-| Space | reach | grasp | transport | insert | retreat |
-|---|---|---|---|---|---|
-| state | 0.580 | 0.531 | 0.465 | 0.485 | 0.499 |
-| top | 0.742 | 0.477 | 0.605 | 0.484 | 0.620 |
-| wrist | 0.562 | 0.471 | 0.497 | 0.482 | 0.517 |
-| top+wrist | 0.553 | 0.469 | 0.440 | 0.494 | 0.494 |
+![Weight sweep](figs/05_weight_sweep.png)
 
-Aliasing rate (fraction of a frame's 10 top-camera neighbors that are far in wrist space *and* have a
-different next motion): 0.6% overall, at most 1.0% in any phase. Visual diversity: wrist 0.468, top 0.186.
+*The equal-weighting suspicion was wrong: the curve is flat between 0.3 and 0.7. Redundancy, not weighting.*
 
-## Verdicts
+## 2. Phase structure (the corrected view)
 
-| | Hypothesis | Verdict |
-|---|---|---|
-| **H-c** | top+wrist beats top, beyond the control | **Confirmed.** Passes at every k, both conditions, bootstrap intervals well clear of 0. Gain over top: 0.142 at k=10, CI [0.127, 0.156] |
-| **H-f** | wrist frames more varied | **Confirmed** (descriptive): 0.468 vs 0.186 |
-| **H-a** | wrist beats top in grasp/insert | **Not supported.** The direction is right but the gaps are 0.006 and 0.002 — noise. The wrist camera's real advantage is in reach, transport and retreat (0.10–0.18) |
-| **H-b** | top beats wrist in reach | **Refuted, and backwards.** In reach, wrist 0.562 vs top 0.742 |
-| **H-d** | aliasing concentrated in grasp/insert | **Not supported quantitatively.** If top and wrist distances were unrelated, the rate would be ~25% by construction (two median splits). At 0.6% the top camera's neighbors are almost always genuinely similar in wrist space too. The example pairs are real and instructive, but rare |
-| **H-e** | joint state most ambiguous at the start | **Refuted.** State is the *strongest* single space overall (0.520 vs top 0.641 at k=10) and beats the top camera in reach (0.580 vs 0.742) |
-
-**C1 answer: yes, the second camera helps** — but not for the reason the hypotheses assumed. The wrist camera
-is the strong view and the top camera is the weak one, almost everywhere in the task.
-
-## Why the results came out this way
-
-- **The top camera is the aliased view, not the wrist camera.** Its diversity is 0.186 against the wrist's
-  0.468: from above, the arm and cylinder are a small part of a mostly static scene, so a global DINOv2
-  embedding is dominated by the unchanging table and fixture. Frames from different moments end up close
-  together. The wrist image changes completely as the arm moves, so it encodes arm pose *and* the local
-  geometry, which is most of what sets the next motion.
-- **Why top+wrist adds so little over wrist alone (0.023 at k=10).** Concatenating two unit-length
-  embeddings makes the distance the *average* of the two cameras' distances, so the weak view gets equal
-  weight and dilutes the strong one. On top of that, the wrist view already carries much of what the top
-  view knows (the arm's pose implies where the cylinder is, once the operator has aimed at it). A weighted
-  combination would show how much of the loss is the equal weighting.
-- **There is a floor that no camera can cross.** These are human demos: from the same observation the
-  operator can legitimately move at different speeds or along slightly different paths. Around 0.44–0.50
-  may be mostly that irreducible spread, not missing information. Nothing in this run estimates the floor,
-  so "0.499 is good" is currently unjudgeable.
-- **The phase comparison is confounded by action scale** (your observation, and I think it's right).
-  Divergence is normalized by the spread of motions over the *whole dataset*. In grasp and insert the arm
-  barely moves, so the local spread is small for every space, and every curve drops. That is why the top
-  camera looks as good as the wrist there. Phase conclusions (H-a, H-b) should be treated as provisional
-  until the metric is normalized within each phase.
-- **Aliasing is rare but the examples are informative.** Motion blur makes frames from different phases look
-  alike, and a grasped cylinder is a few pixels from above. That suggests the embedding, not the camera,
-  limits what the metric can see: a single frame at 640×480 through a small global embedding.
-
-## Caveats
-
-- One operator, one session, clean demos only: this measures observability, not operator inconsistency.
-- No per-episode position log, so nothing here separates the 10 cylinder positions.
-- DINOv2-small global embeddings; no temporal context; equal weighting in every concatenation.
-
----
-
-# Follow-up run (2026-09-20, notebook Sections 9–13)
-
-## 9 — Divergence normalized within each phase
-
-Normalizing by the motion spread *inside* each phase, and restricting neighbors to the same phase, removes
-the scale artifact that made Section 5 unreadable. Random baseline ≈ 0.90–0.94.
+![Phase-normalized divergence](figs/03_phase_normalized.png)
 
 | Space (same-phase neighbors, k=10) | reach | grasp | transport | insert | retreat |
 |---|---|---|---|---|---|
@@ -89,150 +120,184 @@ the scale artifact that made Section 5 unreadable. Random baseline ≈ 0.90–0.
 | wrist | 0.538 | **0.868** | 0.529 | **0.898** | 0.503 |
 | top+wrist | 0.523 | 0.868 | 0.442 | 0.907 | 0.495 |
 | state | 0.510 | 0.839 | 0.399 | 0.896 | 0.517 |
-| random | 0.926 | 0.901 | 0.917 | 0.924 | 0.944 |
+| random baseline | 0.926 | 0.901 | 0.917 | 0.924 | 0.944 |
 
-- **Each camera wins where it should.** Top is better in reach (−0.024) and transport (−0.093); wrist is
-  better in grasp (−0.029) and insert (−0.039). This is **H-a and H-b, both supported** once the metric is
-  phase-normalized — the opposite of the Section 5 reading, which was dominated by how much the arm moves.
-  Section 9c plots this zoomed in.
-- **In grasp and insert, every space is near the random baseline.** No observation — camera, both cameras,
-  or joint state — predicts the next motion there.
+The first run's phase table (global normalization) said the opposite, because in grasp and insert the arm
+barely moves: the local spread is small for *every* space, so all curves drop together. That was arithmetic,
+not information.
 
-### What "near random" means, and the guideline that follows
+**In grasp and insert, everything is near the random baseline.** Given everything the robot can observe, the
+demonstrations at those instants move in **different directions across episodes**. Three causes, not
+separable with this data: (1) genuine multi-modality — several acceptable ways to close the last
+millimetres; (2) small corrections and jitter dominating when the motion is small; (3) the observation truly
+lacking mm-level detail.
 
-It means: given everything the robot can observe, the demonstrations at that instant move in **different
-directions across episodes**. Three causes, not separable with this data:
-1. genuine multi-modality — several acceptable ways to close the last millimetres;
-2. small-amplitude corrections and jitter, which dominate when the overall motion is small;
-3. the observation genuinely lacking the mm-level detail (the original H-a idea).
+## 3. Joint state is the strongest single space
 
-**Guideline for future data collection (derived from this):**
-- **The fine phases need the most demonstrations and the most discipline.** Reach and transport are already
-  near-deterministic given an observation; extra episodes there add little. Grasp and insert are where a
-  policy has to guess.
-- **Standardize the fine phases**: one approach direction, one closing speed, no exploratory wiggling. The
-  task card's "one grasp style" rule should be enforced hardest in the last second before contact and before
-  release.
-- **When adding episodes, add them for the fine phases** — more positions, deliberate slow approach — rather
-  than more full episodes of everything.
-- **Track per-phase divergence as a quality metric** for each new batch. It is the only number here that
-  changed when the protocol changed.
-- Open check before over-trusting this: recompute with a longer action horizon (e.g. H = 30 instead of 10).
-  If divergence falls a lot, cause 2 (jitter) dominates; if it stays, causes 1 and 3 do.
+Partly real, partly measurement:
 
-### Why joint state is the strongest single space
+- **Real:** one operator, a stereotyped task. The pose says where the task is and what comes next, and the
+  target is the same joint signal ⅓ s later. The cameras have to infer what the joints state directly.
+- **Artifact:** 6-D Euclidean vs 384-D cosine. In 6-D the 10 nearest neighbors really are nearly the same
+  pose; in 384-D distances concentrate and "nearest" is relatively far. Ranking spaces of very different
+  dimension is therefore not strictly fair. (Forcing the state block to unit length for the Section 10
+  blends also costs a little: 0.520 → 0.538.)
+- The formula is identical everywhere — same k, same target, same normalization — so this is geometry, not a
+  different metric.
 
-State is lowest in almost every phase (0.399 in transport vs 0.436 for top). Partly real, partly a measuring
-artifact:
+**Cameras still add over proprioception:** state 0.538 → state+wrist 0.480 → state+top+wrist 0.475 (k=10).
 
-- **Real:** the task is stereotyped and there is one operator. The arm's pose says where the task is and what
-  comes next; the future command is the same signal, one third of a second later. The cameras have to infer
-  what the joints state directly.
-- **Artifact of dimensionality:** state is 6-d Euclidean, the embeddings are 384-d cosine. In 6-d the 10
-  nearest neighbors are genuinely almost the same pose; in 384-d distances concentrate and "nearest" is much
-  farther away in relative terms. Spaces of very different dimension are therefore not strictly comparable —
-  a caveat for any table that ranks them against each other.
-- The formula is identical for all spaces (same k, same targets, same normalization), so it is not a
-  different metric, only a different geometry. A fair check would reduce the image embeddings to ~6-d (PCA)
-  before the comparison. Not done yet.
+## 4. Temporal context
 
-## 10 — Cameras on top of joint state, and weighting
-
-| Space | k=5 | k=10 | k=20 |
-|---|---|---|---|
-| state | 0.468 | 0.538 | 0.587 |
-| state+top | 0.444 | 0.511 | 0.567 |
-| state+wrist | 0.427 | 0.480 | 0.522 |
-| state+top+wrist | 0.423 | 0.475 | 0.524 |
-
-- Cameras **do** add over proprioception: state+wrist is 11% below state at k=10, state+top+wrist 12%. Small
-  in absolute terms because state is genuinely strong (above), not because the cameras are useless.
-- **Weight sweep is flat**: 0.499 at equal weighting, 0.498 at the best weight (0.6 on top). So equal
-  weighting was *not* why top+wrist barely beat wrist — the two views are largely redundant.
-- **Decision: keep the equal 50/50 concatenation** in all further analyses.
-
-## 11 — Temporal context (the big win)
-
-| Space | k=10 (all neighbors) |
+| Space | k=10 |
 |---|---|
 | top | 0.641 |
-| top hist (decayed) | 0.508 |
+| top + history (decayed) | 0.508 |
 | wrist | 0.522 |
-| wrist hist (decayed) | 0.497 |
+| wrist + history (decayed) | 0.497 |
 | top+wrist | 0.499 |
-| **top+wrist hist (decayed)** | **0.479** |
+| **top+wrist + history (decayed)** | **0.479** |
 | top +Δ / wrist +Δ | 0.562 / 0.507 |
 
-- **History helps most where the single frame is weakest.** The top camera gains 0.133, nearly closing the
-  gap to the wrist camera: most of its apparent weakness was not seeing *which way the task was going*.
-- **Real history beats a difference vector.** `+Δ` (current frame plus direction of change) is clearly worse
-  than keeping the lagged frames in their own slots. Use lagged embeddings, not deltas.
-- **Which number predicts policy training?** It depends on the architecture's observation window. ACT and
-  SmolVLA condition on a single timestep (plus state), and π0-style models likewise; Diffusion Policy
-  typically uses 2 observation steps. So: judge data for a single-frame policy with the single-frame numbers,
-  and use the history numbers to describe what is *achievable* with an architecture that looks back. When
-  the target architecture is known, set `LAGS` to match its observation window.
-- **Why the same-phase bars are higher than the all-neighbor bars** (they are not comparable):
-  1. different denominators — all-neighbor bars are divided by the spread over the whole dataset,
-     same-phase bars by the spread inside the phase, which is smaller in the fine phases;
-  2. a smaller candidate pool (insert has only ~280 frames) means the nearest neighbor is farther away;
-  3. it is a strictly harder question: telling apart states *within* a stage, with the easy
-     between-stage separation removed.
-  Compare within a colour, never across.
+History = embeddings at t, t−10, t−20, each in **its own block of dimensions** — that block layout is the
+positional encoding, so "now" and "0.67 s ago" can never be confused. Real lagged frames clearly beat a
+difference vector (`+Δ`): use lagged embeddings, not deltas.
 
-## 12 — Representation probe: no effect
+## 5. Aliasing, before and after temporal context
 
-`dinov2-base` (0.639 vs 0.641 for top) and a cropped top view (0.647) change nothing, and diversity barely
-moves. The top camera's weakness is **not** encoder capacity or background clutter — it is the missing
-temporal context (Section 11).
+![Aliasing rates](figs/08_aliasing_rates.png)
 
-## Revised verdicts
+| Scan (neighbors from any phase, k=10) | same-phase neighbors | aliased |
+|---|---|---|
+| top → wrist, single frame | 0.701 | 0.007 |
+| top → wrist, history | **0.792** | 0.001 |
+| wrist → top, single frame | 0.850 | 0.009 |
+| wrist → top, history | **0.885** | 0.006 |
 
-| | Verdict after follow-ups |
-|---|---|
-| **H-a** wrist wins in grasp/insert | **Supported** with phase-normalized, same-phase neighbors (Section 9) |
-| **H-b** top wins in reach | **Supported** in the same analysis, and strongly in transport |
-| **H-c** top+wrist beats top | Still confirmed; the gain over wrist alone stays small because the views are redundant, not because of weighting |
-| **H-e** state ambiguous | Still refuted — state is the strongest single space, with a dimensionality caveat |
-| **H-d** aliasing | **Refuted as stated.** With temporal embeddings the aliased share drops to 0.1–0.6% and same-phase matching rises: most single-frame "aliasing" was phase confusion, not two different states that look alike |
+Chance level for "aliased" is ~25% (two median splits), so even the single-frame rate was far below chance.
+With history, matched pairs come from the same phase far more often and the aliased share nearly vanishes:
+**most of what looked like aliasing was the single frame confusing one stage of the task with another.**
 
-## 13 — Aliasing with temporal embeddings
+![Aliased pairs, matched by the top camera](figs/09_aliased_pairs_top_matched.jpg)
 
-| Scan (neighbors from any phase, k=10) | same-phase neighbors | aliased | reach | grasp | transport | insert | retreat |
-|---|---|---|---|---|---|---|---|
-| top → wrist, single frame | 0.701 | 0.007 | 0.005 | 0.000 | 0.011 | 0.000 | 0.008 |
-| top → wrist, history | **0.792** | 0.001 | 0.001 | 0.000 | 0.002 | 0.000 | 0.001 |
-| wrist → top, single frame | 0.850 | 0.009 | 0.005 | 0.019 | 0.014 | 0.005 | 0.005 |
-| wrist → top, history | **0.885** | 0.006 | 0.004 | 0.013 | 0.009 | 0.005 | 0.004 |
+*Matched by top history, far apart at the wrist. The top camera still cannot separate reach from transport —
+the arm occludes the cylinder — while the wrist view shows instantly whether something is between the
+fingers. This is the clearest picture of what the second camera buys.*
 
-- **History makes the matches sane.** Same-phase neighbor share rises (top 0.701 → 0.792, wrist 0.850 →
-  0.885) and the aliased share falls (top 0.007 → 0.001). So most of what Section 6 counted as "aliasing"
-  was the single frame confusing one *stage* of the task with another, not two genuinely different states.
-- **The top camera still can't separate reach from transport**, because the arm occludes the cylinder from
-  that viewpoint — visible in the Section 13b pairs, where "A transport" and "B reach" look nearly identical
-  from the top and differ obviously at the wrist (cylinder held between the fingers vs. empty gripper above
-  the table). This is the clearest picture of what the second camera buys.
-- **The wrist camera is close to a phase detector**, which is unsurprising: the phases were *defined* from the
-  gripper signal, and the wrist view shows the gripper and whatever is between the fingers. Its same-phase
-  rate is the highest even on single frames (0.850).
+![Aliased pairs, matched by the wrist camera](figs/10_aliased_pairs_wrist_matched.jpg)
 
-### Artifact worth knowing: the background is not constant
+*Matched by wrist history, far apart at the top camera. The wrist view is close to a phase detector (partly
+circular: phases were defined from the gripper signal). The "difference" the top camera sees is often
+background — **a dog walking past**, a hand at the frame edge, changing light.*
 
-In the wrist → top pairs, the strongest "difference in the top camera" is often **a dog walking through the
-background**, plus a hand at the frame edge and changing light. Consequences:
+**The background artifact cuts both ways:**
 
-- **The visual-diversity numbers for the top camera partly measure the room**, not the task. Treat Section 7
-  (H-f) as even softer than stated.
-- **For training it is probably mild augmentation rather than harm**: the distractors are uncorrelated with
-  the cylinder position and with the phase, so a policy has no incentive to key on them, and they add the
-  kind of nuisance variation domain randomization aims for. It would only hurt if a distractor correlated
-  with the task (e.g. someone always reaching in at the same moment).
-- **For metrics it is noise that must be controlled**: it inflates top-camera distances and can push genuinely
-  similar frames apart. If a future batch is used for careful measurement, either keep the background clear
-  or crop the top view before embedding (Section 12 shows cropping costs nothing on divergence).
+- *For metrics, it is noise.* Top-camera visual diversity partly measures the room, so H-f is softer than it
+  looks, and background motion can push genuinely similar frames apart.
+- *For training, it is probably mild augmentation.* The distractors are uncorrelated with cylinder position
+  and with phase, so a policy has no incentive to key on them, and they supply the nuisance variation that
+  domain randomization tries to manufacture. It would only hurt if a distractor correlated with the task —
+  someone reaching in at the same moment every episode.
 
-## Open questions
+## 6. Representation probe: a clean null result
 
-- Longer action horizon (H = 30) to separate jitter from genuine multi-modality in the fine phases.
-- PCA-matched dimensionality before ranking state against the image spaces.
-- Per-position breakdown — still blocked on a per-episode position log.
+![Representation probe](figs/07_representation_probe.png)
+
+`dinov2-base` (top 0.639 vs 0.641) and a cropped top view (0.647) change nothing, and diversity barely
+moves. The weakness was temporal, not visual.
+
+---
+
+# Guidelines for collection and analysis
+
+**What action divergence is good for** — the list verified against these runs, with extensions:
+
+| Use | Supported by | How to run it |
+|---|---|---|
+| **Is a camera pointed usefully?** | top 0.641 vs wrist 0.522; per-phase table | Record ~5 episodes, embed, compare per-phase divergence between candidate placements before committing the rig |
+| **Are two cameras complementary or redundant?** | top+wrist 0.499 vs wrist 0.522, flat weight sweep | Compare the pair against each single view *and* against a shuffled control |
+| **Which phase needs more or better data?** | grasp & insert ≈ random baseline | Phase-normalized, same-phase-neighbor variant only |
+| **Why do look-alike frames have different actions?** | Section 13 pair grids | Aliasing scan in both directions; inspect the strongest pairs by eye — the pictures are the diagnostic, not the rate |
+| **Most accurate measurement available** | history beats single frame in every space | Use temporal embeddings (t, t−10, t−20) as the default for future analysis |
+
+**Extensions worth adding:**
+
+- **Always report a control and a random baseline.** A divergence number alone is uninterpretable: "0.5"
+  only means something against the shuffled control (0.83) and the random baseline (~0.92).
+- **Exclude same-episode neighbors**, or every space looks excellent.
+- **Use the next *motion*, not the absolute command**, or any space encoding the current pose scores well
+  for free.
+- **Compare spaces of similar dimensionality**, or state the caveat (joint state vs images here).
+- **This metric measures observability, not operator quality.** Operator inconsistency needs the dial
+  experiments (08 §A.4); a clean single-operator dataset isolates the observation side.
+- **Keep the background clean for measurement batches**, or crop before embedding — cropping costs nothing.
+
+**For the next collection round (toolkit task):**
+
+1. **Spend episodes where the metric is near chance:** grasp and insert. Extra reach/transport episodes add
+   little — those phases are already near-deterministic given an observation.
+2. **Enforce one grasp style hardest in the final second** before contact and before release: one approach
+   direction, one closing speed, no exploratory wiggling.
+3. **Add targeted fine-phase episodes** (more positions, deliberate slow approach) rather than more whole
+   episodes of everything.
+4. **Track per-phase divergence per batch** as a quality gate — it is the number that moved when the
+   protocol changed.
+5. **Log positions per episode** (`phase05_log.csv` in the task card). Its absence blocked the per-position
+   breakdown in this study.
+
+---
+
+# Future studies
+
+## 1. Does divergence predict policy performance? (the essential missing link)
+
+Nothing here shows that lower divergence produces a better policy. Design: build subsets of one pool that
+differ in divergence — top-only vs top+wrist observation configs, or worst-quartile vs best-quartile
+episodes by per-phase divergence — train ACT with fixed hyperparameters and seeds, and run the eval protocol
+from [05](../05_eval_and_design.md). Report the correlation between predicted divergence and rollout
+success, and per-phase failure rates against per-phase divergence. This is Q1 of 08 §A.1, and it would
+upgrade divergence from "plausible proxy" to "validated proxy".
+
+## 2. Multi-frame history in policies
+
+It has been tried, and the result is more interesting than "nobody did it":
+
+- **RT-1** conditions on a short history of images (6 frames) rather than one
+  ([arXiv:2212.06817](https://arxiv.org/html/2212.06817v2)).
+- **Diffusion Policy** and its transformer variants use a short observation horizon; ablations report that
+  **2 observation steps work best and 3 or more actively hurt** — more history makes convergence harder,
+  while 2 frames supply the velocity cue that helps when the prediction horizon is long
+  ([Diffusion Policy](https://arxiv.org/html/2303.04137v5),
+  [Diffusion Transformer Policy](https://arxiv.org/pdf/2410.15959)).
+- The classic reason history hurts is **causal confusion / the copycat problem**: with observation histories
+  a cloned policy learns to predict the *previous* action, which is strongly correlated with the next one,
+  instead of the causal mapping — so more information yields worse policies
+  ([Causal Confusion in Imitation Learning](https://arxiv.org/abs/1905.11979),
+  [Fighting Copycat Agents](https://arxiv.org/abs/2010.14876),
+  [residual action prediction](https://arxiv.org/html/2207.09705v1)).
+
+So the LLM analogy only half transfers. Attention over a longer context helps *perception* — Section 11
+shows the information is genuinely there — but in behavioral cloning that same context offers a shortcut
+which supervised training will happily take. **That gap is a real research opening**, and this metric
+quantifies its first half. A concrete study: measure divergence with and without history per phase, train
+matched policies with 1 / 2 / 3 observation steps, and test whether the phases where history reduces
+divergence most are the phases where the history-conditioned policy gains — or where copycat behaviour
+appears.
+
+## 3. Smaller open threads
+
+- **Chunk-level target**: use the whole future action chunk (e.g. 30 commands) instead of one ⅓-s delta, to
+  match how chunked policies actually act.
+- **Longer horizon** (H = 30) to separate jitter from genuine multi-modality in the fine phases.
+- **PCA-matched dimensionality** before ranking joint state against the cameras.
+
+---
+
+# Caveats
+
+- One operator, one session, clean (D0) demos only: this is about observability, not operator consistency.
+- No per-episode position log, so nothing separates the 10 cylinder positions.
+- Phases are defined from the gripper signal, which makes "the wrist camera predicts the phase" partly
+  circular.
+- Bootstrap intervals resample episodes but reuse fixed neighbor sets, so they are slightly optimistic.
+- DINOv2 global embeddings throughout; no patch-level or object-centric features were tried.
