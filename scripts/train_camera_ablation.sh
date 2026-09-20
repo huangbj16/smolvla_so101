@@ -4,7 +4,7 @@
 # Docs: Details/phase06_camera_ablation_training.md
 #
 #   SMOKE:  STEPS=500 SAVE_FREQ=500 EVAL_STEPS=250 OUT=outputs/smoke ./scripts/train_camera_ablation.sh
-#   FINAL:  ./scripts/train_camera_ablation.sh                        # 60k steps, ~7 h, pushes to HF
+#   FINAL:  ./scripts/train_camera_ablation.sh                        # 60k steps, ~6.5 h, pushes to HF
 #
 #   ./scripts/train_camera_ablation.sh wrist       # one condition only
 #   SEED=1001 ./scripts/train_camera_ablation.sh   # a second seed (new wandb runs + new HF repos)
@@ -27,15 +27,15 @@ OUT=${OUT:-outputs/train}
 EVAL_SPLIT=${EVAL_SPLIT:-0.1}   # set to 0 to train on all 50 episodes
 # eval_steps=0 (lerobot's default) builds the eval dataloader and never uses it: the holdout episodes
 # would just be dropped from training for nothing. Must be 0 when EVAL_SPLIT is 0, or validate() raises.
-# Measured cost: ~30 s per pass on the full 5-episode holdout with two cameras, ~15 s with one. At 2000
-# that is 30 points on the wandb curve for ~8% extra wall clock.
-EVAL_STEPS=${EVAL_STEPS:-2000}
+# Measured cost: ~30 s per pass on the full 5-episode holdout with two cameras, ~15 s with one. At 5000
+# that is 12 points on the wandb curve for ~12 min across the three runs.
+EVAL_STEPS=${EVAL_STEPS:-5000}
 if [ "$EVAL_SPLIT" = "0" ] || [ "$EVAL_SPLIT" = "0.0" ]; then EVAL_STEPS=0; fi
 # NOTE: do NOT set --max_eval_samples. It slices frames[:n] per task, i.e. the FIRST n frames of the
 # holdout, which is the opening of one episode only — the reach phase of a single position.
 
 # --- logging ---------------------------------------------------------------------------------------
-LOG_FREQ=${LOG_FREQ:-100}
+LOG_FREQ=${LOG_FREQ:-200}
 WANDB=${WANDB:-true}
 WANDB_PROJECT=${WANDB_PROJECT:-phase06-camera-ablation}   # run name = job_name, so all 3 overlay
 
