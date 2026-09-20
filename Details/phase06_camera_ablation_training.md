@@ -179,7 +179,7 @@ Recorded so the write-up does not have to reconstruct them.
 | **Action chunking at rollout** | **`n_action_steps=25`** (model still predicts a 100-step chunk) | The default 100 is 3.3 s of blind motion at 30 fps — the policy would consult the cameras only ~9 times in a 30 s episode, throttling the very effect under test. 25 gives ~36 observations per episode. Set at rollout, no retraining. Temporal ensembling (`n_action_steps=1`) was rejected: it needs a policy call every frame, and the two-camera forward pass is estimated at ~45 ms (~22 Hz), which would give the three conditions *different* effective control rates |
 | **Precision** | **fp32** (`use_amp=false`, the default) | The reference ACT recipe. bf16 AMP is ~1.3× faster (~5.2 h) but nothing has verified ACT converges identically under it here, and a numerics surprise would be indistinguishable from a camera effect |
 | **Image augmentation** | **Off** (the default) | Color and affine jitter would not affect the two views equally — the wrist view is dominated by gripper and cylinder, the top view by a static scene — so it could shift the camera ranking for reasons unrelated to observability |
-| **Hub push** | **Final model of each run**, private | All 6 checkpoints per run stay on local disk (~11 GB), which is where the 40k-vs-60k convergence check needs them |
+| **Hub push** | **Final model of each run**, private, **as a separate step after training** | All 6 checkpoints per run stay on local disk (~11 GB), which is where the 40k-vs-60k convergence check needs them. Pushing from inside `lerobot-train` is what killed the first attempt (§7) |
 | **Validation** | Every 5000 steps, full holdout | 12 points on the curve for ~12 min total |
 | **Logging** | wandb, `log_freq=200` | Three runs in one project so the curves overlay |
 
@@ -222,8 +222,7 @@ The smoke run also exercises wandb. It does **not** push to the Hub: the script 
 ```
 
 Runs `top`, `wrist`, `both` **sequentially** at 60k steps each, ~6.5 h total, logging to
-`outputs/train/act_<cond>_s1000.log`, streaming to wandb, and pushing each final model to a private Hub
-repo `HALDijkstraaa/act_toolkit_cylinder_<cond>_s1000`. Useful variants:
+`outputs/train/act_<cond>_s1000.log` and streaming to wandb. Useful variants:
 
 ```bash
 STEPS=100000 ./scripts/train_camera_ablation.sh
@@ -238,13 +237,27 @@ SEED=1001 ./scripts/train_camera_ablation.sh wrist
 ```
 
 ```bash
-WANDB=false PUSH_TO_HUB=false ./scripts/train_camera_ablation.sh
+WANDB=false ./scripts/train_camera_ablation.sh
 ```
+
+### Step 2b — push the models
+
+Separate from training on purpose (§7):
+
+```bash
+./scripts/push_models.sh
+```
+
+Uploads each finished `checkpoints/last/pretrained_model` (198 MB) to a private
+`HALDijkstraaa/act_toolkit_cylinder_<cond>_s1000`. `CKPT=040000 ./scripts/push_models.sh` pushes a
+specific checkpoint instead; naming a condition (`./scripts/push_models.sh top`) pushes just that one.
+
+The script rewrites any `socks://` proxy variable to `http://` before uploading — see §7.
 
 The script is a thin wrapper; the single command it issues for the top-only condition is:
 
 ```bash
-lerobot-train --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episodes="[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 9, 19, 29, 39, 49]" --dataset.eval_split=0.1 --eval_steps=5000 --policy.type=act --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_toolkit_cylinder_top_s1000 --policy.private=true --policy.input_features="{'observation.state': {'type': 'STATE', 'shape': [6]}, 'observation.images.top': {'type': 'VISUAL', 'shape': [3, 480, 640]}}" --batch_size=8 --steps=60000 --num_workers=8 --seed=1000 --save_freq=10000 --log_freq=200 --output_dir=outputs/train/act_top_s1000 --job_name=act_top_s1000 --wandb.enable=true --wandb.project=phase06-camera-ablation
+lerobot-train --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episodes="[0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 9, 19, 29, 39, 49]" --dataset.eval_split=0.1 --eval_steps=5000 --policy.type=act --policy.device=cuda --policy.push_to_hub=false --policy.input_features="{'observation.state': {'type': 'STATE', 'shape': [6]}, 'observation.images.top': {'type': 'VISUAL', 'shape': [3, 480, 640]}}" --batch_size=8 --steps=60000 --num_workers=8 --seed=1000 --save_freq=10000 --log_freq=200 --output_dir=outputs/train/act_top_s1000 --job_name=act_top_s1000 --wandb.enable=true --wandb.project=phase06-camera-ablation
 ```
 
 The `wrist` condition swaps the image key; the `both` condition **omits `--policy.input_features`
@@ -453,7 +466,41 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 | Fixture moved between training data and eval | Re-check the taped outline against the top view before starting |
 | Single-camera policy errors on the extra camera key | Verify on the first rollout (§4a); fall back to dropping the camera from `--robot.cameras` |
 | Reading 10 trials per condition as a success rate | It is ±16 points. Pass 1 is for behavior; §4b is for numbers |
-| Overnight run dies silently | The script `tee`s logs; check `outputs/train/*.log` before starting eval. The loop does not abort on a failed run |
+| Overnight run dies silently | The script `tee`s logs; check `outputs/train/*.log` before starting eval |
+| A failed run takes the rest down with it | It does — `set -euo pipefail` means `pipefail` propagates `lerobot-train`'s exit code through the `tee` pipe and `set -e` aborts the loop. That is correct for a genuine training failure, and it is why the Hub push was moved out of training |
+| `socks://` proxy vs `huggingface_hub` | See below |
 | Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
 | Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
 | A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |
+
+### The Hub-push failure of 2026-09-20
+
+The `top` run finished cleanly at 60k (`eval_loss=0.1711`, 1 h 39 m), then died in `push_model_to_hub`:
+
+```
+ValueError: Unknown scheme for proxy URL URL('socks://127.0.0.1:7897/')
+```
+
+`huggingface_hub` 1.x uses **httpx**, which accepts `http://`, `https://` and `socks5://` proxies but
+rejects a bare `socks://`. The VPN client exports `socks://127.0.0.1:7897`, so every Hub call through
+httpx raises before sending anything. (`requests`, which wandb uses, tolerates it — which is why wandb
+logged fine all the way through.)
+
+Because the push runs *inside* `train()` and the script uses `set -euo pipefail`, the non-zero exit
+propagated through the `tee` pipe and aborted the loop: **`wrist` and `both` never started.** Nothing was
+lost from `top` — the final checkpoint was already on disk — but three hours of queued work evaporated.
+
+**Two fixes, both applied:**
+
+1. **Scheme rewrite.** `scripts/push_models.sh` rewrites any `socks://` proxy variable to `http://` on the
+   same port before uploading. Clash's mixed port serves HTTP CONNECT as well as SOCKS5, so this needs no
+   extra package. (The alternative, `pip install "httpx[socks]"` plus `socks5://`, also works.) For an
+   interactive session:
+
+   ```bash
+   export ALL_PROXY=http://127.0.0.1:7897 all_proxy=http://127.0.0.1:7897
+   ```
+
+2. **Decoupling.** `PUSH_TO_HUB` now defaults to `false` in the training script. Training touches no
+   network (the dataset is cached locally; only wandb needs it), so nothing that depends on the network
+   should be able to end a training queue. Push afterwards with `./scripts/push_models.sh`.

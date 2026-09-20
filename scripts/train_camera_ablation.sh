@@ -4,7 +4,8 @@
 # Docs: Details/phase06_camera_ablation_training.md
 #
 #   SMOKE:  STEPS=500 SAVE_FREQ=500 EVAL_STEPS=250 OUT=outputs/smoke ./scripts/train_camera_ablation.sh
-#   FINAL:  ./scripts/train_camera_ablation.sh                        # 60k steps, ~6.5 h, pushes to HF
+#   FINAL:  ./scripts/train_camera_ablation.sh                        # 60k steps, ~6.5 h
+#   PUSH:   ./scripts/push_models.sh                                  # afterwards, separately
 #
 #   ./scripts/train_camera_ablation.sh wrist       # one condition only
 #   SEED=1001 ./scripts/train_camera_ablation.sh   # a second seed (new wandb runs + new HF repos)
@@ -40,7 +41,11 @@ WANDB=${WANDB:-true}
 WANDB_PROJECT=${WANDB_PROJECT:-phase06-camera-ablation}   # run name = job_name, so all 3 overlay
 
 # --- hub -------------------------------------------------------------------------------------------
-PUSH_TO_HUB=${PUSH_TO_HUB:-true}     # pushes the FINAL model of each run, private
+# OFF by default, and deliberately so: lerobot pushes at the very end of train(), inside the same
+# process, and this script runs under `set -euo pipefail` — so a failed push aborts the whole loop and
+# the remaining conditions never train. That cost two runs on 2026-09-20. Push afterwards instead:
+#   ./scripts/push_models.sh
+PUSH_TO_HUB=${PUSH_TO_HUB:-false}    # pushes the FINAL model of each run, private
 HF_USER=${HF_USER:-HALDijkstraaa}
 REPO_PREFIX=${REPO_PREFIX:-act_toolkit_cylinder}
 # Guard: never push a smoke run to the Hub, even if PUSH_TO_HUB was left at its default.
@@ -112,4 +117,6 @@ done
 echo "done. checkpoints under $OUT/act_*_s${SEED}/checkpoints/"
 if [ "$PUSH_TO_HUB" = "true" ]; then
   echo "pushed: https://huggingface.co/${HF_USER}/${REPO_PREFIX}_<cond>_s${SEED} (private)"
+else
+  echo "next: ./scripts/push_models.sh   # upload the final models to private HF repos"
 fi
