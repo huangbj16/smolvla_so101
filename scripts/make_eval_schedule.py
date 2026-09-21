@@ -32,7 +32,7 @@ halves = {"A": sorted(pos[: a.positions // 2], key=key), "B": sorted(pos[a.posit
 
 w = csv.writer(sys.stdout)
 w.writerow(["block", "condition", "half", "episode_in_block", "position",
-            "success", "fail_stage", "notes"])
+            "episode_index", "duration_s", "success", "fail_stage", "notes"])
 
 block = 0
 plan = []
@@ -46,7 +46,7 @@ for rep in range(a.repeats):
             rng.shuffle(eps)                       # position order differs per block
             plan.append((block, cond, half, eps))
             for i, ppos in enumerate(eps, start=1):
-                w.writerow([block, cond, half, i, ppos, "", "", ""])
+                w.writerow([block, cond, half, i, ppos, "", "", "", "", ""])
         order = order[1:] + order[:1]              # rotate so the same policy is not always first
 
 print(f"# {block} blocks x {a.positions // 2} episodes = {block * (a.positions // 2)} trials", file=sys.stderr)

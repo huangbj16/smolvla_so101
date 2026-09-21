@@ -176,7 +176,7 @@ Recorded so the write-up does not have to reconstruct them.
 
 | Decision | Choice | Reasoning |
 |---|---|---|
-| **Action chunking at rollout** | **`n_action_steps=25`** (model still predicts a 100-step chunk) | The default 100 is 3.3 s of blind motion at 30 fps — the policy would consult the cameras only ~9 times in a 30 s episode, throttling the very effect under test. 25 gives ~36 observations per episode. Set at rollout, no retraining. Temporal ensembling (`n_action_steps=1`) was rejected: it needs a policy call every frame, and the two-camera forward pass is estimated at ~45 ms (~22 Hz), which would give the three conditions *different* effective control rates |
+| **Action chunking at rollout** | ~~`n_action_steps=25`~~ → **the stored 100** (reverted 2026-09-21, see §4a "Why 25 stalls") | The default 100 is 3.3 s of blind motion at 30 fps — the policy would consult the cameras only ~9 times in a 30 s episode, throttling the very effect under test. 25 gives ~36 observations per episode. Set at rollout, no retraining. Temporal ensembling (`n_action_steps=1`) was rejected: it needs a policy call every frame, and the two-camera forward pass is estimated at ~45 ms (~22 Hz), which would give the three conditions *different* effective control rates |
 | **Precision** | **fp32** (`use_amp=false`, the default) | The reference ACT recipe. bf16 AMP is ~1.3× faster (~5.2 h) but nothing has verified ACT converges identically under it here, and a numerics surprise would be indistinguishable from a camera effect |
 | **Image augmentation** | **Off** (the default) | Color and affine jitter would not affect the two views equally — the wrist view is dominated by gripper and cylinder, the top view by a static scene — so it could shift the camera ranking for reasons unrelated to observability |
 | **Hub push** | **Final model of each run**, private, **as a separate step after training** | All 6 checkpoints per run stay on local disk (~11 GB), which is where the 40k-vs-60k convergence check needs them. Pushing from inside `lerobot-train` is what killed the first attempt (§7) |
@@ -377,7 +377,7 @@ Set `COND` and `HALF` from the schedule, then run. This is block 1 (`both`, half
 > `HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name'`.
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && COND=both && HALF=a && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=outputs/train/act_${COND}_s1000/checkpoints/last/pretrained_model --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/rollout_phase06_eval_${COND}_${HALF} --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=5 --dataset.episode_time_s=30 --dataset.reset_time_s=20 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && COND=both && HALF=a && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=outputs/train/act_${COND}_s1000/checkpoints/last/pretrained_model --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/rollout_phase06_eval_${COND}_${HALF} --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=5 --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
 ```
 
 Then repeat for blocks 2–6, changing only `COND` and `HALF`:
@@ -391,16 +391,57 @@ Then repeat for blocks 2–6, changing only `COND` and `HALF`:
 | 5 | `wrist` | `b` |
 | 6 | `both` | `b` |
 
-Verified to parse for both a single-camera and the two-camera policy: `n_action_steps` resolves to 25
-with `chunk_size` still 100, `act_top_s1000` loads with `['observation.images.top', 'observation.state']`
-while `act_both_s1000` loads all three keys, and both cameras attach in each case.
+Verified to parse for both a single-camera and the two-camera policy: `act_top_s1000` loads with
+`['observation.images.top', 'observation.state']` while `act_both_s1000` loads all three keys, and both
+cameras attach in each case.
+
+### Why `n_action_steps=25` stalls, and 100 does not
+
+The planned 25-step chunk left the arm jittering at the home pose, unable to start until a hand moved in
+front of the camera. The cause is in the training data, and it is measurable.
+
+**Training episodes were never idle-trimmed.** Trimming was a change made in the *analysis* notebook
+(§Phase 0.5), not in the dataset. So every episode begins with the arm parked at home while the operator
+gets ready. Measuring the lead-in — frames until any joint moves more than 2 units, the same rule the
+notebook used:
+
+| idle lead-in before the arm first moves | frames (30 fps) |
+|---|---|
+| median / mean | **74 / 74** (≈ 2.5 s) |
+| min / max | 34 / 141 |
+| episodes with lead-in > 25 frames (0.83 s) | **50 / 50 — 100%** |
+| episodes with lead-in > 50 frames (1.67 s) | 43 / 50 — 86% |
+| episodes with lead-in > 100 frames (3.33 s) | 6 / 50 — 12% |
+
+So from the home pose the policy's predicted chunk *begins with "stay still"* in every single episode it
+learned from.
+
+- **With `n_action_steps=25`** the robot executes 0.83 s — pure idle in 100% of the training distribution
+  — then re-observes. The scene is unchanged: same home pose, same static table. So it predicts idle
+  again. **A self-reinforcing stall**, broken only by changing the observation — which is exactly what
+  waving a hand does.
+- **With `n_action_steps=100`** the robot commits to 3.3 s open-loop, which clears the idle lead-in in 88%
+  of the distribution and carries it into real motion before it ever re-observes.
+
+This is the copycat / idle-attractor failure in miniature, and it is the same ambiguity Phase 0.5
+measured: a single frame cannot distinguish "parked at home, about to start" from "parked at home,
+waiting". Only temporal context can, and ACT has none.
+
+**Consequences, stated plainly:**
+
+- The §2 decision to use 25 was wrong for this dataset, and the reasoning behind it still stands — at
+  `n_action_steps=100` the policy consults the cameras roughly nine times in a 30 s episode, which does
+  throttle the effect under test. It is applied identically to all three conditions, so the comparison
+  stays fair; it just measures the cameras' value at a coarse re-observation rate.
+- **The real fix is in the data, not the rollout flag: trim idle frames before training.** That is a
+  data-collection guideline worth carrying into Phase 0.5's results doc, and it would likely make shorter
+  chunks viable — which would in turn make this ablation more sensitive.
 
 **Why each flag is what it is:**
 
-- **`--policy.n_action_steps=25`** overrides the checkpoint's stored 100. `lerobot-rollout` forwards
-  `--policy.*` into `PreTrainedConfig.from_pretrained` as `cli_overrides`, so no retraining is needed.
-  **Keep it identical for all six blocks** — it sets how often the policy looks at the cameras, which is
-  the thing being compared (§2).
+- **No `n_action_steps` override — the stored 100 is used.** The planned 25 was tried first and *failed*:
+  the arm jittered in place at the home pose and would not start until a hand was waved in front of the
+  camera. See "Why 25 stalls" below. All six blocks use the default.
 - **Both cameras always connected**, even for the single-camera policies. The policy consumes only the
   keys in its own `input_features`; the extra stream is ignored, keeps the physical scene identical, and
   gives you both views on video for review. **Confirm on the very first block** that a single-camera
@@ -411,7 +452,9 @@ while `act_both_s1000` loads all three keys, and both cameras attach in each cas
 - **The dataset name must start with `rollout_`.** `build_rollout_context` rejects anything else outright
   (`Dataset names for rollout must start with 'rollout_'`). This is a **runtime** check, not a config
   check, so it fires only after the robot and cameras have already connected.
-- **`reset_time_s=20`** is your window to move the cylinder to the next scheduled position.
+- **`episode_time_s=60`**, up from the planned 30. The 30 s success window still defines success, but a
+  hard 30 s cutoff leaves no slack on a loaded CPU; press **→** when the outcome is clear.
+- **`reset_time_s=10`** is your window to move the cylinder to the next scheduled position.
 - **`--display_data=true`** gives you the live rerun view — use it to confirm image quality before the
   first episode commits.
 - **The checkpoint path is a local directory, not a Hub id.** `PreTrainedConfig.from_pretrained` checks
@@ -581,6 +624,7 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 | `socks://` proxy vs `huggingface_hub` | See below |
 | `HFValidationError` on a local checkpoint path | The variables expanded empty. Separate the assignments with `&&`, not spaces — as a command prefix they apply to the process env *after* the line is expanded (§4a) |
 | `Dataset names for rollout must start with 'rollout_'` | `lerobot-rollout` enforces the prefix in `build_rollout_context`. Use `--dataset.repo_id=<user>/rollout_<name>` |
+| Arm jitters at home and never starts | `n_action_steps` too small for this dataset's idle lead-in — use the stored 100 (§4a) |
 | Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
 | Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
 | A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |
