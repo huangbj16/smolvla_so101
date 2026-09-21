@@ -286,46 +286,138 @@ outputs/train/act_top_s1000/checkpoints/last/pretrained_model
 
 ---
 
+# 3.5 — Training record (2026-09-21)
+
+All three runs finished at 60k steps, seed 1000, fp32, no augmentation.
+**wandb:** [phase06-camera-ablation](https://wandb.ai/bj-huang-university-of-toronto/phase06-camera-ablation?nw=nwuserbjhuang)
+
+![Validation loss over training](figs/11_phase06_eval_loss.png)
+
+*Held-out loss on the 5 balanced episodes, every 5000 steps, plotted from the run logs. The shaded band
+marks how much a single curve moves between neighbouring checkpoints.*
+
+| Run | final `eval_loss` | wall clock | Hub (private) |
+|---|---|---|---|
+| `act_top_s1000` | 0.1711 | 1 h 39 m | `HALDijkstraaa/act_toolkit_cylinder_top_s1000` |
+| `act_wrist_s1000` | 0.1701 | ~1 h 40 m | `…_wrist_s1000` |
+| `act_both_s1000` | **0.1663** | ~3 h 15 m | `…_both_s1000` |
+
+**Reading it honestly:**
+
+- **The final ranking is `both` < `wrist` < `top`**, the direction Phase 0.5 predicted (P1), and the
+  `both`-over-`wrist` margin is small (P2). So far so consistent.
+- **But the ranking is not resolved by this metric.** The whole spread at 60k is **0.0048**, while a single
+  curve's typical move between neighbouring checkpoints is **0.0039**. The curves also cross repeatedly:
+  `wrist` is the worst space for most of training and only overtakes `top` in the last two checkpoints.
+  One seed, one holdout of 5 episodes. Treat the ordering as *not contradicting* Phase 0.5, not as
+  confirming it.
+- **Nothing had converged at 60k.** All three are still trending down, and `both` takes its largest single
+  drop at the very last checkpoint (0.1717 → 0.1663). 60k was a budget, not a plateau. Which is exactly
+  why the 40k checkpoints are worth keeping: if the 40k and 60k policies behave the same on the robot,
+  the budget was enough; if they differ, the comparison needs more steps before it means anything.
+- This is also the reason the real answer has to come from rollouts. A 0.005 difference in action-
+  prediction L1 says almost nothing about whether the arm finds the cylinder.
+
+---
+
 # 4 — Evaluation
 
 ## 4a — Pass 1: the behavior pass (this phase)
 
-30 rollouts, one per position per condition, ~45 minutes. **This is not a success-rate measurement** —
-10 trials per condition gives a ±16-point standard error, so any difference under ~30 points is noise.
-What it does give you is video of three policies attempting the same ten positions, which is enough to
-see *behavioral* differences, and those are usually obvious to the eye long before they are statistically
-significant.
+30 rollouts — 10 per policy, one per position — in about an hour. **This is not a success-rate
+measurement**: 10 trials per condition gives a ±16-point standard error, so anything under ~30 points is
+noise. What it gives you is video of three policies attempting the same ten positions, which is enough to
+see *behavioral* differences long before they are statistically significant.
+
+Evaluate the **60k checkpoints** of all three (lowest held-out loss for each, and the same step for all
+three, so no condition gets a cherry-picked checkpoint).
+
+### Step 1 — generate the schedule (already done)
 
 ```bash
-python scripts/make_eval_schedule.py --trials-per-position 1 --seed 0 > Details/phase06_eval_log.csv
+python scripts/make_eval_schedule.py --seed 0 > Details/phase06_eval_log.csv
 ```
 
-Columns: `trial, block, condition, position, success, fail_stage, time_s, notes`. Even in a behavior pass,
-**fill in `fail_stage`** (`reach | grasp | transport | insert | retreat | none`) — that column is the
-direct test of the Phase 0.5 predictions in §6.
+`lerobot-rollout` records N episodes of one policy in a row, so a fully interleaved trial order would mean
+restarting the process 30 times. The schedule splits the positions in half and runs every condition once
+per half, so each policy gets the same positions at the same point in the session:
 
-**Load the camera presets first.** The policies were trained on images produced by preset 1 (C920 / top)
-and preset 2 (C922 / wrist). An unloaded preset is a distribution shift that will look like a policy
-failure. See [01 Step 6](../01_setup_robot.md).
+```
+half A = P2 P4 P6 P8 P9        half B = P1 P3 P5 P7 P10
+  block 1: both  (A) -> P6  P2  P8  P4  P9
+  block 2: top   (A) -> P4  P9  P8  P6  P2
+  block 3: wrist (A) -> P4  P8  P9  P2  P6
+  block 4: top   (B) -> P3  P1  P10 P7  P5
+  block 5: wrist (B) -> P10 P1  P3  P7  P5
+  block 6: both  (B) -> P1  P5  P3  P7  P10
+```
 
-Then, with `CKPT` set to whichever condition the schedule calls for:
+Six `lerobot-rollout` invocations, five episodes each.
+
+### Step 2 — set up the rig
+
+1. **Plug in the follower only** (`/dev/ttyACM0`). The leader is not needed: with no teleop connected, the
+   episodic strategy returns the arm to the joint positions captured at startup between episodes.
+2. **Put the arm in the home pose before you start** — that startup pose becomes the reset pose for the
+   whole block.
+3. **Load the camera presets**: Cameractrls, preset 1 for the C920 (top), preset 2 for the C922 (wrist).
+   The policies were trained on images those presets produce; an unloaded preset is a distribution shift
+   that will look like a policy failure. [01 Step 6](../01_setup_robot.md).
+4. **Check the fixture** is on its taped outline and the P1–P10 marks are where they were during recording.
+5. Place the cylinder on **block 1's first position (P6)** before running anything.
+
+### Step 3 — run one block
+
+Set `COND` and `HALF` from the schedule, then run. This is block 1 (`both`, half A):
 
 ```bash
-CKPT=outputs/train/act_top_s1000/checkpoints/last/pretrained_model TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 lerobot-rollout --strategy.type=episodic --policy.path=$CKPT --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/phase06_eval_act_top --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=10 --dataset.episode_time_s=30 --dataset.reset_time_s=15 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && COND=both HALF=a TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 lerobot-rollout --strategy.type=episodic --policy.path=outputs/train/act_${COND}_s1000/checkpoints/last/pretrained_model --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/phase06_eval_${COND}_${HALF} --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=5 --dataset.episode_time_s=30 --dataset.reset_time_s=20 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
 ```
 
-- **Always connect both cameras**, even for the single-camera policies. The policy consumes only the keys
-  in its own `input_features`; the extra stream is ignored but keeps the physical scene identical (the
-  wrist camera is mounted either way) and gives you both views on video for review. **Verify this on the
-  first rollout** — if a single-camera policy errors on the extra key, drop that camera from
-  `--robot.cameras` for its trials.
+Then repeat for blocks 2–6, changing only `COND` and `HALF`:
+
+| Block | `COND` | `HALF` |
+|---|---|---|
+| 1 | `both` | `a` |
+| 2 | `top` | `a` |
+| 3 | `wrist` | `a` |
+| 4 | `top` | `b` |
+| 5 | `wrist` | `b` |
+| 6 | `both` | `b` |
+
+Verified to parse: `n_action_steps` resolves to 25 with `chunk_size` still 100, the top-only policy loads
+with `['observation.images.top', 'observation.state']`, and both cameras attach.
+
+**Why each flag is what it is:**
+
 - **`--policy.n_action_steps=25`** overrides the checkpoint's stored 100. `lerobot-rollout` forwards
-  `--policy.*` flags into `PreTrainedConfig.from_pretrained` as `cli_overrides`, so this needs no
-  retraining. **Use the same value for all three conditions** — it changes how often the policy looks at
-  the cameras, which is exactly what is being compared. See the decisions table in §2.
-- **`reset_time_s=15`**, longer than the 3 s used for recording: you reposition the cylinder between trials.
-- **→** ends a trial early, **←** discards and re-runs, **Esc** stops.
-- `--strategy.type=episodic` saves video, which is the actual deliverable of this pass.
+  `--policy.*` into `PreTrainedConfig.from_pretrained` as `cli_overrides`, so no retraining is needed.
+  **Keep it identical for all six blocks** — it sets how often the policy looks at the cameras, which is
+  the thing being compared (§2).
+- **Both cameras always connected**, even for the single-camera policies. The policy consumes only the
+  keys in its own `input_features`; the extra stream is ignored, keeps the physical scene identical, and
+  gives you both views on video for review. **Confirm on the very first block** that a single-camera
+  policy does not error on the extra key — if it does, drop that camera from `--robot.cameras` for its
+  blocks and note it.
+- **`--dataset.no_stamp=true`** keeps the repo name predictable instead of appending a timestamp.
+- **`reset_time_s=20`** is your window to move the cylinder to the next scheduled position.
+- **`--display_data=true`** gives you the live rerun view — use it to confirm image quality before the
+  first episode commits.
+
+### Step 4 — during the session
+
+- **→** ends the current episode or reset early · **←** discards and re-records · **Esc** stops the block.
+- Use **←** only for a *rig* problem (cylinder knocked over during reset, wrong position placed). Do
+  **not** re-record because the policy failed — the failures are the data.
+- Between episodes, move the cylinder to the next position in that block's list.
+- Jot `success` and `fail_stage` in `Details/phase06_eval_log.csv` as you go, or leave it and score from
+  video afterwards. Either way, **`fail_stage` is the column that matters** — it is the direct test of the
+  Phase 0.5 predictions in §6.
+
+### Step 5 — after the session
+
+Episodes land in `~/.cache/huggingface/lerobot/HALDijkstraaa/phase06_eval_<cond>_<half>/`. Score from
+video, blind to condition if you can manage it, and fill in the log. Then write up per §6.
 
 ## 4b — Pass 2: the success-rate comparison (only if pass 1 looks promising)
 

@@ -294,7 +294,12 @@ so all three 60k-step runs take **~6.3 h sequentially** in fp32 and no cloud GPU
 GPU-bound, so larger batches and parallel runs both buy nothing (three concurrent runs finish 8% *later*).
 
 Pass 1 is one seed and 30 rollouts, aimed at the **emergent behavior** of a top-only vs wrist-only
-policy rather than at success rates; the statistical comparison is a later pass. Note the run book also
+policy rather than at success rates; the statistical comparison is a later pass.
+
+**Training done 2026-09-21** ([wandb](https://wandb.ai/bj-huang-university-of-toronto/phase06-camera-ablation?nw=nwuserbjhuang)):
+final held-out loss `both` 0.1663 < `wrist` 0.1701 < `top` 0.1711 — the direction Phase 0.5 predicted, but
+the 0.0048 spread is the size of a single curve's checkpoint-to-checkpoint wobble, so it settles nothing.
+Rollouts next. Note the run book also
 fixes the train/eval split: episodes were recorded in position blocks, so lerobot's default "last 5"
 holdout would have removed position P10 from training entirely.
 
