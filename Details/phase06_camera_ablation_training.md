@@ -377,7 +377,7 @@ Set `COND` and `HALF` from the schedule, then run. This is block 1 (`both`, half
 > `HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name'`.
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && COND=both && HALF=a && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=outputs/train/act_${COND}_s1000/checkpoints/last/pretrained_model --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/phase06_eval_${COND}_${HALF} --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=5 --dataset.episode_time_s=30 --dataset.reset_time_s=20 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && COND=both && HALF=a && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=outputs/train/act_${COND}_s1000/checkpoints/last/pretrained_model --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/rollout_phase06_eval_${COND}_${HALF} --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=5 --dataset.episode_time_s=30 --dataset.reset_time_s=20 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
 ```
 
 Then repeat for blocks 2–6, changing only `COND` and `HALF`:
@@ -406,7 +406,11 @@ while `act_both_s1000` loads all three keys, and both cameras attach in each cas
   gives you both views on video for review. **Confirm on the very first block** that a single-camera
   policy does not error on the extra key — if it does, drop that camera from `--robot.cameras` for its
   blocks and note it.
-- **`--dataset.no_stamp=true`** keeps the repo name predictable instead of appending a timestamp.
+- **`--dataset.no_stamp=true`** keeps the repo name predictable instead of appending a timestamp. The
+  name check runs *before* stamping, so this does not interfere with it.
+- **The dataset name must start with `rollout_`.** `build_rollout_context` rejects anything else outright
+  (`Dataset names for rollout must start with 'rollout_'`). This is a **runtime** check, not a config
+  check, so it fires only after the robot and cameras have already connected.
 - **`reset_time_s=20`** is your window to move the cylinder to the next scheduled position.
 - **`--display_data=true`** gives you the live rerun view — use it to confirm image quality before the
   first episode commits.
@@ -430,7 +434,7 @@ while `act_both_s1000` loads all three keys, and both cameras attach in each cas
 
 ### Step 5 — after the session
 
-Episodes land in `~/.cache/huggingface/lerobot/HALDijkstraaa/phase06_eval_<cond>_<half>/`. Score from
+Episodes land in `~/.cache/huggingface/lerobot/HALDijkstraaa/rollout_phase06_eval_<cond>_<half>/`. Score from
 video, blind to condition if you can manage it, and fill in the log. Then write up per §6.
 
 ## 4b — Pass 2: the success-rate comparison (only if pass 1 looks promising)
@@ -576,6 +580,7 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 | A failed run takes the rest down with it | It does — `set -euo pipefail` means `pipefail` propagates `lerobot-train`'s exit code through the `tee` pipe and `set -e` aborts the loop. That is correct for a genuine training failure, and it is why the Hub push was moved out of training |
 | `socks://` proxy vs `huggingface_hub` | See below |
 | `HFValidationError` on a local checkpoint path | The variables expanded empty. Separate the assignments with `&&`, not spaces — as a command prefix they apply to the process env *after* the line is expanded (§4a) |
+| `Dataset names for rollout must start with 'rollout_'` | `lerobot-rollout` enforces the prefix in `build_rollout_context`. Use `--dataset.repo_id=<user>/rollout_<name>` |
 | Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
 | Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
 | A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |
