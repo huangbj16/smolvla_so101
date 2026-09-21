@@ -21,7 +21,7 @@ The rest now lives in [09](09_home_deployment_and_hardware.md):
 | ID | Question | When |
 |---|---|---|
 | **C1** Second camera | Does adding the gripper camera raise visual state diversity and lower action divergence? | Week 1 — [done, passed](Details/phase05_camera_test_results.md) |
-| **C1b** Camera ablation | Does the wrist camera actually raise ACT success rate, and does divergence predict it? | Week 2 — [run book](Details/phase06_camera_ablation_training.md) |
+| **C1b** Camera ablation | Does the wrist camera actually raise ACT success rate, and does divergence predict it? | Week 2 — [done, partly](Details/phase06_camera_ablation_training.md) |
 | **Q0** Defects | Which data defects (jerky, hesitant, fumbled, inconsistent) hurt closed-loop success, and by how much? | Sim wk 3–5 · real wk 6–7 |
 | **Q1** Ranking | Does training on the top-N episodes by metric M beat random-N and bottom-N? | Sim wk 3–5 · real wk 6–7 |
 | **Q2** Policy transfer | Do Q0/Q1 hold across ACT, SmolVLA and π0.5? | Sim wk 3–5 · real wk 6–7 |
@@ -296,10 +296,15 @@ GPU-bound, so larger batches and parallel runs both buy nothing (three concurren
 Pass 1 is one seed and 30 rollouts, aimed at the **emergent behavior** of a top-only vs wrist-only
 policy rather than at success rates; the statistical comparison is a later pass.
 
-**Training done 2026-09-21** ([wandb](https://wandb.ai/bj-huang-university-of-toronto/phase06-camera-ablation?nw=nwuserbjhuang)):
-final held-out loss `both` 0.1663 < `wrist` 0.1701 < `top` 0.1711 — the direction Phase 0.5 predicted, but
-the 0.0048 spread is the size of a single curve's checkpoint-to-checkpoint wobble, so it settles nothing.
-Rollouts next. Note the run book also
+**Done 2026-09-21** ([wandb](https://wandb.ai/bj-huang-university-of-toronto/phase06-camera-ablation?nw=nwuserbjhuang)).
+Held-out loss separated the three by less than one curve's checkpoint wobble, and success rates (3/10,
+2/10, 2/10) were noise — but *where* they failed was decisive. `top` reached the cylinder 10/10 and never
+failed at reach; `wrist` reached 3/10 and failed at reach 7 times (Fisher p = 0.003), and the three
+positions it did reach were exactly the three nearest its fixed default trajectory (p = 0.008). H-a and
+H-b confirmed as a double dissociation. H-c was **not** supported: `top+wrist` reached only 6/10,
+under-shooting the workspace extremes by 17%, so the redundant stream degraded the phase the other camera
+was carrying. Divergence predicts what information is *available*, not whether a network can fuse it
+without harm. Note the run book also
 fixes the train/eval split: episodes were recorded in position blocks, so lerobot's default "last 5"
 holdout would have removed position P10 from training entirely.
 

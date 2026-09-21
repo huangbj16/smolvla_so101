@@ -608,57 +608,126 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 
 ---
 
-# 6.5 — Results, half A (2026-09-21)
+# 6.5 — Results: all 30 trials (2026-09-21)
 
-Blocks 1–3 done: 15 trials, 5 per condition, positions P2 P4 P6 P8 P9.
+Six blocks, 10 trials per condition, every position once per condition.
 Log: [phase06_eval_log.csv](phase06_eval_log.csv).
 
-| Condition | Passed | reach | grasp | insert |
-|---|---|---|---|---|
-| `top + wrist` | **2/5** | 1 | 1 | 1 |
-| `top` only | 1/5 | **0** | 2 | 2 |
-| `wrist` only | 0/5 | **4** | 1 | **0** |
+| Condition | Passed | **Reached the cylinder** | reach fails | grasp fails | insert fails |
+|---|---|---|---|---|---|
+| `top` only | 2/10 | **10/10** | **0** | 4 | 4 |
+| `top + wrist` | 3/10 | 6/10 | 4 | 2 | 1 |
+| `wrist` only | 2/10 | 3/10 | **7** | 1 | 0 |
 
-**The failure stages dissociate exactly as predicted, and in opposite directions.**
+**Success rate settles nothing — 3/10 vs 2/10 vs 2/10 is noise at ±15 points.** Everything below comes
+from *where* the policies failed, which at the same sample size is far more informative. That is itself a
+methodological result: **with few trials, score sub-goal attainment, not binary success.**
 
-- **`top`-only never fails at reach** (0/5) and fails *only* in the fine phases. It finds the cylinder
-  every time, then cannot close the last few millimetres. Operator note on P9: *"top cam can't find the
-  exact spot for insertion."* That is **P4 / hypothesis H-a**, observed on the robot.
-- **`wrist`-only fails at reach in 4 of 5** and never reaches an insertion at all. Operator note: *"without
-  the top cam, the robot learns the average reach behavior, always trying to reach the same position,
-  without paying much attention to where the cylinder is."* That is **P3 / hypothesis H-b**.
-- **`top+wrist` is the only condition whose failures spread across all three stages** — no single phase
-  dominates, which is what you would expect if each view covers the other's blind spot.
+## 1. The two cameras fail in opposite phases — confirmed
 
-### The "average reach" is measurable, not just visible
+- **`top`-only reached the cylinder in 10/10 trials and never once failed at reach.** All 8 of its failures
+  are in the fine phases (4 grasp, 4 insert), and the split replicated exactly across halves: 0/2/2 in
+  half A, 0/2/2 in half B. Operator note on P9: *"top cam can't find the exact spot for insertion."*
+- **`wrist`-only failed at reach in 7 of 10**, and never reached an insertion at all.
+- Failure-stage distribution, `top` (0/8 at reach) vs `wrist` (7/8): **Fisher exact p = 0.0014**.
+  On the cleaner per-trial framing, reached-the-cylinder 10/10 vs 3/10: **p = 0.0031**.
 
-Taking `shoulder_pan` at the grasp attempt (first gripper closure *after* the gripper has opened — it
-starts closed at home) gives where the arm actually decided to go:
+**P3 and P4 confirmed, in opposite directions.** This is the double dissociation the experiment was
+designed to find, and it is significant despite ten trials per condition.
 
-![Where the arm reaches](figs/12_phase06_reach_target.png)
+## 2. Wrist-only has a capture range — and it explains every one of its outcomes
 
-| Condition | std of pan at grasp | spread |
+![Does the policy go where the cylinder is?](figs/13_phase06_reach_tracking.png)
+
+*`shoulder_pan` at the grasp attempt (first gripper closure after the gripper opens — it starts closed at
+home) against where the cylinder actually was. The x-axis uses the top-only policy's own reach as the
+position reference, which is fair because it reached 10/10, but means `top` lies on the identity line by
+construction and cannot be judged by it.*
+
+`wrist`-only sits flat on one default line at **−46.9°** regardless of the cylinder — the average-reach
+behavior you saw. But it is not uniformly blind:
+
+| | positions | wrist reached? |
 |---|---|---|
-| `top` only | 28.4° | 67° |
-| `top + wrist` | 21.8° | 47° |
-| `wrist` only | **7.2°** | **17°** |
+| within ~20° of its default | P7 (0.9°), P3 (16.4°), P2 (20.2°) | **3/3** |
+| beyond | P1, P8, P4, P5, P9, P6, P10 (26–101°) | **0/7** |
 
-The wrist-only values are −46.9, −48.2, −47.4, −47.4 and −31.5: **four of five land within 1.3° of each
-other** regardless of where the cylinder was. The policy has collapsed onto one default reach — a
-regression to the mean action, which is precisely what an uninformative observation produces.
+**The three positions `wrist` reached are exactly the three nearest its default trajectory.** Under random
+assignment that ordering has probability 1/C(10,3) = **0.008**. Your reading is right, and sharper than
+"sometimes it works": the policy commits to a fixed opening move, and *if that move happens to sweep the
+cylinder into the wrist's field of view, it can then servo onto it* — P3 at −30.4° pulled the arm from
+−46.9 to −34.2, real visual adaptation. Outside that capture band the cylinder never enters frame, so
+there is nothing to adapt to.
 
-**And the outlier explains the one non-reach failure.** P2 at −31.5° is the only position `wrist`-only
-reached, and the only one where it failed at *grasp* instead — it is the position closest to the policy's
-default. The camera did not tell it where to go; the cylinder happened to be near where it goes anyway.
+This also explains its one non-reach failure: **P2 is the third-nearest position**, the arm got there, and
+it failed at grasp instead.
 
-### Caveats
+## 3. Adding the wrist camera made reaching *worse* — the compounding effect, located
 
-- **5 trials per condition.** The success counts (2 / 1 / 0) carry a ±~20-point standard error and should
-  not be read as a ranking. The *failure-stage* split is the finding, and it is 4/5 vs 0/5 on reach — a
-  pattern, not a rate.
-- Half A only (P2 P4 P6 P8 P9). Half B is blocks 4–6.
-- All three run at `n_action_steps=100`, i.e. ~9 observations per 30 s episode (§4a). A policy that could
-  re-observe more often might recover from a bad reach; none of these can.
+`top+wrist` reached 6/10 where `top` alone reached 10/10 (Fisher p = 0.087 — suggestive, not significant
+at this n). Your "compounding effect" reading holds up, and the data says exactly where it bites.
+
+Regressing `both`'s reach against `top`'s over the same ten positions gives a **slope of 0.81**: `both`
+under-shoots the extremes by 17% on average. Position by position:
+
+| | centre (P3 P2 P1 P8 P4 P9) | extremes (P7 P5 P6 P10) |
+|---|---|---|
+| `both` vs `top` reach | within ~1.5° — indistinguishable | −47.7→−41.0, +18.3→+5.8, +40.7→+20.3, +54.0→+45.2 |
+| `both` reach failures | 0 | **4 of 4** |
+
+**`both` is a partial version of `wrist`'s collapse**: fine in the middle of the workspace, dragged toward
+the mean at the edges — and every one of its reach failures is at an edge. The wrist stream carries no
+position information during reach but supplies half the visual tokens, and the further the cylinder is
+from the wrist's default view, the more that uninformative half pulls.
+
+**On "does it need more training steps?"** — worth testing, but the evidence cuts both ways:
+
+- *For:* validation loss was still falling for all three at 60k, `both` took its steepest drop at the very
+  last checkpoint, and `both` processes 600 image tokens against 300, so it plausibly needs longer.
+- *Against:* `both` already had the **lowest** validation loss of the three. If it were the least-trained
+  model you would expect the opposite. The deficit is in *arbitration* — knowing which camera to trust in
+  which phase — and held-out action L1 does not measure that.
+
+A second candidate cause is architectural, and specific: **ACT gives the model no camera-identity signal.**
+`encoder_cam_feat_pos_embed` is a 2D sinusoidal embedding of the feature map's H×W, so both cameras'
+300-token blocks receive *identical* positional embeddings (§1). The network must infer which camera a
+token came from purely from appearance, and then learn phase-dependent trust, from 45 demonstrations.
+
+Two clean follow-ups, in order of cost:
+
+1. **Resume `both` to 120k** and re-run only the four extreme positions (P7 P5 P6 P10), 2 trials each — 8
+   trials, ~30 min of robot time. Direct test of the training-budget hypothesis.
+2. **Add a learned per-camera embedding** to ACT's encoder input and retrain `both`. Small change,
+   directly targets arbitration, and it is a publishable negative-or-positive either way.
+
+## 4. What this says about the divergence metric
+
+This was Future Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does divergence
+predict policy performance? Partially, and the failure is as informative as the success.
+
+| Phase 0.5 said | The robot said |
+|---|---|
+| Top wins reach/transport; wrist wins grasp/insert (H-a, H-b) | **Confirmed** — a significant double dissociation |
+| Wrist frames cannot tell the ten positions apart during reach | **Confirmed**, with a measured capture range around a fixed default |
+| Grasp and insert sit near the random baseline for every space | **Consistent** — 8 of `top`'s 10 trials died there, and `both` never exceeded 3/10 |
+| top+wrist has the lowest divergence, so it should be best (H-c) | **Not supported.** Best success rate, but worse at reaching than `top` alone |
+
+**The gap worth carrying forward: divergence measures what information is *available* in an observation
+space, not whether a network can exploit it without harm.** Phase 0.5 already found the two views largely
+redundant (0.499 vs 0.522); it had no way to predict that the redundant stream would actively degrade the
+phase the other camera was carrying. A metric of availability needs a companion notion of *fusability*.
+
+## Caveats
+
+- **One trial per position per condition, 10 per condition.** Every per-position statement is n = 1.
+- The position reference is `top`'s own reach, valid as a reference because it reached 10/10, but it makes
+  `top` exact by construction.
+- The ±20° capture band was chosen after seeing the data; the rank statistic (1/120) is the honest test.
+- **Block 6 (`both`, half B) ran last in the session**, so it carries the most drift. `both` ran *first*
+  in half A, so across its ten trials the exposure partly cancels — but its half-B reach failures are the
+  most drift-exposed result here.
+- One seed, `n_action_steps=100` (~9 observations per episode), and a training set that was never
+  idle-trimmed (§4a).
 
 ---
 
