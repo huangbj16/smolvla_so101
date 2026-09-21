@@ -807,7 +807,12 @@ the same answer and does not depend on the binary outcome.
 token came from purely from appearance, then learn phase-dependent trust, from 45 demonstrations.
 
 The change is small: a learnable `nn.Embedding(n_cameras, dim_model)` added to each camera's block as it
-is appended in `modeling_act.py`. Then retrain `both` at the same 60k and rerun the F1 retest.
+is appended in `modeling_act.py`, **zero-initialised** so step 0 is exactly upstream ACT. Cost: 2 × 512 =
+1024 parameters. Then retrain `both` at the same 60k and rerun the F1 retest.
+
+Patch script: [`scripts/patch_act_camera_embed.py`](../scripts/patch_act_camera_embed.py) — idempotent,
+asserts both anchors match exactly once. Verified locally: parameters land at 51,597,190 + 1,024, the
+embedding starts at zero, and a forward pass runs.
 
 This is worth doing even if F1 comes back positive — "more steps fixes it" and "the architecture makes it
 unnecessarily hard" are both true-shaped answers, and the second is the more interesting one. It also
@@ -822,8 +827,14 @@ From §4a: the training set was never idle-trimmed, which forced `n_action_steps
 short chunks viable, and a policy that re-observes every 0.8 s is a far more sensitive instrument for any
 camera ablation — a camera can only matter at the moments the policy looks.
 
-Retrain all three at 60k on the trimmed set, then rerun a reduced rollout pass. This is the follow-up that
-makes *future* ablations better rather than answering the current one.
+Retrain all three at 60k on the trimmed set, then rerun a reduced rollout pass with a short
+`n_action_steps`. This is the follow-up that makes *future* ablations better rather than answering the
+current one.
+
+Trim script: [`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py). Verified on the
+3-episode test set: parquet rows equal decoded video frames for both cameras, and every trimmed episode
+shows motion within its first 30 frames. ~13 frames/s, so **~40 min** for the 50-episode set — run it
+locally and push, rather than burning a GPU session on CPU work.
 
 ## F4 — Firm up the load-bearing numbers
 
@@ -834,6 +845,19 @@ Only if something needs to survive review:
   per condition would settle it; that is ~19 h of training plus a day of robot time.
 - The ±20° capture band was chosen post-hoc. The rank statistic (1/120) does not depend on it, so this
   only needs fixing if the band itself becomes a claim.
+
+## Running F2 and F3 on Colab
+
+Both are in [`colab_phase06_f2_f3.ipynb`](../colab_phase06_f2_f3.ipynb): installs lerobot v0.6.1 from
+source, authenticates to HF and wandb, pulls the dataset from the Hub, and reproduces the exact 60k
+recipe — same 45/5 balanced holdout, seed, batch size and `eval_steps` — into the same wandb project, so
+the new curves overlay the baselines.
+
+**Use an L4.** The workload is compute-bound and peaks at 3.5 GiB, so an A100's 40 GB is wasted; a T4 is
+~3× slower and would push F2+F3 past 30 hours. Estimated on L4: **F2 ~4.5 h, F3 ~9 h.** The notebook
+includes a 300-step benchmark cell that measures the actual rate and prints real projections before you
+commit. Every run pushes checkpoints to the Hub, so a Colab disconnect is recoverable by resuming from
+the repo id.
 
 ## F5 — A fusability companion to divergence
 
