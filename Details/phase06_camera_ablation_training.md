@@ -625,6 +625,7 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 | `HFValidationError` on a local checkpoint path | The variables expanded empty. Separate the assignments with `&&`, not spaces — as a command prefix they apply to the process env *after* the line is expanded (§4a) |
 | `Dataset names for rollout must start with 'rollout_'` | `lerobot-rollout` enforces the prefix in `build_rollout_context`. Use `--dataset.repo_id=<user>/rollout_<name>` |
 | Arm jitters at home and never starts | `n_action_steps` too small for this dataset's idle lead-in — use the stored 100 (§4a) |
+| An episode runs past 30 s | `episode_time_s=60` gives slack for a loaded CPU, but success is still **within 30 s** ([task card](toolkit_task_card.md)). `duration_s` is logged per trial — score anything that only succeeds after 30 s as a failure |
 | Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
 | Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
 | A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |

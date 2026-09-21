@@ -4,11 +4,11 @@ block,condition,half,episode_in_block,position,episode_index,duration_s,success,
 1,both,A,3,P8,2,22.2,1,none,
 1,both,A,4,P4,3,23.9,1,none,
 1,both,A,5,P9,4,17.5,0,grasp,"grasp off-centre, cylinder slipped"
-2,top,A,1,P4,,,,,
-2,top,A,2,P9,,,,,
-2,top,A,3,P8,,,,,
-2,top,A,4,P6,,,,,
-2,top,A,5,P2,,,,,
+2,top,A,1,P4,0,27.8,0,grasp,
+2,top,A,2,P9,1,22.7,0,insert,top view cannot locate the exact insertion spot
+2,top,A,3,P8,2,21.9,0,insert,
+2,top,A,4,P6,3,29.0,1,none,"grasp failed on the first try, retried and succeeded (29.0 s, just inside the 30 s window)"
+2,top,A,5,P2,4,39.3,0,grasp,"ran 39.3 s; failed regardless, but past the 30 s success window"
 3,wrist,A,1,P4,,,,,
 3,wrist,A,2,P8,,,,,
 3,wrist,A,3,P9,,,,,
