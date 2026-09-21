@@ -9,11 +9,11 @@ block,condition,half,episode_in_block,position,episode_index,duration_s,success,
 2,top,A,3,P8,2,21.9,0,insert,
 2,top,A,4,P6,3,29.0,1,none,"grasp failed on the first try, retried and succeeded (29.0 s, just inside the 30 s window)"
 2,top,A,5,P2,4,39.3,0,grasp,"ran 39.3 s; failed regardless, but past the 30 s success window"
-3,wrist,A,1,P4,,,,,
-3,wrist,A,2,P8,,,,,
-3,wrist,A,3,P9,,,,,
-3,wrist,A,4,P2,,,,,
-3,wrist,A,5,P6,,,,,
+3,wrist,A,1,P4,0,39.3,0,reach,"reached the default position, ignoring the cylinder"
+3,wrist,A,2,P8,1,36.4,0,reach,
+3,wrist,A,3,P9,2,21.8,0,reach,
+3,wrist,A,4,P2,3,39.2,0,grasp,only position it reached — nearest the policy's default reach target
+3,wrist,A,5,P6,4,22.0,0,reach,
 4,top,B,1,P3,,,,,
 4,top,B,2,P1,,,,,
 4,top,B,3,P10,,,,,

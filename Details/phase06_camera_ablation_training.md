@@ -608,6 +608,60 @@ Study #1 in the [Phase 0.5 results](phase05_camera_test_results.md): does diverg
 
 ---
 
+# 6.5 — Results, half A (2026-09-21)
+
+Blocks 1–3 done: 15 trials, 5 per condition, positions P2 P4 P6 P8 P9.
+Log: [phase06_eval_log.csv](phase06_eval_log.csv).
+
+| Condition | Passed | reach | grasp | insert |
+|---|---|---|---|---|
+| `top + wrist` | **2/5** | 1 | 1 | 1 |
+| `top` only | 1/5 | **0** | 2 | 2 |
+| `wrist` only | 0/5 | **4** | 1 | **0** |
+
+**The failure stages dissociate exactly as predicted, and in opposite directions.**
+
+- **`top`-only never fails at reach** (0/5) and fails *only* in the fine phases. It finds the cylinder
+  every time, then cannot close the last few millimetres. Operator note on P9: *"top cam can't find the
+  exact spot for insertion."* That is **P4 / hypothesis H-a**, observed on the robot.
+- **`wrist`-only fails at reach in 4 of 5** and never reaches an insertion at all. Operator note: *"without
+  the top cam, the robot learns the average reach behavior, always trying to reach the same position,
+  without paying much attention to where the cylinder is."* That is **P3 / hypothesis H-b**.
+- **`top+wrist` is the only condition whose failures spread across all three stages** — no single phase
+  dominates, which is what you would expect if each view covers the other's blind spot.
+
+### The "average reach" is measurable, not just visible
+
+Taking `shoulder_pan` at the grasp attempt (first gripper closure *after* the gripper has opened — it
+starts closed at home) gives where the arm actually decided to go:
+
+![Where the arm reaches](figs/12_phase06_reach_target.png)
+
+| Condition | std of pan at grasp | spread |
+|---|---|---|
+| `top` only | 28.4° | 67° |
+| `top + wrist` | 21.8° | 47° |
+| `wrist` only | **7.2°** | **17°** |
+
+The wrist-only values are −46.9, −48.2, −47.4, −47.4 and −31.5: **four of five land within 1.3° of each
+other** regardless of where the cylinder was. The policy has collapsed onto one default reach — a
+regression to the mean action, which is precisely what an uninformative observation produces.
+
+**And the outlier explains the one non-reach failure.** P2 at −31.5° is the only position `wrist`-only
+reached, and the only one where it failed at *grasp* instead — it is the position closest to the policy's
+default. The camera did not tell it where to go; the cylinder happened to be near where it goes anyway.
+
+### Caveats
+
+- **5 trials per condition.** The success counts (2 / 1 / 0) carry a ±~20-point standard error and should
+  not be read as a ranking. The *failure-stage* split is the finding, and it is 4/5 vs 0/5 on reach — a
+  pattern, not a rate.
+- Half A only (P2 P4 P6 P8 P9). Half B is blocks 4–6.
+- All three run at `n_action_steps=100`, i.e. ~9 observations per 30 s episode (§4a). A policy that could
+  re-observe more often might recover from a bad reach; none of these can.
+
+---
+
 # 7 — Gotchas
 
 | Risk | Mitigation |
