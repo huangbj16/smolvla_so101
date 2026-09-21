@@ -858,10 +858,16 @@ recipe — same 45/5 balanced holdout, seed, batch size and `eval_steps` — int
 the new curves overlay the baselines.
 
 **Use an L4.** The workload is compute-bound and peaks at 3.5 GiB, so an A100's 40 GB is wasted; a T4 is
-~3× slower and would push F2+F3 past 30 hours. Estimated on L4: **F2 ~4.5 h, F3 ~9 h.** The notebook
-includes a 300-step benchmark cell that measures the actual rate and prints real projections before you
-commit. Every run pushes checkpoints to the Hub, so a Colab disconnect is recoverable by resuming from
-the repo id.
+~3× slower and would push F2+F3 past 30 hours. Estimated on L4: **F2 ~4.5 h, F3 ~9 h.**
+
+**Run the §5 smoke test first** (~8–12 min): 300 steps with the real configuration — balanced split,
+validation, wandb, and a checkpoint pushed to the Hub — then automatic PASS/FAIL checks on each of those
+plus the measured it/s and the resulting projections. It exercises the Hub push specifically, because
+that is the step that failed on the laptop and with `save_checkpoint_to_hub` it happens at the first
+`save_freq` rather than at the end. Re-run it with `SMOKE_DATASET = TRIMMED` before F3.
+
+Every run pushes checkpoints to the Hub, so a Colab disconnect is recoverable by resuming from the repo
+id.
 
 ## F5 — A fusability companion to divergence
 
