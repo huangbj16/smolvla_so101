@@ -731,6 +731,119 @@ phase the other camera was carrying. A metric of availability needs a companion 
 
 ---
 
+# 8 — Follow-ups
+
+Ordered by cost. **F1 is the one the results actually demand**; the rest are optional.
+
+| | Question it settles | Cost |
+|---|---|---|
+| **F1** | Is `top+wrist`'s reach deficit a training-budget problem? | 2.2 h unattended + 45 min robot |
+| **F2** | Is it an arbitration problem ACT's architecture can't express? | ~4 h + 45 min robot |
+| **F3** | Does idle-trimming let short action chunks work, sharpening every future ablation? | ~3.5 h + a retrain |
+| **F4** | Firm up any number that ends up load-bearing | 1–2 days |
+| **F5** | A companion metric for *fusability* | design work |
+
+## F1 — Resume `both` to 100k and retest the extremes
+
+Your hypothesis: `both` hasn't learned when to trust which camera, and the still-falling validation curve
+says it is undertrained. §6.5 argues both sides; this settles it.
+
+### Step 1 — resume training (~2.2 h, unattended)
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && ./scripts/resume_training.sh both 100000
+```
+
+40,000 more steps at ~5.3 it/s. Everything is read back from the checkpoint's `train_config.json`, so the
+episode order, the 45/5 holdout, the seed, `save_freq` and `eval_steps` are preserved, and **the wandb
+curve extends run `bj9f13g4` rather than starting a new one**. Only `--steps` is overridden.
+
+Verified by dry-running the config through lerobot's own parser: `resume=True`, `steps=100000`,
+`checkpoint_path=outputs/train/act_both_s1000/checkpoints/last`, `output_dir` unchanged, holdout tail
+still `[9, 19, 29, 39, 49]`. The saved `training_step.json` reads `{"step": 60000}` and the loop is
+`for _ in range(step, cfg.steps)`, so it is exactly 40k additional steps, not 100k fresh ones.
+
+Afterwards: `./scripts/push_models.sh both`.
+
+### Step 2 — retest, but **interleaved against the 60k checkpoint**
+
+The tempting shortcut is to run the 100k policy on the four extreme positions and compare against
+yesterday's numbers. **Don't** — that is a cross-session comparison, and session drift is exactly what the
+block design was built to avoid ([06](../06_expand_data_multi_env.md) says the same: matched, interleaved
+runs when comparing checkpoints). Run both checkpoints in one session:
+
+- **Positions: P7, P5, P6, P10** — the four extremes, where `both` reached 0/4 and `top` reached 4/4.
+- **2 trials per position per checkpoint = 16 trials**, ~45 min.
+- **Four blocks, alternating**: 60k, 100k, 100k, 60k — so each checkpoint gets one early and one late block.
+
+The 60k checkpoint is still on disk at `checkpoints/060000/pretrained_model`; `checkpoints/last` will point
+at 100k after the resume. Same rollout command as §4a, changing only `--policy.path` and the dataset name:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && STEP=060000 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=outputs/train/act_both_s1000/checkpoints/${STEP}/pretrained_model --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/rollout_phase06_f1_both_${STEP} --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=4 --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+Use `STEP=100000` for the other two blocks. Because the same dataset name is reused for the second block
+of a checkpoint, add `--resume=true` on that block, or give it a `_b` suffix.
+
+### What the answer looks like
+
+**Score "reached the cylinder", not success** — the deficit is in reach, and 8 trials cannot resolve a
+success rate.
+
+| Outcome | Reading |
+|---|---|
+| 100k reaches ≥ 6/8, 60k stays ≤ 2/8 | **Training budget.** Your hypothesis is right; the fusion just needed longer. Fisher p ≈ 0.007 at that split |
+| Both around 0–2/8 | **Not the budget.** The deficit is arbitration — go to F2 |
+| Both improve together | **Session effect**, not the checkpoint. This is exactly why the interleave is required |
+
+Also re-measure the reach slope (§6.5, currently 0.81). Moving toward 1.0 is the mechanistic version of
+the same answer and does not depend on the binary outcome.
+
+## F2 — Give ACT a camera-identity embedding
+
+`encoder_cam_feat_pos_embed` is a 2D sinusoidal embedding of the feature map's H×W, so **both cameras'
+300-token blocks receive identical positional embeddings** (§1). The model has to infer which camera a
+token came from purely from appearance, then learn phase-dependent trust, from 45 demonstrations.
+
+The change is small: a learnable `nn.Embedding(n_cameras, dim_model)` added to each camera's block as it
+is appended in `modeling_act.py`. Then retrain `both` at the same 60k and rerun the F1 retest.
+
+This is worth doing even if F1 comes back positive — "more steps fixes it" and "the architecture makes it
+unnecessarily hard" are both true-shaped answers, and the second is the more interesting one. It also
+connects directly to the temporal-encoding discussion in the
+[Phase 0.5 results](phase05_camera_test_results.md) "Future studies": in both cases ACT is asked to
+separate token blocks that carry no positional tag distinguishing them.
+
+## F3 — Retrain on idle-trimmed data
+
+From §4a: the training set was never idle-trimmed, which forced `n_action_steps=100` and with it a coarse
+~9 observations per 30 s episode. Trimming (the `dev > 2.0` rule the Phase 0.5 notebook uses) should make
+short chunks viable, and a policy that re-observes every 0.8 s is a far more sensitive instrument for any
+camera ablation — a camera can only matter at the moments the policy looks.
+
+Retrain all three at 60k on the trimmed set, then rerun a reduced rollout pass. This is the follow-up that
+makes *future* ablations better rather than answering the current one.
+
+## F4 — Firm up the load-bearing numbers
+
+Only if something needs to survive review:
+
+- The double dissociation is already significant (p = 0.0014) and replicated across halves — leave it.
+- `top` 10/10 vs `both` 6/10 on reaching is **p = 0.087**. If that claim matters, 2 more seeds × 10 trials
+  per condition would settle it; that is ~19 h of training plus a day of robot time.
+- The ±20° capture band was chosen post-hoc. The rank statistic (1/120) does not depend on it, so this
+  only needs fixing if the band itself becomes a claim.
+
+## F5 — A fusability companion to divergence
+
+The conceptual gap from §6.5: divergence measures what information is *available* in an observation space,
+not whether a network can exploit it without harm. Phase 0.5 scored top+wrist best; the robot found it
+worse at reaching than top alone. Any candidate metric has to predict *that*, and nothing in the current
+toolkit does. This is the most interesting open question the phase produced, and the least defined.
+
+---
+
 # 7 — Gotchas
 
 | Risk | Mitigation |
