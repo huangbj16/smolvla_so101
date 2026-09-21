@@ -32,7 +32,11 @@ Task string (use verbatim in every recording):
 
 ## Episode protocol
 
-- **Start:** arm at the home pose, gripper open, cylinder standing on the scheduled position.
+- **Start:** arm at the home pose, gripper open, cylinder standing on the scheduled position. **Begin
+  moving as soon as the episode starts** — a long static lead-in becomes an idle attractor the policy
+  cannot escape (measured: median 74 idle frames in the Phase 0.5 set; see
+  [phase05 results](phase05_camera_test_results.md) guideline 6). If a lead-in creeps in anyway, **trim it
+  from the dataset before training**.
 - **Clean demo (D0):** one grasp style (*default:* straight down from above), one approach path, one-shot
   grasp, no pauses. *Default:* small wiggles during insertion are allowed; a regrasp is not (that's D3).
 - **End:** after release, return the arm to home, then press **→** to end the episode. The recording

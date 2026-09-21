@@ -244,6 +244,23 @@ moves. The weakness was temporal, not visual.
    protocol changed.
 5. **Log positions per episode** (`phase05_log.csv` in the task card). Its absence blocked the per-position
    breakdown in this study.
+6. **Trim idle frames before training, not just before analysis.** This study trimmed the static lead-in
+   for measurement only; the training dataset kept it, and that broke the Phase 0.6 rollouts. Measured on
+   these 50 episodes, the arm sits still for a median of **74 frames (2.5 s)** before it first moves, and
+   **50/50 episodes idle for longer than 25 frames**. So an ACT policy at the home pose predicts a chunk
+   that *starts with "stay still"* in every episode it learned from. With a short action chunk
+   (`n_action_steps=25`) the robot executes only that idle segment, re-observes an unchanged scene, and
+   predicts idle again — a self-reinforcing stall that needed a hand waved in front of the camera to
+   break. Only the full 100-step chunk (3.3 s) clears the lead-in, and only for 88% of the distribution.
+   Two consequences:
+   - **Trim before training.** Either start recording at motion onset, or trim the dataset as a
+     preprocessing step. The same `dev > 2.0` rule the notebook uses works.
+   - **It costs measurement sensitivity too.** Being forced to a 100-step chunk means the policy consults
+     its cameras only ~9 times in a 30 s episode, which blunts any camera ablation run on this data.
+     Trimming would make short chunks viable and the comparison sharper.
+
+   Full measurement and reasoning:
+   [phase06_camera_ablation_training.md §4a](phase06_camera_ablation_training.md).
 
 ---
 
