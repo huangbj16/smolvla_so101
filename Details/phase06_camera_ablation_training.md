@@ -852,35 +852,37 @@ Only if something needs to survive review:
 
 ## Running F2 and F3 on Colab
 
-Both are in [`colab_phase06_f2_f3.ipynb`](../colab_phase06_f2_f3.ipynb): installs lerobot v0.6.1 from
-source, authenticates to HF and wandb, pulls the dataset from the Hub, and reproduces the exact 60k
-recipe — same 45/5 balanced holdout, seed, batch size and `eval_steps` — into the same wandb project, so
-the new curves overlay the baselines.
+[`colab_phase06_f2_f3.ipynb`](../colab_phase06_f2_f3.ipynb), in four parts:
 
-**Use an L4.** The workload is compute-bound and peaks at 3.5 GiB, so an A100's 40 GB is wasted; a T4 is
-~3× slower and would push F2+F3 past 30 hours. Estimated on L4: **F2 ~4.5 h, F3 ~9 h.**
+- **A — Setup.** Runtime check, lerobot v0.6.1 from source (F2 edits `modeling_act.py`, so a wheel will
+  not do), HF and wandb auth, shared config.
+- **B — Smoke test.** One cell, ~15 min. 300 real training steps against **both** datasets, then a
+  readiness verdict and the projected runtime for the whole programme. Raises on any failure.
+- **C — Training.** One cell. Runs F2 and F3 to completion, uploading as it goes. Refuses to start unless
+  Part B passed.
+- **D — Recovery.** Resume-from-Hub and single-run cells, if something fails.
 
-**Authentication is the trap, not the training.** A Colab secret named `HF_TOKEN` is resolved *last* in
-`huggingface_hub`'s order and only via `google.colab.userdata.get()`, which needs the notebook kernel's
-channel to the Colab frontend. `lerobot-train` runs as a **subprocess**, where that channel does not
-exist — so `whoami()` succeeds in the notebook while training authenticates as nobody (401 on a private
-dataset, 401 on `create_repo`). The notebook's §3 now copies the token into `HF_TOKEN` *and* the token
-file, then proves a subprocess can authenticate. Second trap: a **fine-grained token scoped to existing
-repos cannot create new ones**, and every run creates a model repo — it needs the global "Write access to
-contents/settings of all repos" scope, or a classic Write token.
+**Use an L4** — compute-bound, peaks at 3.5 GiB, so an A100's 40 GB is wasted and a T4 is ~3× too slow.
 
-**Run the §5 smoke test first** (~8–12 min): 300 steps with the real configuration — balanced split,
-validation, wandb, and a checkpoint pushed to the Hub — then automatic PASS/FAIL checks on each of those
-plus the measured it/s and the resulting projections. It exercises the Hub push specifically, because
-that is the step that failed on the laptop and with `save_checkpoint_to_hub` it happens at the first
-`save_freq` rather than at the end. Re-run it with `SMOKE_DATASET = TRIMMED` before F3.
+Three things that make Part C safe to leave alone:
 
-Every run pushes checkpoints to the Hub at each `save_freq`, tagged by step, so a disconnect costs at
-most 10k steps and resuming from the repo id rejoins the same wandb run. The notebook is safe to
-"Run all": the smoke test raises on failure, the trimmed-dataset rebuild is skipped when the repo
-exists, and `use_camera_embed()` is toggled explicitly before each experiment — the F2 patch edits
-`modeling_act.py` on disk, so without an explicit revert F3 would silently inherit the camera
-embedding and confound the two experiments.
+- **The patch is toggled, not applied once.** F2 edits `modeling_act.py` *on disk*, so it affects every
+  later `lerobot-train` subprocess. `use_camera_embed(True/False)` restores from a pristine copy before
+  each experiment, and every run asserts its parameter count — 51,597,190 stock, +1024 patched — so
+  training the wrong variant fails immediately instead of producing a plausible-looking confounded
+  result. Without this, the three F3 runs would silently have included the camera embedding.
+- **Uploads happen throughout.** `save_checkpoint_to_hub` pushes at every 10k steps, tagged by step
+  (recoverable with `--policy.pretrained_revision=<step>`), plus a final model push. A disconnect costs
+  at most 10k steps.
+- **Failures are recorded, not fatal.** The four runs are independent, so a transient Hub error on one
+  does not cost the rest of the session; the closing summary says what succeeded.
+
+**Authentication is the trap, not the training.** A Colab secret named `HF_TOKEN` is resolved *last* and
+only via `google.colab.userdata.get()`, which needs the kernel's channel to the Colab frontend —
+`lerobot-train` is a subprocess, so `whoami()` succeeds in the notebook while training authenticates as
+nobody. Part A copies the token into `HF_TOKEN` and the token file, then proves a subprocess can use it.
+It also asserts the token has global `repo.write`: a fine-grained token scoped to existing repos cannot
+create the new model repos each run pushes to.
 
 ## F5 — A fusability companion to divergence
 
