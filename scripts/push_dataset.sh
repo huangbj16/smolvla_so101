@@ -26,4 +26,21 @@ find "$SRC" -type d -empty -delete            # the image writer leaves empty st
 echo "=== $SRC ($(du -sh "$SRC" | cut -f1)) -> $REPO ==="
 hf upload "$REPO" "$SRC" . --repo-type dataset --private \
   --commit-message "Idle-trimmed copy: lead-in and tail cut with the dev > 2.0 rule"
+
+# `hf upload` copies files but does NOT create the codebase-version tag, and lerobot refuses to load a
+# dataset without it (get_safe_version -> "Your dataset must be tagged with a codebase version").
+# LeRobotDataset.push_to_hub() does this for you; a plain upload does not.
+python3 - "$SRC" "$REPO" <<'PY'
+import json, sys
+from huggingface_hub import HfApi
+src, repo = sys.argv[1], sys.argv[2]
+ver = json.load(open(f"{src}/meta/info.json"))["codebase_version"]
+api = HfApi()
+tags = [t.name for t in api.list_repo_refs(repo, repo_type="dataset").tags]
+if ver in tags:
+    print(f"version tag {ver} already present")
+else:
+    api.create_tag(repo, tag=ver, repo_type="dataset")
+    print(f"created version tag {ver}")
+PY
 echo "done: https://huggingface.co/datasets/$REPO"

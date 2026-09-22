@@ -835,7 +835,11 @@ Retrain all three at 60k on the trimmed set, then rerun a reduced rollout pass w
 `n_action_steps`. This is the follow-up that makes *future* ablations better rather than answering the
 current one.
 
-Trim script: [`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py). Verified on the
+Trim script: [`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) — pass `--push` so
+it uploads through `LeRobotDataset.push_to_hub()`. **A plain `hf upload` is not enough**: lerobot resolves
+a dataset at the revision named by its `codebase_version`, so the repo needs a matching git tag, and only
+`push_to_hub()` creates it. Without it the dataset downloads fine and then fails minutes into training
+with "Your dataset must be tagged with a codebase version". Verified on the
 3-episode test set: parquet rows equal decoded video frames for both cameras, and every trimmed episode
 shows motion within its first 30 frames. ~13 frames/s, so **~40 min** for the 50-episode set — run it
 locally and push, rather than burning a GPU session on CPU work.

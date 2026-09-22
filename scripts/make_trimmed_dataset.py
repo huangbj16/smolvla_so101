@@ -8,7 +8,7 @@ import sys, glob, shutil, time, numpy as np, pandas as pd, torch
 from pathlib import Path
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-SRC, DST, ROOT = sys.argv[1], sys.argv[2], Path(sys.argv[3])
+SRC, DST, ROOT = sys.argv[1], sys.argv[2], Path(sys.argv[3])   # optional 4th arg: --push
 THRESH, PAD = 2.0, 5
 t0 = time.time()
 
@@ -56,3 +56,12 @@ for ep in range(src.num_episodes):
 dt = time.time() - t0
 print(f"kept {kept}/{src.num_frames} frames ({100*kept/src.num_frames:.0f}%) in {dt/60:.1f} min "
       f"-> {kept/dt:.0f} frames/s")
+
+if "--push" in sys.argv:
+    # Use the dataset's own push_to_hub: it uploads, writes a dataset card, and — the part a plain
+    # `hf upload` misses — tags the revision with the codebase version, without which lerobot refuses
+    # to load the dataset at all.
+    dst.push_to_hub(private=True)
+    print(f"pushed and tagged: https://huggingface.co/datasets/{DST}")
+else:
+    print(f"not pushed. Either re-run with --push, or use scripts/push_dataset.sh {ROOT} {DST}")
