@@ -860,6 +860,15 @@ the new curves overlay the baselines.
 **Use an L4.** The workload is compute-bound and peaks at 3.5 GiB, so an A100's 40 GB is wasted; a T4 is
 ~3× slower and would push F2+F3 past 30 hours. Estimated on L4: **F2 ~4.5 h, F3 ~9 h.**
 
+**Authentication is the trap, not the training.** A Colab secret named `HF_TOKEN` is resolved *last* in
+`huggingface_hub`'s order and only via `google.colab.userdata.get()`, which needs the notebook kernel's
+channel to the Colab frontend. `lerobot-train` runs as a **subprocess**, where that channel does not
+exist — so `whoami()` succeeds in the notebook while training authenticates as nobody (401 on a private
+dataset, 401 on `create_repo`). The notebook's §3 now copies the token into `HF_TOKEN` *and* the token
+file, then proves a subprocess can authenticate. Second trap: a **fine-grained token scoped to existing
+repos cannot create new ones**, and every run creates a model repo — it needs the global "Write access to
+contents/settings of all repos" scope, or a classic Write token.
+
 **Run the §5 smoke test first** (~8–12 min): 300 steps with the real configuration — balanced split,
 validation, wandb, and a checkpoint pushed to the Hub — then automatic PASS/FAIL checks on each of those
 plus the measured it/s and the resulting projections. It exercises the Hub push specifically, because
