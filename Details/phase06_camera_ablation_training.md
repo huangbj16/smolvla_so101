@@ -875,8 +875,12 @@ plus the measured it/s and the resulting projections. It exercises the Hub push 
 that is the step that failed on the laptop and with `save_checkpoint_to_hub` it happens at the first
 `save_freq` rather than at the end. Re-run it with `SMOKE_DATASET = TRIMMED` before F3.
 
-Every run pushes checkpoints to the Hub, so a Colab disconnect is recoverable by resuming from the repo
-id.
+Every run pushes checkpoints to the Hub at each `save_freq`, tagged by step, so a disconnect costs at
+most 10k steps and resuming from the repo id rejoins the same wandb run. The notebook is safe to
+"Run all": the smoke test raises on failure, the trimmed-dataset rebuild is skipped when the repo
+exists, and `use_camera_embed()` is toggled explicitly before each experiment — the F2 patch edits
+`modeling_act.py` on disk, so without an explicit revert F3 would silently inherit the camera
+embedding and confound the two experiments.
 
 ## F5 — A fusability companion to divergence
 
