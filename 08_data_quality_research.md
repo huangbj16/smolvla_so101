@@ -308,6 +308,13 @@ without harm. Note the run book also
 fixes the train/eval split: episodes were recorded in position blocks, so lerobot's default "last 5"
 holdout would have removed position P10 from training entirely.
 
+**Follow-ups F2 and F3 trained 2026-09-23** (Colab L4). F2 gave ACT a learned per-camera identity
+embedding — held-out loss moved 0.0011, and the learned vector settled at 0.35% of the feature magnitude
+it tags, so the optimiser effectively declined the camera-identity signal: arbitration is not a
+"can't tell the streams apart" problem. F3 retrained on idle-trimmed data, and there `top` alone
+(0.1828) beats `top+wrist` (0.1989) — the reverse of the untrimmed baselines, and the first loss-level
+echo of the compounding effect. Both go to the robot next.
+
 Full run book — held-fixed table, step-by-step training scripts, eval protocol, pre-registered
 predictions: [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
 Scripts: [`scripts/train_camera_ablation.sh`](scripts/train_camera_ablation.sh),
