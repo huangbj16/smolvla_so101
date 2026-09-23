@@ -737,9 +737,9 @@ Ordered by cost. **F1 is the one the results actually demand**; the rest are opt
 
 | | Question it settles | Cost | Status |
 |---|---|---|---|
-| **F1** | Is `top+wrist`'s reach deficit a training-budget problem? | 2.2 h unattended + 45 min robot | not started |
+| **F1** | Is `top+wrist`'s reach deficit a training-budget problem? | 2.2 h unattended + 45 min robot | **run 2026-09-21, unscored** — `checkpoints/100000` exists and `rollout_phase06_f1_both_060000` / `_100000` hold 10 episodes each; outcomes never entered |
 | **F2** | Is it an arbitration problem ACT's architecture can't express? | ~4 h + 45 min robot | **trained 2026-09-23**; robot pass pending |
-| **F3** | Does idle-trimming let short action chunks work, sharpening every future ablation? | ~3.5 h + a retrain | **`top` + `both` trained 2026-09-23** (`wrist` unfinished); robot pass pending |
+| **F3** | Does idle-trimming let short action chunks work, sharpening every future ablation? | ~3.5 h + a retrain | **answered 2026-09-23 — yes.** `n_action_steps=25` runs without stalling on the trimmed policy (below) |
 | **F4** | Firm up any number that ends up load-bearing | 1–2 days | not started |
 | **F5** | A companion metric for *fusability* | design work | parked |
 
@@ -1018,6 +1018,68 @@ frame), so a handful of trials settles it. Do **not** wave at the camera; if a t
 
 Block 3 is the control that keeps block 1 interpretable: if trim@25 reaches worse than trim@100, the chunk
 length is costing accuracy even though it unstuck the start, and 50 is the compromise to test next.
+
+### Session B, block 1 — F3 confirmed (2026-09-23)
+
+**`act_both_s1000_trim` at `n_action_steps=25` starts moving immediately and updates quickly.** No stall,
+no hand-wave needed. The untrimmed baseline at the same setting could not start at all (§4a). **The idle
+lead-in was the cause, and trimming removes it** — a policy that re-observes every 0.83 s instead of every
+3.3 s is now available for every future ablation, which was the whole point of F3.
+
+`rollout_phase06_f3_trim25` holds 1 episode (735 frames); the session was stopped early to chase the
+offset below, so blocks 2 and 3 are still outstanding.
+
+### The leftward insertion offset — diagnosed, and it is **not** the servos (2026-09-23)
+
+The arm placed the cylinder consistently to the **left of the hole**, with the trimmed policy *and* with
+the 60k baseline, after the robot had been powered for two days. The natural suspicion is servo drift and
+the natural fix is recalibration. **Both are wrong here, and recalibrating would have made it worse.**
+
+Four measurements, none of which needs the robot:
+
+| Check | Result |
+|---|---|
+| Calibration file mtime | **2026-09-16 20:49** — before the 2026-09-17 recording, untouched since. And `connect()` compares the motors' EEPROM against it (`feetech.py:228`, homing offset *and* both limits) and prompts on any mismatch; no prompt appeared, so the motors still hold the recording-day values |
+| Mechanically-constrained joints at rest | `shoulder_lift` and `wrist_flex` rest against the arm's own structure. Training ep 25: **−104.18 / −101.49**. Today: **−104.26 / −101.58**. Agreement to **0.09°** — a slipped horn or a drifted homing offset cannot hide inside that |
+| Top camera + fixture | Template-matched three static regions (fixture tray, clamp block, table edge) between the training frame and today's: **dx = 0, dy = 0–1 px**, scores 0.95–0.99. Mean brightness 127.0 vs 125.1. The camera did not move, the fixture did not move, the exposure preset is loaded |
+| Wrist camera | Apparent shift of +42 px — **explained by arm pose, not a moved mount**: the arm was parked 3.7° further in `shoulder_pan` today, and at ~9 px/° that predicts ~33 px |
+
+**Nothing drifted.** What did change is smaller and worth controlling: the *parked* rest pose varies by a
+few degrees between sessions (`shoulder_pan` across sessions: −1.3 training, −4.1, −7.5, −5.9, −5.7, −3.3
+today), because it is set by hand and that joint has no mechanical stop. It is inside the training spread
+today, but it is free variance in a comparison that is trying to resolve a few degrees — park it against a
+mark.
+
+**The offset is most likely not new.** From §6.5, insertion is the documented weak phase: `top` failed
+**4/10** at insert with the operator note *"top cam can't find the exact spot for insertion"*, and `both`
+logged *"not fully inserted"*. A cylinder gripped off-centre — also logged, *"grasp not at the centre and
+slip"* — transfers that offset straight to the insertion. Two days later, with a short action chunk making
+the policy commit harder to the visually-implied target, the same weakness reads as a new hardware fault.
+
+#### Why not just recalibrate
+
+`Present_Position = Actual_Position − Homing_Offset`, and the policy consumes and emits positions in that
+frame; the dataset's normalization statistics were computed in it too. The calibration routine's first
+step is **hand-positioned** — "move the arm to the middle of its range and press ENTER" — and one encoder
+count is 360/4096 = **0.088°**, so being 5° out by hand writes a permanent 57-count bias into that joint,
+applied to every state and every action the policy sees. That is the same order as the error being chased.
+
+So: **recalibrate only after proving the physical zero moved**, which the table above says it did not.
+It is recoverable either way — the json is the master, and pressing ENTER at the connect prompt writes it
+back into the motors (`so_follower.py:115` → `feetech.py:268`). Both files are now backed up in
+[calibration/](calibration/).
+
+#### The two-minute confirmation, if doubt remains
+
+`lerobot-replay` plays a recorded episode's actions straight to the servos — no policy, no vision, no
+feedback. If it drops the cylinder in the hole, the arm and the geometry are intact and the offset is
+perception or policy:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episode=25
+```
+
+Episode 25 is a **P6** demonstration, so place the cylinder at P6 and start from the home pose.
 
 ## F4 — Firm up the load-bearing numbers
 
