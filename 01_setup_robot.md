@@ -69,6 +69,30 @@ lerobot-calibrate --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleo
   (`~/.cache/huggingface/lerobot/calibration/`).
 - Follow the prompts: move each joint through its full range, set the rest/zero pose.
 
+> **Once you have recorded data with a calibration, that calibration is load-bearing — back it up and
+> do not casually re-run this step.** Policies consume and emit joint positions in the frame the
+> calibration defines, and the dataset's normalization statistics were computed in it. The homing step
+> is hand-positioned and one encoder count is 0.088°, so a re-run writes a few degrees of fresh bias
+> into every joint. Backup + the restore procedure:
+> [Details/calibration/](Details/calibration/README.md).
+
+### Is it the hardware? Replay a recorded episode
+
+The one check that separates "the robot changed" from "the policy or the cameras changed".
+`lerobot-replay` plays a recorded episode's **actions** straight to the servos — no policy, no camera,
+no feedback loop — so if it no longer reaches what it reached on the day it was recorded, the problem
+is physical:
+
+```bash
+lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --dataset.repo_id=<user>/<dataset> --dataset.episode=<n>
+```
+
+Set the scene exactly as that episode had it, and start from the home pose. A miss under replay means
+the arm, the base, or the fixture moved; a clean replay clears the hardware and points at perception or
+the policy. Worked example, including how to turn the miss into a calibration correction:
+[Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md) §8, and
+[`scripts/joint_offset_check.py`](scripts/joint_offset_check.py).
+
 ## Step 5 — test teleoperation (no camera yet)
 
 ```bash

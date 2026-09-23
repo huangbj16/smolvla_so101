@@ -1029,57 +1029,86 @@ lead-in was the cause, and trimming removes it** — a policy that re-observes e
 `rollout_phase06_f3_trim25` holds 1 episode (735 frames); the session was stopped early to chase the
 offset below, so blocks 2 and 3 are still outstanding.
 
-### The leftward insertion offset — diagnosed, and it is **not** the servos (2026-09-23)
+### The leftward insertion offset — it *is* the arm, and it is `shoulder_pan` (2026-09-23)
 
-The arm placed the cylinder consistently to the **left of the hole**, with the trimmed policy *and* with
-the 60k baseline, after the robot had been powered for two days. The natural suspicion is servo drift and
-the natural fix is recalibration. **Both are wrong here, and recalibrating would have made it worse.**
+The arm placed the cylinder consistently to the **left of the hole**, with the trimmed policy and with
+the 60k baseline, after being powered for two days.
 
-Four measurements, none of which needs the robot:
+**`lerobot-replay` settled it.** Replay plays a recorded episode's actions straight to the servos — no
+policy, no camera, no feedback — and it now **misses left at the grasp and again at the insert** on an
+episode the human recorded successfully. Nothing in that path involves the policies or the cameras, so
+the physical↔encoder mapping has moved. *(Replay is the general form of this check; it is written up in
+[01 Step 4](../01_setup_robot.md).)*
+
+What did **not** move, each verified from data rather than by eye:
 
 | Check | Result |
 |---|---|
-| Calibration file mtime | **2026-09-16 20:49** — before the 2026-09-17 recording, untouched since. And `connect()` compares the motors' EEPROM against it (`feetech.py:228`, homing offset *and* both limits) and prompts on any mismatch; no prompt appeared, so the motors still hold the recording-day values |
-| Mechanically-constrained joints at rest | `shoulder_lift` and `wrist_flex` rest against the arm's own structure. Training ep 25: **−104.18 / −101.49**. Today: **−104.26 / −101.58**. Agreement to **0.09°** — a slipped horn or a drifted homing offset cannot hide inside that |
-| Top camera + fixture | Template-matched three static regions (fixture tray, clamp block, table edge) between the training frame and today's: **dx = 0, dy = 0–1 px**, scores 0.95–0.99. Mean brightness 127.0 vs 125.1. The camera did not move, the fixture did not move, the exposure preset is loaded |
-| Wrist camera | Apparent shift of +42 px — **explained by arm pose, not a moved mount**: the arm was parked 3.7° further in `shoulder_pan` today, and at ~9 px/° that predicts ~33 px |
+| Calibration file | mtime **2026-09-16 20:49**, before the 2026-09-17 recording, untouched. `connect()` compares the motors' EEPROM against it (`feetech.py:228`, homing offset *and* both limits) and prompts on mismatch; no prompt appeared |
+| `shoulder_lift`, `wrist_flex` | These rest against the arm's own structure, so the parked pose is a physical witness. Training ep 25: **−104.18 / −101.49**. Today: **−104.26 / −101.58** — **0.09°**. Neither has drifted |
+| Top camera, fixture, **and the robot base** | Template-matched the fixture tray, clamp block, table edge and the base block itself: **dx = 0–1 px, dy = 0–1 px**, scores 0.97–0.99. Brightness 127.0 vs 125.1. The camera, the fixture and the base are all where they were |
+| Wrist camera | Apparent +42 px shift is arm pose, not a moved mount: the arm was parked 3.7° further in `shoulder_pan`, and at ~9 px/° that predicts ~33 px |
 
-**Nothing drifted.** What did change is smaller and worth controlling: the *parked* rest pose varies by a
-few degrees between sessions (`shoulder_pan` across sessions: −1.3 training, −4.1, −7.5, −5.9, −5.7, −3.3
-today), because it is set by hand and that joint has no mechanical stop. It is inside the training spread
-today, but it is free variance in a comparison that is trying to resolve a few degrees — park it against a
-mark.
+**So the drift is inside a joint whose zero has no witness in any of those checks — and that is
+`shoulder_pan`.** It is the only joint that moves the gripper left/right, and at the parked pose the arm
+is folded almost onto the pan axis, so rotating it barely moves anything in frame. Measured that
+blindness rather than assumed it: regressing the arm's pixel displacement against `shoulder_pan` over 16
+parked training frames gives **−0.23 px/°** (r = −0.81). A 4° pan error is one pixel. The earlier
+"nothing drifted" reading of these same frames was wrong for exactly this reason.
 
-**The offset is most likely not new.** From §6.5, insertion is the documented weak phase: `top` failed
-**4/10** at insert with the operator note *"top cam can't find the exact spot for insertion"*, and `both`
-logged *"not fully inserted"*. A cylinder gripped off-centre — also logged, *"grasp not at the centre and
-slip"* — transfers that offset straight to the insertion. Two days later, with a short action chunk making
-the policy commit harder to the visually-implied target, the same weakness reads as a new hardware fault.
+One other joint is worth a look: `elbow_flex` at the parked pose reads **96.1 → 96.0 → 95.3 → 94.8 →
+94.7 → 94.5** across the six sessions in date order, a monotone 1.5° slide, while `shoulder_lift` and
+`wrist_flex` hold to 0.3° and 0.8°. That is small and it moves reach in/out rather than left/right, but
+a monotone trend is not what parking variance looks like.
 
-#### Why not just recalibrate
+#### Fixing it without invalidating the policies
 
-`Present_Position = Actual_Position − Homing_Offset`, and the policy consumes and emits positions in that
-frame; the dataset's normalization statistics were computed in it too. The calibration routine's first
-step is **hand-positioned** — "move the arm to the middle of its range and press ENTER" — and one encoder
-count is 360/4096 = **0.088°**, so being 5° out by hand writes a permanent 57-count bias into that joint,
-applied to every state and every action the policy sees. That is the same order as the error being chased.
+The policies are only valid in the calibration frame they were trained in, so **restore that frame; do
+not re-run calibration.** A fresh `lerobot-calibrate` starts with a hand-positioned "move to the middle
+of the range" step, and one count is 360/4096 = **0.088°**, so it writes several degrees of new bias
+into all six joints — the same error being chased, on every joint at once.
 
-So: **recalibrate only after proving the physical zero moved**, which the table above says it did not.
-It is recoverable either way — the json is the master, and pressing ENTER at the connect prompt writes it
-back into the motors (`so_follower.py:115` → `feetech.py:268`). Both files are now backed up in
-[calibration/](calibration/).
+**1. Mechanics first.** Power down, torque off, and check the `shoulder_pan` servo horn (centre screw
+into the output spline, plus the horn screws), the base plate screws, and any play between base and
+upper arm that is not gearbox backlash. Compensating in software for a horn that is still loose just
+buys a few days.
 
-#### The two-minute confirmation, if doubt remains
-
-`lerobot-replay` plays a recorded episode's actions straight to the servos — no policy, no vision, no
-feedback. If it drops the cylinder in the hole, the arm and the geometry are intact and the offset is
-perception or policy:
+**2. Measure the offset against a landmark that exists in the training data.**
+[`scripts/joint_offset_check.py`](../scripts/joint_offset_check.py) disables torque, prints live joint
+readings, and diffs them against a chosen training frame:
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --dataset.repo_id=HALDijkstraaa/so101_toolkit_cylinder_20260917_165544 --dataset.episode=25
+python scripts/joint_offset_check.py --ref-episode 25 --ref-frame 600
 ```
 
-Episode 25 is a **P6** demonstration, so place the cylinder at P6 and start from the home pose.
+Pick `--ref-frame` from the episode video at a moment with an unambiguous physical pose — the gripper
+holding the cylinder in the fixture hole is the best one — then hand-hold the arm in that same pose and
+read the delta. Pan is well determined by "gripper over the hole" regardless of the other joints,
+because it is the arm's azimuth.
+
+**3. Apply it as a shift of that joint's range, not a recalibration.** In `DEGREES` mode lerobot reports
+`(Present_Position − mid) × 360/4095` with `mid = (range_min + range_max)/2`, so shifting `range_min`
+and `range_max` together by the slip moves the reported frame back *and* carries the joint limits with
+it:
+
+```
+Δcounts = Δdeg × 4095/360 = Δdeg × 11.375        (Δdeg = reading now − reading in training)
+range_min += Δcounts ;  range_max += Δcounts     (that joint only)
+```
+
+The script prints these numbers. Sign takes care of itself because Δ is measured in the same reported
+degrees. Edit
+`~/.cache/huggingface/lerobot/calibration/robots/so_follower/my_follower.json`, reconnect, press ENTER
+at the "use provided calibration file" prompt so `write_calibration()` pushes it to the motors, and
+**re-run replay**. Two or three iterations converge; replay is the acceptance test, so optimise against
+it directly.
+
+Hand-positioning is worth about a degree, so do not correct a joint whose delta is under ~1.5°. Back up
+the json first — [calibration/](calibration/) holds the recording-day copy, which is the fallback if an
+edit makes things worse.
+
+**No retraining is needed.** The policies are wrong only by the offset; restoring the frame restores
+them.
 
 ## F4 — Firm up the load-bearing numbers
 
@@ -1171,6 +1200,8 @@ toolkit does. This is the most interesting open question the phase produced, and
 | Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
 | Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
 | A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |
+| "Is it the robot or the policy?" | **`lerobot-replay` a recorded episode.** Actions go straight to the servos — no policy, no camera, no feedback. A miss on an episode that was recorded successfully is hardware; a clean replay clears it ([01 Step 4](../01_setup_robot.md)) |
+| Recalibrating to fix a drift | The homing step is hand-positioned and 1 count = 0.088°, so it writes several degrees of fresh bias into all six joints. Shift the affected joint's `range_min`/`range_max` instead (§8) |
 | A modified-architecture checkpoint loaded by the wrong code | **Silent.** lerobot logs a `WARNING` for missing/unexpected state-dict keys and carries on, so the F2 checkpoint under stock ACT drops its trained embedding and evaluates as plain ACT. Patch once for the whole session; the zero-init makes non-F2 checkpoints exactly stock under the patch (F2/F3 run book) |
 | `use_camera_embed()` raising `too many values to unpack` | Its verification subprocess printed an extra first-run line on stdout. Parse the last line only — this is what skipped F3 `wrist` |
 
