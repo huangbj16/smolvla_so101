@@ -735,13 +735,16 @@ phase the other camera was carrying. A metric of availability needs a companion 
 
 Ordered by cost. **F1 is the one the results actually demand**; the rest are optional.
 
-| | Question it settles | Cost |
-|---|---|---|
-| **F1** | Is `top+wrist`'s reach deficit a training-budget problem? | 2.2 h unattended + 45 min robot |
-| **F2** | Is it an arbitration problem ACT's architecture can't express? | ~4 h + 45 min robot |
-| **F3** | Does idle-trimming let short action chunks work, sharpening every future ablation? | ~3.5 h + a retrain |
-| **F4** | Firm up any number that ends up load-bearing | 1–2 days |
-| **F5** | A companion metric for *fusability* | design work |
+| | Question it settles | Cost | Status |
+|---|---|---|---|
+| **F1** | Is `top+wrist`'s reach deficit a training-budget problem? | 2.2 h unattended + 45 min robot | not started |
+| **F2** | Is it an arbitration problem ACT's architecture can't express? | ~4 h + 45 min robot | **trained 2026-09-23**; robot pass pending |
+| **F3** | Does idle-trimming let short action chunks work, sharpening every future ablation? | ~3.5 h + a retrain | **`top` + `both` trained 2026-09-23** (`wrist` unfinished); robot pass pending |
+| **F4** | Firm up any number that ends up load-bearing | 1–2 days | not started |
+| **F5** | A companion metric for *fusability* | design work | parked |
+
+Training for F2 and F3 ran on Colab; the run book for both robot passes is
+[below](#f2--f3-rollout--run-book-2026-09-23).
 
 ## F1 — Resume `both` to 100k and retest the extremes
 
@@ -824,6 +827,39 @@ connects directly to the temporal-encoding discussion in the
 [Phase 0.5 results](phase05_camera_test_results.md) "Future studies": in both cases ACT is asked to
 separate token blocks that carry no positional tag distinguishing them.
 
+### Result — training (2026-09-23, Colab L4, 3.96 h)
+
+| run | steps | final held-out `eval_loss` |
+|---|---|---|
+| `act_both_s1000_camemb` (F2) | 60k | **0.1652** |
+| `act_both_s1000` (baseline) | 60k | 0.1663 |
+
+0.0011 apart, against a checkpoint-to-checkpoint wobble of ~0.004 in the baselines. No difference.
+
+**The embedding itself is the more informative number.** Measured on the downloaded checkpoint:
+
+| | value |
+|---|---|
+| ‖`camera_id_embed`‖, top / wrist | 0.0340 / 0.0325 |
+| mean ‖projected feature token‖ it is added to | 9.74 / 9.69 |
+| **the identity vector as a fraction of what it tags** | **0.35 %** |
+| sinusoidal positional-embedding token norm, for scale | 16.0 |
+| cosine(top, wrist) | 0.06 |
+
+The embedding is zero-initialised and trained with **Adam**, whose per-element step is bounded by the
+learning rate — so a consistently useful direction could have moved each element by up to
+lr × steps = 1e-5 × 60,000 = **0.6**. The observed per-element magnitude is ~0.0015: **0.25 % of that
+ceiling.** The gradient arriving at the camera tag was essentially sign-noise.
+
+**Given an explicit, free way to tell the two cameras apart, the optimiser did not take it.** That
+reframes F2's question: the model was not information-starved for camera *identity*. Whatever makes
+arbitration hard, a per-camera tag is not the missing piece — which also means the §1 architectural
+observation (both cameras get identical positional embeddings) is true but, on this task, not
+load-bearing.
+
+The robot check below is still worth 45 minutes — the deficit was behavioural, and held-out action L1 was
+never going to see it — but the honest prior is a null result.
+
 ## F3 — Retrain on idle-trimmed data
 
 From §4a: the training set was never idle-trimmed, which forced `n_action_steps=100` and with it a coarse
@@ -844,6 +880,145 @@ with "Your dataset must be tagged with a codebase version". Verified on the
 shows motion within its first 30 frames. ~13 frames/s, so **~40 min** for the 50-episode set — run it
 locally and push, rather than burning a GPU session on CPU work.
 
+### Result — training (2026-09-23, Colab L4)
+
+| run | wall | final `eval_loss` (trimmed holdout) |
+|---|---|---|
+| `act_top_s1000_trim` | 2.13 h | **0.1828** |
+| `act_both_s1000_trim` | 3.86 h | 0.1989 (minimum 0.1923 at 45k; 50k = 0.1966) |
+| `act_wrist_s1000_trim` | — | **did not run** — notebook crash, 30k checkpoint on the Hub |
+
+These are higher than the untrimmed baselines (0.17 range) exactly as predicted: the trimmed holdout has
+no trivial "stay still" frames left to predict. That is a different validation set, not a regression.
+Compare F3 runs to each other.
+
+**And the comparison between them reverses the baselines.** On untrimmed data `top+wrist` had the
+*lowest* held-out loss of the three conditions (0.1663 vs `top` 0.1711). On trimmed data the order flips:
+`top` alone **0.1828** beats `top+wrist` **0.1989**. Same dataset, same holdout episodes, same recipe, so
+this is a direct comparison. Once the idle frames are gone, the second camera stops paying even in
+action L1 — **the first loss-level echo of the compounding effect that until now appeared only on the
+robot** (§6.5.3). It also retires the §6.5 counter-argument that `both` "already had the lowest
+validation loss, so it can't be the least-trained model": on data without the idle attractor, it doesn't.
+
+`act_both_s1000_trim`'s validation curve is flat from 45k (0.1923 / 0.1966 / 0.1961 / 0.1989) — noise, not
+a trend. Use the 60k checkpoint, matching every other run.
+
+**Why `wrist` is missing.** On the reconnected Colab VM the first `use_camera_embed()` call raised
+`ValueError: too many values to unpack (expected 2)` — the verification subprocess prints its two values
+on one line, but on a cold VM that first policy build also emitted a download notice on stdout, so
+`.split()` returned more than two tokens. The run was skipped and `both` trained instead. Fixed in the
+notebook by parsing only the last line. Finishing `wrist` from its 30k checkpoint is ~1 h (Part D).
+
+## F2 / F3 rollout — run book (2026-09-23)
+
+Two short sessions, ~45 min + ~35 min, 28 trials total. Log:
+[phase06_f2f3_eval_log.csv](phase06_f2f3_eval_log.csv) (pre-filled with the schedule; fill the outcome
+columns). Rig setup is §4a Step 2, unchanged — follower only, home pose before starting, camera presets
+1 and 2, fixture on its outline.
+
+### Step 0 — one-time setup (done)
+
+Models are already downloaded to `outputs/hub/` (final 60k models, no checkpoint history):
+
+```bash
+source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot
+export HTTPS_PROXY=http://127.0.0.1:7897 HTTP_PROXY=http://127.0.0.1:7897   # note: http://, not socks://
+hf download HALDijkstraaa/act_both_s1000_camemb --local-dir outputs/hub/act_both_s1000_camemb --exclude "checkpoints/*"
+hf download HALDijkstraaa/act_both_s1000_trim   --local-dir outputs/hub/act_both_s1000_trim   --exclude "checkpoints/*"
+```
+
+**The local lerobot has been patched for the whole session, and must stay patched:**
+
+```bash
+python scripts/patch_act_camera_embed.py     # already applied
+```
+
+> **This is the trap that would silently void F2.** lerobot's loader does not raise on a state-dict
+> mismatch — it logs a `WARNING` and continues. Verified both directions:
+>
+> | | result |
+> |---|---|
+> | F2 checkpoint under **stock** ACT | `WARNING: Unexpected key(s) ... camera_id_embed` → **the trained embedding is dropped**, and you evaluate plain ACT while believing you tested F2 |
+> | non-F2 checkpoint under **patched** ACT | `WARNING: Missing key(s) ...` → the embedding keeps its zero-init, and zero added to the features is *exactly* stock ACT |
+>
+> So the correct protocol is **patch once, leave it patched for both sessions, revert at the end** — never
+> toggle between blocks. Verified on all four checkpoints: baseline and both trim models load with
+> `max|w| = 0.00000`, the F2 model with `max|w| = 0.00502`.
+
+Revert when the robot work is finished:
+
+```bash
+git -C /home/bj/code/lerobot checkout src/lerobot/policies/act/modeling_act.py
+```
+
+### Session A — F2: does the camera-identity embedding fix the reach deficit?
+
+**Positions P7, P5, P6, P10** — the four extremes, where `both` reached **0/4** and `top` reached 4/4
+(§6.5.3). Those four are the whole effect; the six centre positions were already indistinguishable.
+
+**Four blocks of four, ABBA**: `base`, `camemb`, `camemb`, `base` — 2 trials per position per checkpoint,
+each checkpoint getting one early and one late block, so session drift cannot land on one of them.
+`n_action_steps` stays at the stored **100** for both, matching the session these results are compared to.
+
+Block 1 (`base`, first pass). Change only `POLICY` and `NAME` for the other blocks:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && POLICY=outputs/train/act_both_s1000/checkpoints/060000/pretrained_model && NAME=rollout_phase06_f2_base_a && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=4 --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+| Block | `POLICY` | `NAME` |
+|---|---|---|
+| 1 | `outputs/train/act_both_s1000/checkpoints/060000/pretrained_model` | `rollout_phase06_f2_base_a` |
+| 2 | `outputs/hub/act_both_s1000_camemb` | `rollout_phase06_f2_camemb_a` |
+| 3 | `outputs/hub/act_both_s1000_camemb` | `rollout_phase06_f2_camemb_b` |
+| 4 | `outputs/train/act_both_s1000/checkpoints/060000/pretrained_model` | `rollout_phase06_f2_base_b` |
+
+Cylinder order inside every block: **P7 → P5 → P6 → P10**.
+
+**Score "reached the cylinder", not success.** 8 trials per checkpoint cannot resolve a success rate; they
+can resolve 0/8 vs 6/8. Also note `shoulder_pan` at the grasp attempt so the reach slope (§6.5.3,
+currently 0.81) can be recomputed.
+
+| Outcome | Reading |
+|---|---|
+| `camemb` ≥ 6/8, `base` ≤ 2/8 | The tag helped after all — surprising given it stayed at 0.35 % of the feature magnitude, and worth re-examining why |
+| both 0–2/8 | **Expected.** Arbitration is not a camera-identity problem. F1 (more steps) is then the remaining cheap hypothesis |
+| both improve together | Session effect, not the checkpoint — exactly what the ABBA interleave is for |
+
+### Session B — F3: does idle-trimming make short action chunks viable?
+
+**Correcting the premise:** the 30 trials in §6.5 ran at `n_action_steps` = **100**, not 25. 25 was tried
+first and stalled the arm at the home pose before block 1 — that failure is what motivated F3 (§4a "Why
+`n_action_steps=25` stalls"). So this session is the first time 25 gets a fair run.
+
+Three blocks, 12 trials. Positions are half A — **P6 → P2 → P8 → P4 → P9**:
+
+| Block | Policy | `n_action_steps` | Trials | Purpose |
+|---|---|---|---|---|
+| 1 | `outputs/hub/act_both_s1000_trim` | **25** | 5 | The question |
+| 2 | `outputs/train/act_both_s1000/checkpoints/060000/pretrained_model` | **25** | 2 (P6, P2) | Control — reproduce the stall on untrimmed data, same day, same rig |
+| 3 | `outputs/hub/act_both_s1000_trim` | 100 | 5 | Separates "trimming changed the policy" from "25 now works" |
+
+Same command as Session A with `--policy.n_action_steps=25` added and `--dataset.num_episodes` adjusted:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && POLICY=outputs/hub/act_both_s1000_trim && NAME=rollout_phase06_f3_trim25 && NAS=25 && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=$NAS --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder and place it in the hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+**The primary measurement is time-to-first-motion, and whether it starts unprompted** — not success.
+The stall was a discrete, 100 %-reproducible failure (the arm jitters at home until a hand crosses the
+frame), so a handful of trials settles it. Do **not** wave at the camera; if a trial has not moved by
+~10 s, record it as a stall and press **→**.
+
+| Outcome | Reading |
+|---|---|
+| Block 1 starts unprompted, block 2 stalls | **F3 confirmed.** Trimming removes the idle attractor; every future ablation can use a policy that re-observes 4× more often, which is the point of F3 |
+| Both blocks stall | The attractor is not (only) the lead-in frames. Next try 50, and look for idle *inside* episodes — pauses mid-reach — which the lead-in trim does not touch |
+| Both start fine | The stall was a rig or session artefact, not the data. Re-read the §4a lead-in table before trusting it |
+
+Block 3 is the control that keeps block 1 interpretable: if trim@25 reaches worse than trim@100, the chunk
+length is costing accuracy even though it unstuck the start, and 50 is the compromise to test next.
+
 ## F4 — Firm up the load-bearing numbers
 
 Only if something needs to survive review:
@@ -862,8 +1037,9 @@ Only if something needs to survive review:
   not do), HF and wandb auth, shared config.
 - **B — Smoke test.** One cell, ~15 min. 300 real training steps against **both** datasets, then a
   readiness verdict and the projected runtime for the whole programme. Raises on any failure.
-- **C — Training.** One cell. Runs F2 and F3 to completion, uploading as it goes. Refuses to start unless
-  Part B passed.
+- **C — Training.** One cell. Runs F2 and F3 to completion, uploading as it goes. **Restartable**: before
+  each run it reads that run's Hub repo — a final `model.safetensors` means finished (skip), checkpoints
+  without one mean part-done (resume), neither means start. After a disconnect you re-run the same cell.
 - **D — Recovery.** Resume-from-Hub and single-run cells, if something fails.
 
 **Use an L4** — compute-bound, peaks at 3.5 GiB, so an A100's 40 GB is wasted and a T4 is ~3× too slow.
@@ -880,6 +1056,21 @@ Three things that make Part C safe to leave alone:
   at most 10k steps.
 - **Failures are recorded, not fatal.** The four runs are independent, so a transient Hub error on one
   does not cost the rest of the session; the closing summary says what succeeded.
+
+**What the real run needed, beyond the above** (2026-09-23):
+
+- **Two extra installs.** The editable install alone does not pull the dataset backend or ACT's
+  dependencies on Colab's image: `%pip install 'lerobot[dataset]'` and `'lerobot[act]'` after it.
+- **A token with global `repo.write`.** The Part A assertion fired on a fine-grained token scoped to
+  existing repos, which is the intended behaviour — it is a 30-second fix before the run, versus a 401
+  four hours in.
+- **The restart path.** After the disconnect, Part A was re-run and Part C re-run directly; `SMOKE_OK` is
+  now a warning rather than an assertion, because re-running Part B on a reconnect costs 10 minutes and
+  proves nothing new.
+- **One real bug.** `use_camera_embed()` parsed its verification subprocess with `r.stdout.split()`,
+  expecting exactly two tokens. On a cold VM the first policy build also printed a download notice on
+  stdout, so it raised `ValueError: too many values to unpack` — which is why F3 `wrist` never ran. It now
+  parses the last line only.
 
 **Authentication is the trap, not the training.** A Colab secret named `HF_TOKEN` is resolved *last* and
 only via `google.colab.userdata.get()`, which needs the kernel's channel to the Colab frontend —
@@ -918,6 +1109,8 @@ toolkit does. This is the most interesting open question the phase produced, and
 | Holding out episodes with `eval_steps=0` | lerobot's default never evaluates them — you lose 5 episodes for nothing (§2). The script sets `--eval_steps=5000` |
 | Capping validation with `--max_eval_samples` | It takes the first n frames, not a sample: you would validate on the reach phase of one position (§2) |
 | A smoke run pushed to the Hub | The script refuses to push when `STEPS < 10000` |
+| A modified-architecture checkpoint loaded by the wrong code | **Silent.** lerobot logs a `WARNING` for missing/unexpected state-dict keys and carries on, so the F2 checkpoint under stock ACT drops its trained embedding and evaluates as plain ACT. Patch once for the whole session; the zero-init makes non-F2 checkpoints exactly stock under the patch (F2/F3 run book) |
+| `use_camera_embed()` raising `too many values to unpack` | Its verification subprocess printed an extra first-run line on stdout. Parse the last line only — this is what skipped F3 `wrist` |
 
 ### The Hub-push failure of 2026-09-20
 
