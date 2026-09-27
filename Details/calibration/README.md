@@ -4,10 +4,31 @@ Copied from `~/.cache/huggingface/lerobot/calibration/` on 2026-09-23. `my_follo
 **2026-09-16 20:49**, i.e. before the 2026-09-17 data collection, so it is the exact mapping every
 dataset and every trained policy in this project was recorded and trained under.
 
-| file | lives at |
+| file | what it is |
 |---|---|
-| `my_follower.json` | `~/.cache/huggingface/lerobot/calibration/robots/so_follower/my_follower.json` |
-| `my_leader.json` | `~/.cache/huggingface/lerobot/calibration/teleoperators/so_leader/my_leader.json` |
+| `my_follower.json` | **the recording-day master** (2026-09-16), the frame every dataset and policy was built in |
+| `my_follower.2026-09-27_pan+27.json` | **currently deployed** — the master with `shoulder_pan` drift corrected, see below |
+| `my_leader.json` | leader arm, unchanged |
+
+Live locations: `~/.cache/huggingface/lerobot/calibration/robots/so_follower/my_follower.json` and
+`.../teleoperators/so_leader/my_leader.json`.
+
+## 2026-09-27 — `shoulder_pan` drift correction
+
+The `shoulder_pan` mounting screws worked loose, letting the joint sit a couple of degrees off. Tightened
+mechanically; the residual offset was then measured with
+[`scripts/joint_offset_check.py`](../../scripts/joint_offset_check.py) against a training-frame landmark:
+
+| joint | delta | applied |
+|---|---|---|
+| **shoulder_pan** | **+2.37°** | **`range_min` 761 → 788, `range_max` 3449 → 3476 (+27 counts)** |
+| shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper | +0.09 … +0.41° | none — under the ~1.5° hand-positioning noise floor |
+
+`mid` moves 2105 → 2132, so every physical pose now reports 2.374° lower, cancelling the measured
++2.37°; residual **0.004°**, which is quantisation. `homing_offset` and the range width (2688 counts)
+are untouched, so the joint limits travel with the frame.
+
+**This restores the frame the policies were trained in — no retraining.**
 
 **Why it matters.** On Feetech servos `Present_Position = Actual_Position - Homing_Offset`. lerobot
 stores the homing offset and the per-joint range here and writes them into the motors' EEPROM on

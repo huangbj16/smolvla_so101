@@ -1110,6 +1110,33 @@ edit makes things worse.
 **No retraining is needed.** The policies are wrong only by the offset; restoring the frame restores
 them.
 
+#### Applied, 2026-09-27
+
+Root cause found mechanically: **the `shoulder_pan` mounting screws had worked loose**, letting the joint
+sit a couple of degrees off — which is why the base, camera and fixture all checked out while the arm
+still missed. Screws tightened, then the residual measured against a training-frame landmark:
+
+| joint | delta | action |
+|---|---|---|
+| **`shoulder_pan`** | **+2.37°** | `range_min` **761 → 788**, `range_max` **3449 → 3476** (+27 counts) |
+| others | +0.09 … +0.41° | none — under the ~1.5° hand-positioning noise floor |
+
+`mid` 2105 → 2132, so every physical pose now reports 2.374° lower; residual **0.004°**.
+`homing_offset` (154) and the 2688-count range width are unchanged, so the limits travel with the frame.
+2.37° at the ~270 mm working radius is ~11 mm of lateral error — the right order for the observed miss.
+Deployed file archived as
+[`calibration/my_follower.2026-09-27_pan+27.json`](calibration/my_follower.2026-09-27_pan+27.json).
+
+**The next connect will prompt.** The motors' EEPROM still holds the old limits, so `is_calibrated`
+returns False and `connect()` asks:
+
+```
+Press ENTER to use provided calibration file associated with the id my_follower, or type 'c' and press ENTER to run calibration:
+```
+
+**Press ENTER.** That calls `write_calibration()`, which pushes the corrected values into the motors.
+Typing `c` would start a fresh hand-positioned calibration and throw the frame away.
+
 ## F4 — Firm up the load-bearing numbers
 
 Only if something needs to survive review:
