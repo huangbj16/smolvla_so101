@@ -7,7 +7,7 @@ dataset and every trained policy in this project was recorded and trained under.
 | file | what it is |
 |---|---|
 | `my_follower.json` | **the recording-day master** (2026-09-16), the frame every dataset and policy was built in |
-| `my_follower.2026-09-27_pan+27.json` | **currently deployed** — the master with `shoulder_pan` drift corrected, see below |
+| `my_follower.2026-09-27_pan+37.json` | **currently deployed** — the master with `shoulder_pan` drift corrected, see below |
 | `my_leader.json` | leader arm, unchanged |
 
 Live locations: `~/.cache/huggingface/lerobot/calibration/robots/so_follower/my_follower.json` and
@@ -21,12 +21,13 @@ mechanically; the residual offset was then measured with
 
 | joint | delta | applied |
 |---|---|---|
-| **shoulder_pan** | **+2.37°** | **`range_min` 761 → 788, `range_max` 3449 → 3476 (+27 counts)** |
+| **shoulder_pan** | **+2.37°** measured, **+3.25°** after one replay iteration | **`range_min` 761 → 798, `range_max` 3449 → 3486 (+37 counts)** |
 | shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper | +0.09 … +0.41° | none — under the ~1.5° hand-positioning noise floor |
 
-`mid` moves 2105 → 2132, so every physical pose now reports 2.374° lower, cancelling the measured
-+2.37°; residual **0.004°**, which is quantisation. `homing_offset` and the range width (2688 counts)
-are untouched, so the joint limits travel with the frame.
+`mid` moves 2105 → 2142. The landmark measurement gave +27 counts; replay still showed a small
+leftward miss, so a further **+10 counts (0.88°, ~4 mm at the 270 mm working radius)** was added — within
+what a hand-held landmark reading can resolve. `homing_offset` and the range width (2688 counts) are
+untouched, so the joint limits travel with the frame.
 
 **This restores the frame the policies were trained in — no retraining.**
 

@@ -3,8 +3,8 @@
         "id": 1,
         "drive_mode": 0,
         "homing_offset": 154,
-        "range_min": 788,
-        "range_max": 3476
+        "range_min": 798,
+        "range_max": 3486
     },
     "shoulder_lift": {
         "id": 2,

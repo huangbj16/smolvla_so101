@@ -1119,13 +1119,16 @@ still missed. Screws tightened, then the residual measured against a training-fr
 | joint | delta | action |
 |---|---|---|
 | **`shoulder_pan`** | **+2.37°** | `range_min` **761 → 788**, `range_max` **3449 → 3476** (+27 counts) |
+| `shoulder_pan`, replay iteration 2 | still slightly left | a further **+10 counts** → **798 / 3486**, **+37 total = 3.25°** |
 | others | +0.09 … +0.41° | none — under the ~1.5° hand-positioning noise floor |
 
-`mid` 2105 → 2132, so every physical pose now reports 2.374° lower; residual **0.004°**.
-`homing_offset` (154) and the 2688-count range width are unchanged, so the limits travel with the frame.
-2.37° at the ~270 mm working radius is ~11 mm of lateral error — the right order for the observed miss.
+`mid` 2105 → 2142, so every physical pose now reports 3.253° lower. `homing_offset` (154) and the
+2688-count range width are unchanged, so the limits travel with the frame. 3.25° at the ~270 mm working
+radius is ~15 mm of lateral error — the right order for the observed miss. The landmark reading supplied
+27 of those counts and one replay iteration added the last 10, which is 0.88° — inside what a hand-held
+landmark pose can resolve, and the reason replay rather than the measurement is the acceptance test.
 Deployed file archived as
-[`calibration/my_follower.2026-09-27_pan+27.json`](calibration/my_follower.2026-09-27_pan+27.json).
+[`calibration/my_follower.2026-09-27_pan+37.json`](calibration/my_follower.2026-09-27_pan+37.json).
 
 **The next connect will prompt.** The motors' EEPROM still holds the old limits, so `is_calibrated`
 returns False and `connect()` asks:
