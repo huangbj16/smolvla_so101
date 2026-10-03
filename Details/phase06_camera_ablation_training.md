@@ -14,6 +14,17 @@ Dataset: `HALDijkstraaa/so101_toolkit_cylinder_20260917_165544` (50 episodes, 37
 Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.sh) ·
 [`scripts/make_eval_schedule.py`](../scripts/make_eval_schedule.py). Written 2026-09-20.
 
+> **Calibration frame (added 2026-10-03).** Every policy in this phase was trained in the
+> **2026-09-16 recording-day frame**, archived at
+> [`calibration/archive/2026-09-16_phase05_06_master/`](calibration/archive/2026-09-16_phase05_06_master/);
+> the rollouts from 2026-09-27 on used that frame with the `shoulder_pan` fix of §8, archived at
+> [`calibration/archive/2026-09-27_phase06_pan_fix/`](calibration/archive/2026-09-27_phase06_pan_fix/).
+> **Both arms were recalibrated on 2026-10-03** for the portable rig
+> ([phase07_portable_rig.md](phase07_portable_rig.md)), so the live calibration no longer matches these
+> checkpoints. Restore the pan-fix pair before replaying an episode or re-running any rollout from this
+> phase — otherwise every state and action is off by a constant of up to ~4.7° per joint. Why:
+> [calibration/README.md](calibration/README.md).
+
 ---
 
 # Summary
@@ -1104,8 +1115,8 @@ at the "use provided calibration file" prompt so `write_calibration()` pushes it
 it directly.
 
 Hand-positioning is worth about a degree, so do not correct a joint whose delta is under ~1.5°. Back up
-the json first — [calibration/](calibration/) holds the recording-day copy, which is the fallback if an
-edit makes things worse.
+the json first — [calibration/archive/2026-09-16_phase05_06_master/](calibration/archive/2026-09-16_phase05_06_master/)
+holds the recording-day copy, which is the fallback if an edit makes things worse.
 
 **No retraining is needed.** The policies are wrong only by the offset; restoring the frame restores
 them.
@@ -1128,7 +1139,8 @@ radius is ~13 mm of lateral error — the right order for the observed miss. The
 27 of those counts and replay tuned the last 5 (+10, then −5): 0.44° of total adjustment, inside what a
 hand-held landmark pose can resolve, and the reason replay rather than the measurement is the acceptance
 test. Deployed file archived as
-[`calibration/my_follower.deployed.json`](calibration/my_follower.deployed.json).
+[`calibration/archive/2026-09-27_phase06_pan_fix/`](calibration/archive/2026-09-27_phase06_pan_fix/)
+— the frame to restore before re-evaluating any policy from this phase.
 
 **The next connect will prompt.** The motors' EEPROM still holds the old limits, so `is_calibrated`
 returns False and `connect()` asks:

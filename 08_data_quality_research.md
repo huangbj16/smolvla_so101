@@ -320,6 +320,21 @@ predictions: [Details/phase06_camera_ablation_training.md](Details/phase06_camer
 Scripts: [`scripts/train_camera_ablation.sh`](scripts/train_camera_ablation.sh),
 [`scripts/make_eval_schedule.py`](scripts/make_eval_schedule.py).
 
+### Phase 0.7 — Portable rig and a new dataset (2026-10-03)
+
+The rig was rebuilt onto a single acrylic board — both arms, both cameras, the green tray and the black
+fixture — so it can be set down anywhere and record. The substantive change is that the top camera moved
+from a third-person, front-side view to a **bird's-eye overview of the board**: a third-person view spends
+most of its pixels on room behind the workspace, which varies between sessions and carries no task
+information, and Phase 0.5/0.6 found exactly that view to be the aliased one *and* the one whose addition
+degraded `top+wrist` reach. Remounting forced a **full recalibration of both arms**, so Phase 0.7 data
+shares neither an action frame nor an observation space with Phase 0.5/0.6 and must not be mixed with it.
+Collecting 50 clean episodes of the restated task — `Pick up the white cylinder from the green tray and
+place it in the top left white hole of the black fixture` — with shuffled tray positions, then re-running
+the divergence analysis and the camera ablation on them. Rig spec, task-card delta, preflight, recording
+command and schedule: [Details/phase07_portable_rig.md](Details/phase07_portable_rig.md). Calibration
+frames and restore procedure: [Details/calibration/README.md](Details/calibration/README.md).
+
 ### Dials: sim and real data with known defects
 
 | Dial | Instruction | Should be flagged by | Sim / real episodes |
@@ -513,3 +528,6 @@ memory sources, GPU pricing, laptop vs. desktop, and SO-101 repeatability.
 4. **Read RINSE + PSD, then CUPID** (§A.2), plus a summary.
 5. **Phase 0.6 camera ablation** (week 2, §A.4). Train three ACT policies overnight, then evaluate:
    [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
+6. **Phase 0.7 portable rig + new dataset** (§A.4). Bird's-eye top camera on an acrylic board, both arms
+   recalibrated 2026-10-03, 50 clean episodes of the tray task:
+   [Details/phase07_portable_rig.md](Details/phase07_portable_rig.md).

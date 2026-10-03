@@ -5,6 +5,15 @@ sampled frames). Notebook: [phase05_second_camera.ipynb](../phase05_second_camer
 [08 §A.4](../08_data_quality_research.md) · Task: [toolkit_task_card.md](toolkit_task_card.md).
 Baseline run 2026-09-19, follow-ups 2026-09-20.
 
+> **Calibration frame (added 2026-10-03).** This dataset was recorded in the **2026-09-16 recording-day
+> frame**, archived at
+> [`calibration/archive/2026-09-16_phase05_06_master/`](calibration/archive/2026-09-16_phase05_06_master/).
+> **Both arms were recalibrated on 2026-10-03** for the portable rig
+> ([phase07_portable_rig.md](phase07_portable_rig.md)), so the live calibration no longer matches it.
+> The divergence numbers below are unaffected — they are computed offline from the stored frames — but
+> restore that pair before replaying an episode on the robot. Why:
+> [calibration/README.md](calibration/README.md).
+
 ---
 
 # Summary
