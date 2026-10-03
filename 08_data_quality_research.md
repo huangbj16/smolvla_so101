@@ -330,7 +330,7 @@ information, and Phase 0.5/0.6 found exactly that view to be the aliased one *an
 degraded `top+wrist` reach. Remounting forced a **full recalibration of both arms**, so Phase 0.7 data
 shares neither an action frame nor an observation space with Phase 0.5/0.6 and must not be mixed with it.
 Collecting 50 clean episodes of the restated task — `Pick up the white cylinder from the green tray and
-place it in the top left white hole of the black fixture` — with shuffled tray positions, then re-running
+place it in the top left blue hole of the black fixture` — with shuffled tray positions, then re-running
 the divergence analysis and the camera ablation on them. Rig spec, task-card delta, preflight, recording
 command and schedule: [Details/phase07_portable_rig.md](Details/phase07_portable_rig.md). Calibration
 frames and restore procedure: [Details/calibration/README.md](Details/calibration/README.md).

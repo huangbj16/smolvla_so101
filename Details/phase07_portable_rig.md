@@ -28,7 +28,7 @@ mid-collection.
   image*, which made the target a property of the camera pose. From directly above it is a property of
   the board (§5).
 - **New task string, used verbatim in every episode:**
-  `Pick up the white cylinder from the green tray and place it in the top left white hole of the black fixture`
+  `Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture`
 - **Do not mix this data with Phase 0.5 / 0.6.** Different action frame *and* different observation
   space; concatenating them would train a policy on two incompatible mappings (§4).
 - **Carry the three collection lessons forward:** shuffled position rounds, not position blocks; start
@@ -52,7 +52,7 @@ mid-collection.
 | Mounting | arms clamped to the table, cameras on separate mounts, positions taped to the table surface | **everything on one acrylic board** — arms, both cameras, tray, fixture |
 | Top camera | third-person, front-side, wide; room visible behind the workspace | **bird's-eye, directly above, much higher**; frames the board and little else |
 | Cylinder start | standing on one of 10 taped table positions | **in the green tray** |
-| Target | top-left hole, taped, defined in the third-person image | **top-left white hole** of the black fixture, defined on the board |
+| Target | top-left hole, taped, defined in the third-person image | **top-left blue hole** of the black fixture, defined on the board |
 | Calibration | 2026-09-16 master (+ `shoulder_pan` fix 09-27) | **recalibrated 2026-10-03**, [`calibration/current/`](calibration/current/) |
 | Portability | fixed to one table in one room | **set the board down anywhere and record** |
 
@@ -134,10 +134,10 @@ The full card is [toolkit_task_card.md](toolkit_task_card.md). Phase 0.7 changes
 
 | Entry | Phase 0.7 value |
 |---|---|
-| Task string | `Pick up the white cylinder from the green tray and place it in the top left white hole of the black fixture` |
+| Task string | `Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture` |
 | Start state | cylinder **in the green tray**, standing upright; arm at home, gripper open |
 | Cylinder position | **VARIES** over ___ marked spots **within the tray** (*Default:* 6, two rows of three, each marked on the tray floor) |
-| Target | **top-left white hole** as seen **from the bird's-eye camera** — which is now the board's own top-left, not a camera-dependent direction |
+| Target | **top-left blue hole** as seen **from the bird's-eye camera** — which is now the board's own top-left, not a camera-dependent direction |
 | Success | unchanged: within 30 s, fully seated in that hole, gripper released |
 | Stages | unchanged: reached 0.2 · grasped+lifted 0.4 · over the hole 0.6 · inserted 0.8 · seated+released 1.0 |
 | Fixed | tray and fixture outlines on the board, lighting, both camera poses, Cameractrls presets, one cylinder, one grasp style |
@@ -179,7 +179,7 @@ lerobot-record \
   --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader \
   --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" \
   --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_portable \
-  --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left white hole of the black fixture" \
+  --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" \
   --dataset.num_episodes=50 \
   --dataset.episode_time_s=30 \
   --dataset.reset_time_s=3 \
@@ -195,6 +195,28 @@ lerobot-record \
   time, giving `so101_tray_cylinder_portable_<timestamp>`; record that full name in §8. To add episodes
   later, pass the full stamped name with `--resume=true`.
 - **Timing unchanged** from Phase 0.5 — 30 s episodes, 3 s reset — so episode length stays comparable.
+
+**The throwaway run** of §6 step 5 — 5 episodes, separate `repo_id`, **no push**. Watch these back and
+replay one before starting the real 50; delete the dataset afterwards so no tooling can train on it.
+
+```bash
+TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0
+WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0
+
+lerobot-record \
+  --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower \
+  --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleop.id=my_leader \
+  --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" \
+  --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_portable_test \
+  --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" \
+  --dataset.num_episodes=5 \
+  --dataset.episode_time_s=30 \
+  --dataset.reset_time_s=3 \
+  --dataset.fps=30 \
+  --dataset.push_to_hub=false \
+  --dataset.private=true \
+  --display_data=true
+```
 
 # 8 — Schedule and log
 
