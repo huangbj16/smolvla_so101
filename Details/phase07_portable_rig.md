@@ -255,10 +255,28 @@ the portability claim.
 - The dataset card states: new calibration frame, bird's-eye `top`, not compatible with
   `so101_toolkit_cylinder_20260917_165544`.
 
-**Then, in order:**
+**Then — revised 2026-10-05.** The original plan was to re-run the divergence analysis and the camera
+ablation on this dataset first. **Both are deferred**: they are camera-placement questions, and the
+dataset is now wanted for the policy-transfer question (Q2) instead. What runs now:
+
+| Stage | What | Where |
+|---|---|---|
+| 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
+| 2 | **Build the trimmed dataset** → `..._20261003_211912_trimmed` (50 ep, ~29.5k frames) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
+| 3 | **Train three policies on it, in parallel** — ACT, SmolVLA, π0.5. One notebook each; everything but the policy held constant | [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05.ipynb) |
+| 4 | Rollouts on the robot, interleaved across the three checkpoints | — |
+
+Train/eval split for all three: holdout **`[9, 19, 29, 39, 49]`**, placed in the tail of
+`--dataset.episodes` so lerobot's "last N" split takes exactly those. The default split would otherwise
+hold out episodes 45–49, which are the only **off-grid** tray placements — see §8 and the verification
+report §5.
+
+**Still open, in no particular order:**
 1. Re-run the Phase 0.5 divergence analysis on this dataset
    ([phase05_second_camera.ipynb](../phase05_second_camera.ipynb)) and put the numbers beside the old
    ones. Confounded, so read it as a sanity check: does the top view stop being the aliased one?
+   (Verification §4b already found one piece of the answer for free: the bird's-eye view is blind to the
+   wrist tilt every episode opens with.)
 2. Retrain the three-way camera ablation on it. The sharp question is whether `top+wrist` still
    under-reaches — if the degradation was background-driven it should shrink here.
 3. Record a second location and compare, which is the only direct test of portability.
