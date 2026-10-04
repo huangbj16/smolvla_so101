@@ -9,6 +9,11 @@ Calibration: [calibration/README.md](calibration/README.md) · Predecessors:
 [phase05_camera_test_results.md](phase05_camera_test_results.md),
 [phase06_camera_ablation_training.md](phase06_camera_ablation_training.md). Written 2026-10-03.
 
+**The 50 episodes were recorded and pushed on 2026-10-03** as
+`HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912` (§8). They were verified on 2026-10-04 —
+clean recording, but the idle lead-in of §8 did not shrink, so training must use an idle-trimmed copy:
+[phase07_data_verification.md](phase07_data_verification.md).
+
 Items marked *Default:* are suggestions — fix them before the first episode, then do not change them
 mid-collection.
 
