@@ -108,6 +108,13 @@ keeps **29,462 / 35,141 frames (83.8%)**, leaving episodes of 485–743 frames �
 an ACT 100-step chunk. (Phase 0.5's trimmed copy kept 84.8%, so this is the same operation at the same
 scale.)
 
+> **Done 2026-10-05.** The trimmed dataset is
+> [`so101_tray_cylinder_portable_20261003_211912_trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed)
+> — 50 episodes, 29,462 frames, exactly the prediction above. Built by
+> [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb); post-upload check: every parquet
+> readable, `v3.0` tag present, encoder settings identical to the source, post-trim lead-in ≤ the
+> 5-frame pad. **This is the dataset all three Stage 3 runs read.**
+
 > **For the next collection round.** The instruction did not change behaviour, so it probably needs a
 > mechanism rather than a reminder — e.g. have the cylinder already in hand-reach position and begin the
 > leader motion before pressing record, or trim at record time. Two rounds have now produced a ~2.4 s

@@ -229,15 +229,44 @@ lerobot-record \
 their divergence numbers are compared. Extend toward the N = 100 per-condition figure in
 [08 §A.4](../08_data_quality_research.md) once the rig is proven.
 
+## The datasets, as recorded (2026-10-03)
+
+| | Repo | Episodes | Frames | Use |
+|---|---|---|---|---|
+| **Raw** | [`so101_tray_cylinder_portable_20261003_211912`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912) | 50 | 35,141 | archive · analysis |
+| **Trimmed** | [`..._20261003_211912_trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed) | 50 | **29,462** (83.8%) | **all training** |
+
+Both private, `v3.0`, 30 fps, `top` + `wrist` at 480×640 AV1. The trimmed copy was built 2026-10-05 by
+[colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) with the `dev > 2.0°` / 5-frame-pad
+rule; episodes are 485–743 frames, every one longer than an ACT 100-step chunk. Verified after upload:
+all parquet readable, codebase-version tag present, same encoder settings as the source.
+
+**Train on the trimmed copy, not the raw one** — see §8's lead-in note below and
+[phase07_data_verification.md §2](phase07_data_verification.md).
+
+## What was asked for, and what actually happened
+
 **Shuffle the positions.** Phase 0.5 recorded position blocks (P1 = ep 0–4 … P10 = ep 45–49), which
 confounded position with session time and would have put a whole position in lerobot's default holdout.
 For Phase 0.7: visit every marked tray spot once per round, in a **written-down shuffled order per
 round**, repeating until 50 episodes are done.
 
+> **Not done.** As recorded, episodes 0–44 are **9 tray-spot blocks of 5 consecutive episodes** (a 3×3
+> grid) and **45–49 are random placements** in the tray. So position is confounded with session time
+> again, and lerobot's default "last 5" holdout would hold out exactly the 5 off-grid episodes. Training
+> therefore passes an explicit reordered `--dataset.episodes` with holdout `[9, 19, 29, 39, 49]`. The
+> block structure is recoverable from the data: the grasp pose separates the 9 spots at 27× (verification
+> report §5).
+
 **Start moving the instant the episode starts.** A static lead-in becomes an idle attractor the policy
 cannot escape; Phase 0.5 measured a median 74 idle frames, and the F3 follow-up found that training on
 idle-trimmed data flipped the camera ranking. Trim anyway before training
 ([`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py)).
+
+> **Not done either**, and this one is the reason the trimmed copy is mandatory rather than optional:
+> the measured lead-in is a **median 71 frames (2.38 s)**, essentially unchanged from Phase 0.5's 74,
+> with 47/50 episodes idle longer than one 50-step chunk. Two rounds of the same written instruction
+> have now produced the same lead-in, so the next round needs a mechanism, not a reminder.
 
 Keep `phase07_log.csv` next to the dataset, one row per episode — it cannot be reconstructed afterwards:
 
@@ -262,7 +291,7 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 | Stage | What | Where |
 |---|---|---|
 | 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
-| 2 | **Build the trimmed dataset** → `..._20261003_211912_trimmed` (50 ep, ~29.5k frames) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
+| 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
 | 3 | **Train three policies on it, in parallel** — ACT, SmolVLA, π0.5. One notebook each; everything but the policy held constant | [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05.ipynb) |
 | 4 | Rollouts on the robot, interleaved across the three checkpoints | — |
 
