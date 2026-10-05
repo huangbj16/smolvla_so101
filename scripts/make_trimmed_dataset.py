@@ -53,6 +53,13 @@ for ep in range(src.num_episodes):
     kept += b - a
     print(f"  ep{ep:02d}: {hi-lo:4d} -> {b-a:4d} frames  (cut {a} lead-in, {len(st)-b} tail)", flush=True)
 
+# Close the parquet writers and flush the buffered episode metadata. Without this the files have no
+# parquet footer and the dataset is unreadable. `DatasetWriter.__del__` does it at interpreter exit,
+# which is why this script worked before the call was added — but push_to_hub() below runs BEFORE
+# that, so an unfinalized dataset would upload silently and only fail at training time. In a
+# long-lived process (a notebook kernel) nothing saves you at all. Idempotent.
+dst.finalize()
+
 dt = time.time() - t0
 print(f"kept {kept}/{src.num_frames} frames ({100*kept/src.num_frames:.0f}%) in {dt/60:.1f} min "
       f"-> {kept/dt:.0f} frames/s")
