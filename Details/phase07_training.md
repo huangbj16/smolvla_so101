@@ -12,7 +12,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
 | **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ⬜ not started — unblocked |
-| **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | 🔴 **blocked** — gated backbone (§4) |
+| **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | ◐ smoke test passed 2026-10-06; full run ~16.7 h (§4) |
 
 ---
 
@@ -102,9 +102,43 @@ config; Part A prints both so the run log records what was actually used.
 
 ---
 
-# 4 — π0.5 — blocked on a gated backbone
+# 4 — π0.5 — access granted 2026-10-06; smoke test passed
 
-**The failure.** The smoke test dies ~10 minutes in, after the dataset downloads and the model is on the
+**Smoke test (A100 40 GB, batch 16, 300 steps):** all checks pass. 693,422,112 trainable parameters
+(of 3.3 B — the frozen VLM is the rest), eval_loss 0.3419 → 0.1514 over 300 steps, peak **18.2 GiB**.
+
+| | Measured | Full run (30,000 steps) |
+|---|---|---|
+| Throughput | **1.95 s/step** (~8 samples/s) | — |
+| Wall clock | 13 min for 300 steps | **~16.7 h** (16.2 h train + ~0.5 h eval/pushes) |
+| Coverage | — | 480k samples = **16.3 epochs** (ACT got 17.9) |
+| Peak GPU | 18.2 GiB of 40 | ~18 GiB — room to spare |
+| **Disk per checkpoint** | **11.55 GB** (9.35 model + 2.2 optimizer) | 6 checkpoints = **69 GB** |
+
+**Two things this surfaced.**
+
+1. **The run is ~16.7 h**, well past a comfortable Colab session. Part C resumes from the last Hub
+   checkpoint, so a disconnect costs at most `save_freq` = 5,000 steps ≈ 2.7 h. Levers, in order of
+   preference: try `--policy.gradient_checkpointing=false` (peak is 18.2 of 40 GiB, so there is headroom,
+   and it trades memory back for speed — one 13-minute smoke test settles it); or cut `STEPS`, at the
+   cost of epoch-matching to ACT (20k → 11.3 h / 10.9 epochs; 15k → 8.6 h / 8.1 epochs). Raising the
+   batch does **not** help: the update dominates (`updt_s:1.949` vs `data_s:0.442`), so it is
+   compute-bound and bigger batches buy proportionally longer steps.
+2. **Disk would have ended the run.** Six unreaped checkpoints (69 GB) plus the 14.5 GB base model on a
+   112 GB Colab disk does not fit — it filled to 76.7 GB during the *smoke test alone*. Part C now reaps
+   superseded local checkpoints (keeping the newest 2 ≈ 23 GB); they are redundant locally the moment
+   `save_checkpoint_to_hub` pushes them. The **Hub** repo still ends at ~79 GB, since every checkpoint is
+   pushed — Part D has a pruning snippet.
+
+> π0.5 checkpoints are ~19× an ACT checkpoint (11.55 GB vs 0.62 GB). Worth carrying into the
+> [08 §A.4](../08_data_quality_research.md) grid: the π0.5 column costs far more storage than compute
+> planning alone suggests.
+
+## How it was blocked, and what fixed it
+
+
+
+**The failure was.** The smoke test died ~10 minutes in, after the dataset downloads and the model is on the
 GPU, while building the processor:
 
 ```
@@ -125,9 +159,9 @@ Ungated third-party re-uploads of PaliGemma exist, but pointing at one would sub
 may not match token-for-token, silently changing the language conditioning and making this run
 incomparable with both the pretrained prior and everyone else's results. Not worth it to save a wait.
 
-**What to do.**
+**Resolved 2026-10-06** by requesting access. For the record, what was needed:
 
-1. Request access at **https://huggingface.co/google/paligemma-3b-pt-224**. The gate is `manual`
+1. Access at **https://huggingface.co/google/paligemma-3b-pt-224**. The gate is `manual`
    (`model_info(...).gated == "manual"`), so it is reviewed rather than granted on acceptance — request
    it early, since it is the long pole.
 2. The token also needs **`canReadGatedRepos`** — *"Read access to contents of all public gated repos you
