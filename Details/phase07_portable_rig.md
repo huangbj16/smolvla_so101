@@ -292,7 +292,7 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 |---|---|---|
 | 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
 | 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
-| 3 | **Train three policies on it, in parallel** — ACT, SmolVLA, π0.5. One notebook each; everything but the policy held constant | [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05.ipynb) |
+| 3 ◐ | **Train three policies on it** — everything but the policy held constant. **ACT done** (60k steps, 3.85 h on an L4, eval_loss 0.185); SmolVLA not started; **π0.5 blocked** on access to the gated `google/paligemma-3b-pt-224` | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05.ipynb) |
 | 4 | Rollouts on the robot, interleaved across the three checkpoints | — |
 
 Train/eval split for all three: holdout **`[9, 19, 29, 39, 49]`**, placed in the tail of
