@@ -11,7 +11,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 | Policy | Notebook | Status |
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
-| **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ⬜ not started — unblocked |
+| **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ◐ smoke test passed 2026-10-06; full run ~11.4 h on an **L4** (§3) |
 | **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | ◐ smoke test passed 2026-10-06; full run ~16.7 h (§4) |
 
 ---
@@ -29,7 +29,7 @@ from one source rather than by review.
 | Seed | 1000 |
 | Cameras | both (`top` + `wrist`) |
 | Augmentation | off |
-| Logging | one wandb project, so the eval curves overlay |
+| Logging | one wandb project (see the warning below about reading across policies) |
 
 **Why the holdout is set by hand.** Episodes 0–44 are 9 tray-spot blocks of 5 *consecutive* episodes and
 45–49 are off-grid placements. lerobot's default split takes the last `ceil(n × eval_split)` episodes of
@@ -37,9 +37,35 @@ the list, which would hold out exactly 45–49 — the only unmarked placements 
 and making validation measure nothing but off-grid generalisation. Reordering the episode list puts a
 balanced holdout in the tail instead: the last episode of blocks 2, 4, 6, 8 plus one off-grid.
 
+> ⚠ **Held-out loss does not compare across the three.** They optimise different objectives — ACT is
+> L1 + KLD over a VAE latent, SmolVLA and π0.5 are flow-matching — and they normalise actions
+> differently (ACT/SmolVLA `MEAN_STD`, π0.5 `QUANTILES`). The logs make this plain: ACT reports
+> `l1_loss`/`kld_loss`, SmolVLA `losses_after_forward`, π0.5 a bare `loss`. They share one wandb project
+> so that **conditions and seeds within a policy** overlay, which is what the dial grid needs. Reading
+> ACT's 0.185 against SmolVLA's or π0.5's number is meaningless. **Across policy families, only rollout
+> success answers Q2.**
+
 **Hyperparameters are per-policy on purpose.** Each uses its own published recipe; [08 §A.4](../08_data_quality_research.md)
 holds hyperparameters fixed *after one clean run*, not identical across policy families. **Freeze what
 these runs land on and reuse it for the dial grid.**
+
+## The three runs at a glance
+
+Measured, not estimated — each row comes from that policy's own smoke test or completed run.
+
+| | ACT | SmolVLA | π0.5 |
+|---|---|---|---|
+| GPU | L4 | **L4** | A100 40 GB |
+| Trainable params | 51.6 M (all) | 99.9 M of 450 M | 693 M of 3.3 B |
+| Batch × steps | 8 × 60,000 | 64 × 20,000 | 16 × 30,000 |
+| Samples / **epochs** | 480 k / **18.0** | 1.28 M / **47.9** | 480 k / **18.0** |
+| Throughput | 4.47 step/s | 2.00 s/step | 1.95 s/step |
+| **Wall clock** | **3.85 h** (done) | **~11.4 h** | **~16.7 h** |
+| Peak GPU | 3.8 GiB | 16.5 GiB | 18.2 GiB |
+| Checkpoint size | 0.62 GB | 1.3 GB | **11.6 GB** |
+
+Epochs are over the 45-episode training split (26,721 frames), which is what lerobot reports.
+SmolVLA and π0.5 need different GPU classes, so they run in parallel without contention.
 
 ---
 
@@ -91,14 +117,42 @@ rollouts.**
 
 ---
 
-# 3 — SmolVLA — not started
+# 3 — SmolVLA — smoke test passed 2026-10-06
 
-Unblocked: its backbone (`HuggingFaceTB/SmolVLM2-500M-Video-Instruct`) is **not gated**, and the
-preflight passes. Fine-tunes `lerobot/smolvla_base` with `--rename_map` turning `top`/`wrist` into
-`camera1`/`camera2` (the checkpoint's own feature names win over the dataset's, so without the map the
-run dies on a feature mismatch). Target batch 64 / 20k steps, stepped down on OOM with steps scaled to
-hold samples-seen fixed. Inherits `freeze_vision_encoder=true` and `train_expert_only=true` from the base
-config; Part A prints both so the run log records what was actually used.
+**The published recipe ran unmodified at batch 64 — on an L4, not an A100.** Peak **16.5 GiB of 24**,
+no step-down, so the sample budget is exactly the official one. The notebook's guidance said A100
+preferred with an L4 fallback at a smaller batch; that was too pessimistic and has been corrected.
+
+The reason it fits: `freeze_vision_encoder=true` and `train_expert_only=true` are inherited from
+`smolvla_base`, so only **99,880,992 of ~450 M parameters** train. No optimizer state and no backward
+activations for the VLM — [09 §D](../09_home_deployment_and_hardware.md)'s 16 GB warning is for a *full*
+fine-tune, which this is not.
+
+| | Measured | Full run (20,000 steps) |
+|---|---|---|
+| Throughput | **2.00 s/step** (~32 samples/s) | — |
+| Wall clock | 12.9 min for 300 steps | **~11.4 h** |
+| Coverage | — | 1.28 M samples = **47.9 epochs** |
+| Peak GPU | 16.5 GiB of 24 | same |
+| Disk | 1.3 GB per checkpoint | 4 checkpoints ≈ 5 GB — a non-issue |
+| Smoke eval loss | 0.2016 → 0.1511 over 300 steps | — |
+
+**Scheduling.** SmolVLA on an L4 and π0.5 on an A100 contend for nothing, so run them in parallel — which
+is what the three-notebook split was for. A disconnect costs at most `save_freq` = 5,000 steps ≈ 2.8 h.
+
+**47.9 epochs is the thing to watch.** That is **2.7× what ACT and π0.5 get** (18.0 each) — a consequence
+of each policy keeping its own published recipe on a 50-episode dataset much smaller than those recipes
+were written for. Two consequences:
+
+- Watch the held-out curve for a turn upward. If it overfits, the run is still useful: checkpoints land
+  every 5,000 steps, so **12 / 24 / 36 / 48 epochs are all retained**.
+- Those checkpoints also give a **sample-matched comparison for free** — the 5k (12 epochs) and 10k
+  (24 epochs) checkpoints bracket ACT's 18.0. Worth keeping when pruning the Hub, since a difference
+  between policies at matched epochs is a much cleaner Q2 claim than one at matched recipes.
+
+Configuration notes: `--rename_map` turns `top`/`wrist` into `camera1`/`camera2`, because the
+checkpoint's own feature names win over the dataset's and the run would otherwise die on a feature
+mismatch. Part A prints the inherited freeze flags so the run log records what was actually used.
 
 ---
 
