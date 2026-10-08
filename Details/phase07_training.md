@@ -12,7 +12,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
 | **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | ◐ ready to run on a rented **RTX 4090**; ~17–25 h (§4) |
+| **π0.5** | [4090](../colab_phase07_pi05.ipynb) · [Colab L4](../colab_phase07_pi05_L4.ipynb) | ◐ running on a rented **RTX 4090** (~17–25 h); a 10k-step L4 run alongside it (§4) |
 
 ---
 
@@ -311,6 +311,36 @@ them — exactly the pairing needed to choose which checkpoint to roll out. The 
 **Expect roughly 17–25 h** on a 4090 (extrapolated from 1.95 s/step on an A100; the 4090 has more dense
 bf16 compute but ~⅔ the memory bandwidth, and gradient checkpointing makes this compute-heavy). The
 smoke test measures it exactly in ~15 min.
+
+## A second, smaller run on a Colab L4
+
+[colab_phase07_pi05_L4.ipynb](../colab_phase07_pi05_L4.ipynb), to run alongside the 4090. Everything
+from the runtime check onward is **copied verbatim** from the 4090 notebook — verified byte-identical for
+the preflight, smoke, Part C and auth cells — so the two are comparable at matched steps. Only Part A
+differs (Colab ships torch and has its own secret store) plus four knobs.
+
+**Memory is fine; it is the other two limits that bite.**
+
+| | 4090 host | Colab L4 |
+|---|---|---|
+| Peak VRAM | 18.18 GiB of 24 | same, of 24 — ~6 GiB spare |
+| Steps | 30,000 (**18.0** epochs) | 10,000 (**6.0** epochs) |
+| Projected | ~17–25 h | **~14–19 h** |
+| `save_freq` | 5,000 → 6 checkpoints | 2,500 → 4 checkpoints |
+| Local checkpoints | all kept | **newest 2** (reaped; all still pushed) |
+| Hub repo | `..._trim` | `..._trim_L4` |
+
+- **Speed.** The L4 is roughly 2.5–3.5× slower than the A100 that measured 1.95 s/step, so the full
+  30,000 steps would be **41–57 h** — past any Colab session. 10,000 lands at 14–19 h.
+- **Disk.** Measured across these runs, Colab has 112.6 GB with ~44 GB of base image, leaving **~68 GB**.
+  Six π0.5 checkpoints (69.3 GB) plus the 14.5 GB base model is 84.5 GB and does not fit — the π0.5 smoke
+  test alone once drove a Colab disk to 94.1 GB. Keeping the newest two is ~38 GB.
+- **Is 6 epochs enough?** Unknown for π0.5, but not obviously short: SmolVLA on this same dataset bottomed
+  at **12 epochs and was 61% worse by 48** (§3). If π0.5 overfits on a similar schedule, 6 epochs may be
+  near its optimum. The 2,500-step checkpoints bracket it either way.
+
+`gradient_checkpointing` stays `true` here too — the 18.18 GiB figure depends on it, and a 24 GB card has
+no room to turn it off.
 
 ## How it was blocked, and what fixed it
 
