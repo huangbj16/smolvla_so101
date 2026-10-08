@@ -12,7 +12,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
 | **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | ◐ smoke test passed 2026-10-06; full run ~16.7 h (§4) |
+| **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | ◐ ready to run on a rented **RTX 4090**; ~17–25 h (§4) |
 
 ---
 
@@ -214,6 +214,53 @@ mismatch. The cosine schedule was pinned to the real step count (`scheduler_deca
 > π0.5 checkpoints are ~19× an ACT checkpoint (11.55 GB vs 0.62 GB). Worth carrying into the
 > [08 §A.4](../08_data_quality_research.md) grid: the π0.5 column costs far more storage than compute
 > planning alone suggests.
+
+## Running it on a rented RTX 4090 (2026-10-08)
+
+Moved off Colab to a 4090 box — **24 GB VRAM, 50 GB RAM, 12 vCPU, 30 GB system disk + 100 GB data
+disk**. Everything checks out against what the earlier runs measured:
+
+| | Needed (measured) | Host has | |
+|---|---|---|---|
+| VRAM | **18.18 GiB** peak | 24 GB | ✅ ~6 GiB spare |
+| RAM | ~26 GB peak, total | 50 GB | ✅ |
+| Data disk | **84.5 GB** (below) | 100 GB | ✅ ~15 GB margin |
+| vCPU | `num_workers=8` | 12 | ✅ |
+
+> **`gradient_checkpointing` must stay `true` on a 24 GB card.** The 18.18 GiB figure is *with* it. It
+> trades compute for memory, so disabling it to go faster — fine on a 40 GB A100 — would likely push
+> past 24 GB here. This is the one knob not to touch.
+
+**Disk budget, keeping every checkpoint** (requested, so the whole eval curve stays inspectable — the
+SmolVLA result in §3 is why that matters):
+
+| | GB |
+|---|---|
+| `pi05_base` weights | 14.47 |
+| PaliGemma tokenizer (weights never fetched) | 0.02 |
+| trimmed dataset | 0.70 |
+| 6 checkpoints × 11.55 | 69.30 |
+| **total at end of run** | **84.5 of 100** |
+
+Two things make that fit rather than nearly fit. The notebook now points `HF_HOME` and
+`HF_LEROBOT_HOME` at the **data disk** — left alone they default to `~/.cache`, i.e. the 30 GB system
+disk, which the 14.5 GB base model plus pip and torch would fill. And Part B deletes its own smoke
+checkpoint when it passes, returning 11.5 GB before the real run starts.
+
+**A watchdog replaces the reaper.** Nothing is deleted during the run; instead, every 2 minutes it
+measures the checkpoints actually written, extrapolates to those still to come, and compares against
+free space — printing a status line normally and a loud warning, with options, if the projection stops
+fitting. Part B prints the same projection *before* the run so a shortfall is known at minute 15 rather
+than hour 14.
+
+**`eval_steps` lowered to 2000** (15 eval points instead of 6). SmolVLA's held-out minimum landed on the
+*earliest* checkpoint measured, so its true optimum is unresolved; evaluating more often costs ~16 min
+across a ~20 h run and does not touch training. `save_freq` stays at 5000 because checkpoints — not
+evals — are what the disk budget is made of.
+
+**Expect roughly 17–25 h** on a 4090 (extrapolated from 1.95 s/step on an A100; the 4090 has more dense
+bf16 compute but ~⅔ the memory bandwidth, and gradient checkpointing makes this compute-heavy). The
+smoke test measures it exactly in ~15 min.
 
 ## How it was blocked, and what fixed it
 
