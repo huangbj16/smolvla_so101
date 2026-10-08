@@ -11,7 +11,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 | Policy | Notebook | Status |
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
-| **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ◐ smoke test passed 2026-10-06; full run ~11.4 h on an **L4** (§3) |
+| **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
 | **π0.5** | [colab_phase07_pi05.ipynb](../colab_phase07_pi05.ipynb) | ◐ smoke test passed 2026-10-06; full run ~16.7 h (§4) |
 
 ---
@@ -59,8 +59,9 @@ Measured, not estimated — each row comes from that policy's own smoke test or 
 | Trainable params | 51.6 M (all) | 99.9 M of 450 M | 693 M of 3.3 B |
 | Batch × steps | 8 × 60,000 | 64 × 20,000 | 16 × 30,000 |
 | Samples / **epochs** | 480 k / **18.0** | 1.28 M / **47.9** | 480 k / **18.0** |
+| Best eval loss | 0.1792 @ 50k (+3% at end) | **0.1258 @ 5k (+61% at end)** | — |
 | Throughput | 4.47 step/s | 2.00 s/step | 1.95 s/step |
-| **Wall clock** | **3.85 h** (done) | **~11.4 h** | **~16.7 h** |
+| **Wall clock** | **3.85 h** (done) | **14.2 h** (done) | **~16.7 h** |
 | Peak GPU | 3.8 GiB | 16.5 GiB | 18.2 GiB |
 | Checkpoint size | 0.62 GB | 1.3 GB | **11.6 GB** |
 
@@ -117,42 +118,68 @@ rollouts.**
 
 ---
 
-# 3 — SmolVLA — smoke test passed 2026-10-06
+# 3 — SmolVLA — done 2026-10-08, and it overfits
 
-**The published recipe ran unmodified at batch 64 — on an L4, not an A100.** Peak **16.5 GiB of 24**,
-no step-down, so the sample budget is exactly the official one. The notebook's guidance said A100
-preferred with an L4 fallback at a smaller batch; that was too pessimistic and has been corrected.
+[model](https://huggingface.co/HALDijkstraaa/smolvla_tray_cylinder_s1000_trim) (private, 4 checkpoints +
+final, 6.18 GB). 20,000 steps, batch 64, seed 1000, on an **L4** — the published recipe ran unmodified,
+peaking at **16.5 of 24 GiB** with no step-down, so the sample budget is exactly the official one. 14.2 h
+wall clock against an 11.4 h projection.
 
-The reason it fits: `freeze_vision_encoder=true` and `train_expert_only=true` are inherited from
-`smolvla_base`, so only **99,880,992 of ~450 M parameters** train. No optimizer state and no backward
-activations for the VLM — [09 §D](../09_home_deployment_and_hardware.md)'s 16 GB warning is for a *full*
-fine-tune, which this is not.
+It fits a 24 GB card because `freeze_vision_encoder=true` and `train_expert_only=true` are inherited from
+`smolvla_base`: only **99,880,992 of ~450 M** parameters train, so there is no optimizer state and no
+backward activations for the VLM. [09 §D](../09_home_deployment_and_hardware.md)'s 16 GB figure is for a
+*full* fine-tune, which this is not.
 
-| | Measured | Full run (20,000 steps) |
-|---|---|---|
-| Throughput | **2.00 s/step** (~32 samples/s) | — |
-| Wall clock | 12.9 min for 300 steps | **~11.4 h** |
-| Coverage | — | 1.28 M samples = **47.9 epochs** |
-| Peak GPU | 16.5 GiB of 24 | same |
-| Disk | 1.3 GB per checkpoint | 4 checkpoints ≈ 5 GB — a non-issue |
-| Smoke eval loss | 0.2016 → 0.1511 over 300 steps | — |
+## Held-out loss rises monotonically from the first checkpoint
 
-**Scheduling.** SmolVLA on an L4 and π0.5 on an A100 contend for nothing, so run them in parallel — which
-is what the three-notebook split was for. A disconnect costs at most `save_freq` = 5,000 steps ≈ 2.8 h.
+| step | epochs | train loss | **eval loss** | gap |
+|---|---|---|---|---|
+| 5,000 | 12.0 | 0.0543 | **0.1258** ← min | +0.072 |
+| 10,000 | 24.0 | 0.0284 | 0.1695 | +0.141 |
+| 15,000 | 35.9 | 0.0193 | 0.2029 | +0.184 |
 
-**47.9 epochs is the thing to watch.** That is **2.7× what ACT and π0.5 get** (18.0 each) — a consequence
-of each policy keeping its own published recipe on a 50-episode dataset much smaller than those recipes
-were written for. Two consequences:
+Train loss falls the whole way (0.304 → 0.017); eval loss ends **+61% above its minimum** and the
+generalisation gap triples. This is textbook overfitting, and it is the risk flagged when the epoch
+budgets were first compared — **SmolVLA gets 47.9 epochs where ACT and π0.5 get 18.0**, because each
+policy keeps its own published recipe on a dataset far smaller than those recipes assume. 100 M trainable
+parameters over 45 episodes for 48 epochs is simply a lot of passes.
 
-- Watch the held-out curve for a turn upward. If it overfits, the run is still useful: checkpoints land
-  every 5,000 steps, so **12 / 24 / 36 / 48 epochs are all retained**.
-- Those checkpoints also give a **sample-matched comparison for free** — the 5k (12 epochs) and 10k
-  (24 epochs) checkpoints bracket ACT's 18.0. Worth keeping when pruning the Hub, since a difference
-  between policies at matched epochs is a much cleaner Q2 claim than one at matched recipes.
+**ACT, for contrast, did not overfit**: its eval loss bottomed at 0.1792 (50k) and finished at 0.1848,
++3%. Same dataset, same holdout, same seed. That difference is itself a Q2-relevant result — how much
+data each policy family needs before it starts memorising — and it is worth stating in the write-up
+rather than hiding behind "we used each policy's published recipe".
+
+## What to do about it
+
+1. **Roll out the 5,000-step checkpoint, not just the final one.** It is on the Hub. By held-out loss it
+   is the best of the four by a wide margin, and 20k is the worst.
+2. It also happens to be the **sample-matched** comparison: 5k = 12.0 epochs, bracketing ACT's 18.0
+   alongside the 10k checkpoint's 24.0. A Q2 claim at matched epochs is much cleaner than one at matched
+   recipes.
+3. **Do not re-run.** The four checkpoints already span 12–48 epochs; the short run is already in hand.
+4. **For the dial grid** ([08 §A.4](../08_data_quality_research.md)): SmolVLA should use ~5k steps, not
+   20k. That is both the better model *and* ~2.9 h instead of 11.4 h per condition — a 4× saving on the
+   SmolVLA column.
+
+## Three caveats before reading too much into it
+
+- **The minimum is at the earliest checkpoint measured.** `eval_steps=5000` gives no resolution below
+  5k, so the true optimum may be earlier still. The smoke test's 300-step eval was 0.1511 — worse than
+  5k's 0.1258 — so the optimum sits somewhere between roughly 1k and 10k.
+- **Held-out loss is not task success.** [phase06 §2](phase06_camera_ablation_training.md) found it
+  separated conditions by less than checkpoint wobble while the robot showed a decisive dissociation. A
+  monotone +61% is a far stronger signal than the sub-wobble differences that paper dismissed, but it
+  still has to be confirmed by rollouts, and it is possible the 20k policy acts better than its loss.
+- **A specific, testable mechanism.** The holdout is `[9, 19, 29, 39, 49]`, and **episode 49 is one of
+  the five off-grid placements**; the other four come from the 9-spot grid. If the policy is memorising
+  nine discrete tray positions, it would get steadily worse at the unmarked one in exactly this shape.
+  lerobot logs only a pooled `eval_loss`, so this is a hypothesis — but it connects directly to the block
+  structure found in [the verification report §5](phase07_data_verification.md), and a per-episode eval
+  loss would settle it.
 
 Configuration notes: `--rename_map` turns `top`/`wrist` into `camera1`/`camera2`, because the
 checkpoint's own feature names win over the dataset's and the run would otherwise die on a feature
-mismatch. Part A prints the inherited freeze flags so the run log records what was actually used.
+mismatch. The cosine schedule was pinned to the real step count (`scheduler_decay_steps=20000`).
 
 ---
 
