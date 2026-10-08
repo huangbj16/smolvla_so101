@@ -231,6 +231,28 @@ disk**. Everything checks out against what the earlier runs measured:
 > trades compute for memory, so disabling it to go faster — fine on a 40 GB A100 — would likely push
 > past 24 GB here. This is the one knob not to touch.
 
+**The host is bare** — CUDA 13.0 drivers and Python 3.12, nothing else — so Part A now installs the
+stack itself and in a specific order:
+
+| | Pinned | Why that version |
+|---|---|---|
+| `torch` | **2.11.0+cu130** | lerobot v0.6.1 requires `torch<2.12,>=2.7`, so 2.11 is the newest it accepts; 2.14 is on the cu130 index but would be rejected |
+| `torchvision` | **0.26.0+cu130** | the matching release for torch 2.11, and inside `torchvision<0.27` |
+| `torchaudio` | **2.11.0+cu130** | matching release, for a consistent trio |
+
+Torch is installed **from the CUDA 13.0 index before lerobot**, because installing lerobot first would
+pull a default-CUDA wheel. The cell then verifies what actually landed rather than assuming: that torch
+still reports CUDA 13.x after pip resolved lerobot's dependencies, that it sees the GPU, and that
+`torchcodec` (pulled by `[dataset]`) imports against this torch. That last check matters because a
+torchcodec compiled for a different torch still *exists* as a module, and lerobot selects its decoder on
+`find_spec` alone — it would be chosen and then fail at decode time. If it does not import, the notebook
+falls back to `--dataset.video_backend=pyav`, which costs nothing here since dataloading is not the
+bottleneck (`data_s` 0.44 against `updt_s` 1.95).
+
+**Credentials** are set in a cell before the install, since there is no Colab secret store: the two keys
+go into the process environment (inherited by every `lerobot-train` subprocess) and the HF token file,
+with an opt-in append to `~/.bashrc` for reconnected shells. Only a masked prefix is printed.
+
 **Disk budget, keeping every checkpoint** (requested, so the whole eval curve stays inspectable — the
 SmolVLA result in §3 is why that matters):
 
