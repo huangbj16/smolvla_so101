@@ -240,6 +240,19 @@ stack itself and in a specific order:
 | `torchvision` | **0.26.0+cu130** | the matching release for torch 2.11, and inside `torchvision<0.27` |
 | `torchaudio` | **2.11.0+cu130** | matching release, for a consistent trio |
 
+The host's system Python is **PEP 668 "externally managed"** (Debian/Ubuntu), so pip refuses to install
+into it: `error: externally-managed-environment`. The install cell detects this — a venv or conda prefix,
+or the `EXTERNALLY-MANAGED` marker in the stdlib directory — and adds `--break-system-packages` only when
+there is genuinely no environment to install into. That flag is the right trade on a disposable
+single-purpose box, since what PEP 668 protects is an OS whose own tooling depends on the system Python.
+The markdown gives the venv-plus-ipykernel route for anyone who would rather not. Tested across all four
+cases: bare system Python, venv, conda, and no-marker.
+
+**The install goes on `/`, not the data disk**, and that is deliberate rather than an oversight. Torch
+plus the `nvidia-*` CUDA runtime wheels plus lerobot's dependencies are roughly **10–15 GB**: the 30 GB
+root overlay has nothing else to do with it, while the data disk needs 84.5 GB for the base model and six
+checkpoints. Installing there would leave about half a gigabyte of margin.
+
 Torch is installed **from the CUDA 13.0 index before lerobot**, because installing lerobot first would
 pull a default-CUDA wheel. The cell then verifies what actually landed rather than assuming: that torch
 still reports CUDA 13.x after pip resolved lerobot's dependencies, that it sees the GPU, and that
