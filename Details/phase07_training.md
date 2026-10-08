@@ -224,7 +224,7 @@ disk**. Everything checks out against what the earlier runs measured:
 |---|---|---|---|
 | VRAM | **18.18 GiB** peak | 24 GB | ✅ ~6 GiB spare |
 | RAM | ~26 GB peak, total | 50 GB | ✅ |
-| Data disk | **84.5 GB** (below) | 100 GB | ✅ ~15 GB margin |
+| Data disk | **84.5 GB** (below) | 98 GB at `/root/gpufree-data` | ✅ ~13 GB margin |
 | vCPU | `num_workers=8` | 12 | ✅ |
 
 > **`gradient_checkpointing` must stay `true` on a 24 GB card.** The 18.18 GiB figure is *with* it. It
@@ -264,7 +264,15 @@ SmolVLA result in §3 is why that matters):
 | 6 checkpoints × 11.55 | 69.30 |
 | **total at end of run** | **84.5 of 100** |
 
-Two things make that fit rather than nearly fit. The notebook now points `HF_HOME` and
+The host mounts that disk at **`/root/gpufree-data`**, with a 30 GB overlay at `/` and a 16 GB
+`/dev/shm`. The work-directory cell prefers an ordered list of candidate mounts rather than picking the
+one with the most free space: this box also exposes a shared 1 TB `/data` that is 81% full, which *looks*
+roomier and is the wrong place to write 85 GB. It prints every candidate it found so a bad guess is
+visible, and `PHASE07_WORK` overrides. It also reports free space on `/` (pip puts 10–15 GB of torch and
+dependencies there, and the overlay is only 30 GB) and the size of `/dev/shm`, since a container's 64 MB
+default is the usual cause of "DataLoader worker killed by signal: Bus error" with `num_workers > 0`.
+
+Two things make the disk fit rather than nearly fit. The notebook now points `HF_HOME` and
 `HF_LEROBOT_HOME` at the **data disk** — left alone they default to `~/.cache`, i.e. the 30 GB system
 disk, which the 14.5 GB base model plus pip and torch would fill. And Part B deletes its own smoke
 checkpoint when it passes, returning 11.5 GB before the real run starts.
