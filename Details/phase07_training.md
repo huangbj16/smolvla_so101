@@ -253,10 +253,17 @@ free space — printing a status line normally and a loud warning, with options,
 fitting. Part B prints the same projection *before* the run so a shortfall is known at minute 15 rather
 than hour 14.
 
-**`eval_steps` lowered to 2000** (15 eval points instead of 6). SmolVLA's held-out minimum landed on the
-*earliest* checkpoint measured, so its true optimum is unresolved; evaluating more often costs ~16 min
-across a ~20 h run and does not touch training. `save_freq` stays at 5000 because checkpoints — not
-evals — are what the disk budget is made of.
+**`eval_steps` lowered to 2500** — 12 eval points instead of 6, and **every checkpoint gets an eval at
+its own step**. SmolVLA's held-out minimum landed on the *earliest* checkpoint measured, so its true
+optimum is unresolved; evaluating more often costs ~20 min across a ~20 h run and does not touch
+training. `save_freq` stays at 5000, because checkpoints — not evals — are what the disk budget is made
+of.
+
+2500 rather than a rounder 2000 because lerobot tests `step % eval_steps == 0` and
+`step % save_freq == 0` *independently* (`lerobot_train.py:593-595`). At 2000 the checkpoints at 5k, 15k
+and 25k would have had no eval at their own step, leaving half the saved models without a loss beside
+them — exactly the pairing needed to choose which checkpoint to roll out. The config cell now asserts
+`SAVE_FREQ % EVAL_STEPS == 0` so the two cannot drift apart again.
 
 **Expect roughly 17–25 h** on a 4090 (extrapolated from 1.95 s/step on an A100; the 4090 has more dense
 bf16 compute but ~⅔ the memory bandwidth, and gradient checkpointing makes this compute-heavy). The
