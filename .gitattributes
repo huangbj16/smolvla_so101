@@ -1,0 +1,17 @@
+# This repo is edited on both the Windows laptop and the Ubuntu 5080 laptop, so normalize line
+# endings in the repo and let each checkout use its own. Without this, every file touched on the
+# other OS shows up as fully rewritten.
+* text=auto
+
+# Notebooks are JSON: keep them LF everywhere so the diffs stay readable.
+*.ipynb text eol=lf
+
+# Shell scripts run on Ubuntu; CRLF would break the shebang.
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.npz binary
+*.parquet binary
+*.safetensors binary
