@@ -12,7 +12,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
 | **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [4090](../colab_phase07_pi05.ipynb) · [Colab L4](../colab_phase07_pi05_L4.ipynb) | ◐ running on a rented **RTX 4090** (~17–25 h); a 10k-step L4 run alongside it (§4) |
+| **π0.5** | [Colab](../colab_phase07_pi05_Colab.ipynb) · [4090](../colab_phase07_pi05.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve still to read (§4) |
 
 ---
 
@@ -57,16 +57,18 @@ Measured, not estimated — each row comes from that policy's own smoke test or 
 |---|---|---|---|
 | GPU | L4 | **L4** | A100 40 GB |
 | Trainable params | 51.6 M (all) | 99.9 M of 450 M | 693 M of 3.3 B |
-| Batch × steps | 8 × 60,000 | 64 × 20,000 | 16 × 30,000 |
-| Samples / **epochs** | 480 k / **18.0** | 1.28 M / **47.9** | 480 k / **18.0** |
-| Best eval loss | 0.1792 @ 50k (+3% at end) | **0.1258 @ 5k (+61% at end)** | — |
-| Throughput | 4.47 step/s | 2.00 s/step | 1.95 s/step |
-| **Wall clock** | **3.85 h** (done) | **14.2 h** (done) | **~16.7 h** |
-| Peak GPU | 3.8 GiB | 16.5 GiB | 18.2 GiB |
-| Checkpoint size | 0.62 GB | 1.3 GB | **11.6 GB** |
+| Batch × steps | 8 × 60,000 | 64 × 20,000 | 16 × **10,000** |
+| Samples / **epochs** | 480 k / **18.0** | 1.28 M / **47.9** | 160 k / **6.0** |
+| Best eval loss | 0.1792 @ 50k (+3% at end) | **0.1258 @ 5k (+61% at end)** | **not yet read** (§4) |
+| Throughput | 4.47 step/s | 2.00 s/step | 2.06 s/step |
+| **Wall clock** | **3.85 h** (done) | **14.2 h** (done) | **5.7 h** compute, 22 h elapsed (done) |
+| Peak GPU | 3.8 GiB | 16.5 GiB | 18.2 GiB (smoke) |
+| Checkpoint size | 0.62 GB | 1.3 GB | **11.55 GB** |
 
-Epochs are over the 45-episode training split (26,721 frames), which is what lerobot reports.
-SmolVLA and π0.5 need different GPU classes, so they run in parallel without contention.
+Epochs are over the 45-episode training split (26,721 frames), which is what lerobot reports. The three
+ran on different GPU classes, so they never contended. **π0.5's step budget ended up a third of what
+this table first planned** — 10,000 rather than 30,000, so 6.0 epochs rather than 18.0 — and its 22 h of
+elapsed time is mostly a dead Colab session rather than compute. §4 has both stories.
 
 ---
 
@@ -140,7 +142,7 @@ backward activations for the VLM. [09 §D](../09_home_deployment_and_hardware.md
 
 Train loss falls the whole way (0.304 → 0.017); eval loss ends **+61% above its minimum** and the
 generalisation gap triples. This is textbook overfitting, and it is the risk flagged when the epoch
-budgets were first compared — **SmolVLA gets 47.9 epochs where ACT and π0.5 get 18.0**, because each
+budgets were first compared — **SmolVLA gets 47.9 epochs where ACT gets 18.0 and π0.5 only 6.0**, because each
 policy keeps its own published recipe on a dataset far smaller than those recipes assume. 100 M trainable
 parameters over 45 episodes for 48 epochs is simply a lot of passes.
 
@@ -183,7 +185,128 @@ mismatch. The cosine schedule was pinned to the real step count (`scheduler_deca
 
 ---
 
-# 4 — π0.5 — access granted 2026-10-06; smoke test passed
+# 4 — π0.5 — done 2026-10-09 on a Colab A100
+
+## What ran, and where — verified on the Hub 2026-10-11
+
+**Both planned runs were abandoned.** The rented RTX 4090 and the Colab L4 were dropped without running;
+what executed is the **Colab notebook unchanged except for the GPU** — its 10,000 steps at `save_freq`
+2,500, on a Colab **A100** — pushed as
+[`pi05_tray_cylinder_s1000_trim_A100`](https://huggingface.co/HALDijkstraaa/pi05_tray_cylinder_s1000_trim_A100)
+(private, 4 checkpoints + final, **55.55 GB**, wandb run `sxpkx9st`). Nothing exists under `..._trim` or
+`..._trim_L4` in the namespace, which is consistent: this is the only π0.5 run there was.
+
+**The step budget is the thing to carry forward, not the card.** Because the notebook ran as written, the
+A100 inherited the *L4's* 10,000 steps rather than the 30,000 the 4090 was sized for — so π0.5 got
+**6.0 epochs where ACT got 18.0**, on a card that could have afforded the full budget in ~16 h. That is
+the one respect in which this run is not the one §1 planned, and §3's overfitting result is why it may
+not matter.
+
+Every figure below is read back out of the repo itself — `train_config.json`, the `training_state` files
+and the commit timestamps — rather than from what the notebook meant to do.
+
+| | Planned (Colab notebook) | What ran | |
+|---|---|---|---|
+| GPU | L4 | **A100 40 GB** | the job name says so, and **2.06 s/step proves it** (below) |
+| Steps × batch | 10,000 × 16 | **10,000 × 16** | ✅ `training_step.json` reads 2500 / 7500 / 10000 |
+| Samples / epochs | 160 k / 6.0 | **160 k / 6.0** | ✅ over the 26,721-frame train split |
+| Seed | 1000 | **1000** | ✅ |
+| Holdout | `[9,19,29,39,49]` in the tail | **last 5 of the 50-element list, in that order** | ✅ the reordering survived into the saved config |
+| `eval_split` / `eval_steps` | 0.1 / 2,500 | **0.1 / 2,500** | ✅ every checkpoint has an eval at its own step |
+| `max_eval_samples` | — | **0** — uncapped | the whole held-out split each time, not a subsample |
+| Augmentation | off | **`image_transforms.enable: false`** | ✅ as §1 requires |
+| `gradient_checkpointing` | true | **true** | ✅ the one knob that was not to move |
+| Trainable scope | action expert only | **`train_expert_only` + `freeze_vision_encoder`** | ✅ 693 M of 3.3 B |
+| Precision | bf16 | **`dtype: bfloat16`**, `use_amp: false` | ✅ |
+| Normalisation | `QUANTILES` | **state + action `QUANTILES`, visual `IDENTITY`** | ✅ as §1 records |
+| Checkpoints | 4, at 2,500 | **002500 · 005000 · 007500 · 010000** | each **11.55 GB** |
+| Video decode | torchcodec | **torchcodec** | the pyav fallback was never needed |
+
+**The disk estimate was exact, not approximately right.** The smoke test projected 9.35 GB of model plus
+2.2 GB of optimizer state per checkpoint; the Hub holds **9.354 + 2.195 GB**. Four checkpoints plus the
+9.35 GB final model is 55.55 GB, against the 69 + 9.35 GB six would have cost. The
+[08 §A.4](../08_data_quality_research.md) grid can budget π0.5 storage straight from this figure.
+
+### The session died at 7,500 steps, and the resume worked
+
+The commit timestamps make the shape of the run visible:
+
+| checkpoint | pushed (UTC) | Δ from previous | s/step |
+|---|---|---|---|
+| 002500 | 2026-10-08 17:14:35 | — | — |
+| 005000 | 2026-10-08 18:40:25 | 1 h 25 m 50 s | **2.060** |
+| 007500 | 2026-10-08 20:06:08 | 1 h 25 m 43 s | **2.057** |
+| 010000 | 2026-10-09 13:55:58 | **17 h 49 m 50 s** | — |
+| final weights + processors | 2026-10-09 13:58:52 | 2 m 54 s | — |
+
+Checkpoints 002500–007500 all carry `output_dir: /content/outputs/pi05_tray_cylinder_s1000_trim_A100` and
+`pretrained_path: lerobot/pi05_base`. Checkpoint 010000 carries `output_dir: ..._A100_resumed`,
+`resume: true` and `pretrained_path: ..._A100_resumed/checkpoints/007500/pretrained_model`. So the Colab
+session dropped after 7,500 steps and **Part C's resume path rebuilt it from the Hub the next day** —
+exactly the failure that cell exists for, at exactly the cost it predicted (at most `save_freq` = 2,500
+steps of lost work).
+
+**The resume did not restart the learning-rate schedule**, which is what a resume most often breaks
+silently. `scheduler_state.json` reads `last_epoch` 2500 → 7500 → 10000 with `_last_lr`
+2.1705e-05 → 5.7950e-06 → **2.5000e-06**, and each of those matches
+`decay_lr + ½(1+cos(π·step/10,000))·(peak−decay)` to five digits. The cosine therefore ran once,
+monotonically, straight across the break, and finished on **2.5e-06 — exactly the configured `decay_lr`
+floor** at exactly the last step. Had `scheduler_decay_steps` been left at the published 30,000 rather
+than pinned to the real count, step 10,000 would have landed at 1.94e-05 — 7.8× the intended floor, with
+the run stopping halfway down its decay.
+
+**Throughput, measured rather than projected.** The two interior intervals give 2.060 and 2.057 s/step,
+each covering 2,500 training steps *plus* one held-out eval and one 11.55 GB push. Against the smoke
+test's 1.95 s/step of pure training, that puts eval-and-push overhead at ~0.11 s/step, or ~4.5 min per
+2,500 steps. So **10,000 steps is 5.7 h of compute**; the 22 h between the first push and the final
+upload is almost entirely the dead session.
+
+That rate also identifies the card independently of the job name: at 2.06 s/step it cannot have been the
+L4, which was projected 2.5–3.5× slower, i.e. 5–7 s/step. **The L4 projection of 14–19 h stays
+untested**, and so does the 4090 projection of 17–25 h.
+
+### Still missing: the held-out loss curve
+
+The Hub stores weights, optimizer state and configuration — **not metrics**. The four `eval_loss` values
+at 2,500 / 5,000 / 7,500 / 10,000 exist only in wandb run `sxpkx9st` of `phase07-policy-transfer`, which
+needs credentials this machine does not have. **So nothing verified here says whether π0.5 overfits the
+way SmolVLA did**, and §3 is what makes that the urgent number: SmolVLA bottomed out at 12 epochs on
+this same dataset, and π0.5 got 6.0.
+
+Two ways to fill it in, answering slightly different questions:
+
+1. **Read the four `eval_loss` points off wandb.** What the run itself measured, directly comparable to
+   §3's SmolVLA table, and free.
+2. **Re-measure with [`scripts/eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py).**
+   All four checkpoints are on the Hub, so this runs anywhere with a GPU and does not need the Colab
+   session back. It repeats each checkpoint under three seeds, which π0.5 specifically needs: the
+   flow-matching loss draws a random timestep and a random noise sample per forward pass, so a single
+   number per checkpoint cannot be told apart from its own sampling noise. The script prints the noise
+   floor, and a gap smaller than that floor is not a result.
+
+Until one of those lands, **which checkpoint to roll out is unsettled**. Do not default to 010000; §3 is
+the standing reminder that the last checkpoint can be the worst one.
+
+### One thing to carry into the rollouts
+
+The saved config declares **three** visual inputs — `base_0_rgb`, `left_wrist_0_rgb` and
+`right_wrist_0_rgb` — because the feature names come from `pi05_base`, and its names win over the
+dataset's. The `rename_map` feeds two of them (`top` → `base_0_rgb`, `wrist` → `left_wrist_0_rgb`); the
+third has no source in a two-camera dataset. `observation.state` is likewise declared `(32,)` against the
+SO-101's 6 joints, while `action` comes out `(6,)`.
+
+The consequence is for rollout, not training: the keys the robot produces have to match the keys the
+policy was trained on, so the cameras must either be *named* `base_0_rgb` and `left_wrist_0_rgb` at
+rollout time, or be renamed the same way training renamed them. The model card's auto-generated
+`lerobot-rollout` command carries no rename map — it only warns that the names must match — so it will
+not work as printed against cameras called `top` and `wrist`.
+
+## The smoke test that sized all of this (2026-10-06)
+
+Everything from here to the end of §4 is the **planning record**: the measurements that set the
+configuration, the rented-4090 host that was prepared and then dropped, and the Colab variant whose
+configuration became the run above. Kept because the sizing is reusable — and because the 4090 and L4
+projections in it were never tested, so they remain projections.
 
 **Smoke test (A100 40 GB, batch 16, 300 steps):** all checks pass. 693,422,112 trainable parameters
 (of 3.3 B — the frozen VLM is the rest), eval_loss 0.3419 → 0.1514 over 300 steps, peak **18.2 GiB**.
@@ -215,7 +338,10 @@ mismatch. The cosine schedule was pinned to the real step count (`scheduler_deca
 > [08 §A.4](../08_data_quality_research.md) grid: the π0.5 column costs far more storage than compute
 > planning alone suggests.
 
-## Running it on a rented RTX 4090 (2026-10-08)
+## Running it on a rented RTX 4090 (2026-10-08) — abandoned
+
+> Prepared, never run: the A100 came free first. Kept for the host-sizing work, which is reusable, and
+> because the VRAM and disk budgets below are what proved π0.5 fits a 24 GB card at all.
 
 Moved off Colab to a 4090 box — **24 GB VRAM, 50 GB RAM, 12 vCPU, 30 GB system disk + 100 GB data
 disk**. Everything checks out against what the earlier runs measured:
@@ -312,9 +438,10 @@ them — exactly the pairing needed to choose which checkpoint to roll out. The 
 bf16 compute but ~⅔ the memory bandwidth, and gradient checkpointing makes this compute-heavy). The
 smoke test measures it exactly in ~15 min.
 
-## A second, smaller run on a Colab L4
+## A second, smaller run on a Colab L4 — became the A100 run
 
-[colab_phase07_pi05_L4.ipynb](../colab_phase07_pi05_L4.ipynb), to run alongside the 4090. Everything
+[colab_phase07_pi05_Colab.ipynb](../colab_phase07_pi05_Colab.ipynb) — and **this is the configuration
+that actually ran**, on an A100 rather than the L4 it was sized for. Everything
 from the runtime check onward is **copied verbatim** from the 4090 notebook — verified byte-identical for
 the preflight, smoke, Part C and auth cells — so the two are comparable at matched steps. Only Part A
 differs (Colab ships torch and has its own secret store) plus four knobs.
@@ -393,8 +520,11 @@ first item on the plan's own cut list, which makes the risk tolerable.
 
 - **Rollouts.** Interleaved across checkpoints, blind-scored, on the robot. Nothing here substitutes for
   that, and §2 explains why the loss numbers cannot settle Q2.
+- **π0.5's held-out curve.** Four checkpoints sit on the Hub with no loss beside them (§4). Read it off
+  wandb run `sxpkx9st`, or re-measure it, before choosing a checkpoint to roll out.
 - **Pre-registration.** [08 §A.2](../08_data_quality_research.md) asks for predicted orderings committed
-  *before* the comparison is read. Worth writing down before the π0.5 run unblocks, so the full
-  three-policy comparison is pre-registered rather than two-thirds post-hoc.
+  *before* the comparison is read. All three training runs are now done, so the *loss* comparison can no
+  longer be pre-registered — but the **rollouts** have not started, and they are what actually answers
+  Q2. Worth writing the predicted rollout ordering down now, while it is still honest to do so.
 - **`phase07_log.csv`** still does not exist; per-episode `success` and `stage` are not recoverable from
   the data and the rollout protocol compares against them.
