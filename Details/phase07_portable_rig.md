@@ -1,18 +1,22 @@
 # Phase 0.7 — portable rig: bird's-eye top camera, and a new dataset
 
-Run book for the rebuilt rig and the data collection that follows it. Everything — both arms, both
-cameras, the tray and the fixture — is now mounted on a single acrylic board, and the top camera has been
-raised from a third-person view to a **bird's-eye overview of the board**.
+Run book for the rebuilt rig, the data collection that follows it (§1–§9), and the **round-1 policy
+evaluation** (§10–§11). Everything — both arms, both cameras, the tray and the fixture — is now mounted
+on a single acrylic board, and the top camera has been raised from a third-person view to a **bird's-eye
+overview of the board**.
 
 Plan: [08 §A.4](../08_data_quality_research.md) · Task: [toolkit_task_card.md](toolkit_task_card.md) ·
 Calibration: [calibration/README.md](calibration/README.md) · Predecessors:
 [phase05_camera_test_results.md](phase05_camera_test_results.md),
-[phase06_camera_ablation_training.md](phase06_camera_ablation_training.md). Written 2026-10-03.
+[phase06_camera_ablation_training.md](phase06_camera_ablation_training.md). Written 2026-10-03,
+eval added 2026-10-12.
 
-**The 50 episodes were recorded and pushed on 2026-10-03** as
-`HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912` (§8). They were verified on 2026-10-04 —
-clean recording, but the idle lead-in of §8 did not shrink, so training must use an idle-trimmed copy:
-[phase07_data_verification.md](phase07_data_verification.md).
+**Where this stands.** The 50 episodes were recorded and pushed 2026-10-03 as
+`HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912` (§8) and verified 2026-10-04 — clean
+recording, but the idle lead-in of §8 did not shrink, so all training uses the idle-trimmed copy
+([verification](phase07_data_verification.md)). **All three policies are trained**
+([training](phase07_training.md)). **Next: run §10** — 54 rollouts over six arms, which picks one
+checkpoint per policy; §11 then measures success rates properly.
 
 Items marked *Default:* are suggestions — fix them before the first episode, then do not change them
 mid-collection.
@@ -47,6 +51,14 @@ mid-collection.
 | 3 | 5 throwaway episodes, inspect in rerun | 20 min | yes |
 | 4 | Record 50 D0 episodes | ~1.5 h | yes |
 | 5 | Verify the dataset, push, log | 20 min | yes |
+
+Collection (steps 0–5) is done. The evaluation that follows training adds three more:
+
+| Step | What | Time | Attended? |
+|---|---|---|---|
+| 6 | Eval preflight: revert the ACT patch, replay an episode, check the top view (§10.1, §10.6) | 20 min | yes |
+| 7 | **Round 1: 12 blocks, 54 rollouts** (§10.4) | ~2–2.5 h | yes |
+| 8 | Blind video scoring into [phase07_eval_log.csv](phase07_eval_log.csv) (§10.6) | ~1 h | yes |
 
 ---
 
@@ -292,8 +304,9 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 |---|---|---|
 | 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
 | 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
-| 3 ◐ | **Train three policies on it** — everything but the policy held constant. **ACT done** (60k steps, 3.85 h on an L4, eval_loss 0.185); SmolVLA not started; **π0.5 blocked** on access to the gated `google/paligemma-3b-pt-224` | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05.ipynb) |
-| 4 | Rollouts on the robot, interleaved across the three checkpoints | — |
+| 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
+| 4 ◐ | **Round 1 rollouts: six arms, 54 trials** — two checkpoints per policy, mirrored interleave, 9 grid spots. Written and preflighted (all six load and run on the 5080); **not yet run** | **§10** · [phase07_eval_log.csv](phase07_eval_log.csv) · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
+| 5 | Round 2: success rates at ±9 points, plus the off-grid spots and seeds | **§11** |
 
 Train/eval split for all three: holdout **`[9, 19, 29, 39, 49]`**, placed in the tail of
 `--dataset.episodes` so lerobot's "last N" split takes exactly those. The default split would otherwise
@@ -311,3 +324,402 @@ report §5.
 3. Record a second location and compare, which is the only direct test of portability.
 4. If the comparison in (1) looks worth doing properly, mount the old third-person camera on the board as
    a third stream and record both views at once. That turns a confounded comparison into a controlled one.
+
+---
+
+# 10 — Round 1 eval: six arms, 54 rollouts
+
+Stage 4 of §9. Written 2026-10-12, after all three training runs finished
+([phase07_training.md](phase07_training.md)) and after every checkpoint below was loaded and timed on
+this machine (§10.1). **Not yet run.**
+
+**Round 1 is a checkpoint-selection pass, not a success-rate measurement.** Each of the three policies
+finished with an unsettled checkpoint question, and all three questions are cheap to answer on the robot
+and impossible to answer from the loss curves:
+
+| Policy | The open question | Why the loss cannot answer it |
+|---|---|---|
+| ACT | Is 60k wasted compute over 40k? | Eval loss is flat from 20k; the 20k–60k spread is checkpoint wobble ([training §2](phase07_training.md)) |
+| SmolVLA | Does the +61% eval-loss rise from 5k to 20k show up as worse *behavior*? | [phase06 §2](phase06_camera_ablation_training.md) found held-out loss separated conditions by less than one curve's wobble while the robot showed a decisive dissociation |
+| π0.5 | Which checkpoint at all? | Its four `eval_loss` values exist only in wandb run `sxpkx9st`, which this machine has no credentials for ([training §4](phase07_training.md)) |
+
+So round 1 runs **two checkpoints per policy** and lets the robot rank them. Success counts come out of
+it, and they are the first real success numbers for this rig — but at 9 trials per arm they carry a ±16
+point standard error, so **the rate is round 2's job** (§11). What round 1 settles is which six
+checkpoints become three.
+
+> **π0.5's checkpoint is decided here rather than from wandb, deliberately.** Reading the curve would
+> cost nothing, but it would only rank the checkpoints by a quantity already known to correlate weakly
+> with task success — and for a flow-matching policy a single `eval_loss` sample cannot be told apart
+> from its own sampling noise ([`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py)
+> exists for exactly that reason). Reading it afterwards is still worth doing, as a check on whether
+> loss predicted the rollout ordering; that is in §10.7.
+
+## The six arms
+
+Local paths are what the commands below use. All six are already downloaded (§10.1).
+
+| Arm | Policy | Checkpoint | Samples | Epochs | Held-out loss | Hub repo |
+|---|---|---|---|---|---|---|
+| `act40k` | ACT | `040000` | 320,000 | **12.0** | in the flat 0.179–0.192 band | [`act_tray_cylinder_s1000_trim`](https://huggingface.co/HALDijkstraaa/act_tray_cylinder_s1000_trim) |
+| `act60k` | ACT | `060000` | 480,000 | 18.0 | 0.1792 @50k (min) → 0.1848 @55k | same |
+| `sv5k` | SmolVLA | `005000` | 320,000 | **12.0** | **0.1258 — the minimum** | [`smolvla_tray_cylinder_s1000_trim`](https://huggingface.co/HALDijkstraaa/smolvla_tray_cylinder_s1000_trim) |
+| `sv20k` | SmolVLA | `020000` | 1,280,000 | 47.9 | rises monotonically; 0.2029 @15k (+61%) | same |
+| `pi5k` | π0.5 | `005000` | 80,000 | 3.0 | **not read** | [`pi05_tray_cylinder_s1000_trim_A100`](https://huggingface.co/HALDijkstraaa/pi05_tray_cylinder_s1000_trim_A100) |
+| `pi10k` | π0.5 | `010000` | 160,000 | 6.0 | **not read** | same |
+
+**`act40k` and `sv5k` are both exactly 320,000 samples.** 40,000 × 8 and 5,000 × 64 land on the same
+number, so round 1 contains an **exactly sample-matched ACT-vs-SmolVLA pair** at 12.0 epochs on
+identical data, holdout and seed. That is a far cleaner Q2 comparison than matched *recipes*, which is
+all [training §1](phase07_training.md) could promise, and it costs nothing extra — it is a property of
+the checkpoints that already exist. Note what it does *not* extend to: π0.5's largest checkpoint is
+160,000 samples, half of that, so π0.5 cannot be sample-matched to the other two at all. It stays the
+sample-starved arm, and any π0.5 result has to be read with that attached.
+
+**π0.5's pair was chosen by bracketing rather than by loss.** 005000 and 010000 are 3.0 and 6.0 epochs —
+a clean 2× step, the same shape as the other two pairs. 002500 (1.5 epochs) was left out as implausibly
+early, and 007500 as too close to 010000 to separate. If `pi5k` beats `pi10k`, π0.5 overfits on this
+dataset even faster than SmolVLA did and 002500 becomes worth a look in round 2.
+
+## 10.1 — Step 0: one-time setup, already done and measured
+
+Everything in this subsection has been run on this machine; it is recorded so the session does not
+rediscover it. Re-run only the parts a reinstall would break.
+
+**The six checkpoints are downloaded** to `outputs/hub/` — 20 GB, `pretrained_model` directories only,
+no optimizer state (which is 2.2 GB per checkpoint for π0.5 and is not needed for inference):
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && for spec in "act_tray_cylinder_s1000_trim:040000" "act_tray_cylinder_s1000_trim:060000" "smolvla_tray_cylinder_s1000_trim:005000" "smolvla_tray_cylinder_s1000_trim:020000" "pi05_tray_cylinder_s1000_trim_A100:005000" "pi05_tray_cylinder_s1000_trim_A100:010000"; do R=${spec%%:*}; C=${spec##*:}; hf download HALDijkstraaa/$R --include "checkpoints/$C/pretrained_model/*" --local-dir outputs/hub/$R; done
+```
+
+**All six load and run inside the control-loop budget on the 5080.** This was the open hardware risk:
+the policies were trained on A100/L4 class cards and π0.5 is 4.14 B parameters, so whether it runs at all
+on a 16 GB laptop was unknown. Measured with
+[`scripts/bench_rollout_latency.py`](../scripts/bench_rollout_latency.py), which feeds synthetic
+observations of the right shape through the real preprocessor and the real policy — no robot needed.
+Full output: [`results/phase07_eval/bench_rollout_latency_5080.txt`](../results/phase07_eval/bench_rollout_latency_5080.txt).
+
+| Arm | Params | Peak VRAM | Chunk latency (median / worst) | Headroom at `n_action_steps=25` |
+|---|---|---|---|---|
+| `act40k` / `act60k` | 51.6 M | **0.27 GiB** | 8–9 ms / 9 ms | **89–94×** |
+| `sv5k` / `sv20k` | 450.0 M | **0.91 GiB** | 100–105 ms / 101–106 ms | **7.9–8.3×** |
+| `pi5k` / `pi10k` | 4,143.4 M | **8.87 GiB** of 15.5 | 282–288 ms / 316 ms | **2.6×** |
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && python scripts/bench_rollout_latency.py --policy outputs/hub/pi05_tray_cylinder_s1000_trim_A100/checkpoints/010000/pretrained_model --n-action-steps 25 --cameras observation.images.base_0_rgb observation.images.left_wrist_0_rgb
+```
+
+Three things follow, and they are what make §10.4's commands as simple as they are:
+
+1. **π0.5 fits, with 6.6 GiB spare.** 8.87 GiB peak of 15.5 GiB available. Its 9.35 GB checkpoint is
+   533.6 M F32 parameters plus 3.61 B BF16 ones; loading it under the config's `dtype: bfloat16` lands
+   at 8.71 GiB of weights before activations.
+2. **Plain sync inference is enough for all three. `--inference.type=rtc` is not needed.** RTC exists
+   for policies that cannot compute a chunk inside its execution window, and the slowest arm here uses
+   316 ms of an 833 ms budget. Leaving RTC off keeps one fewer thing different between the arms.
+3. **`n_action_steps=25` is affordable for every arm**, which is what §10.2 spends it on.
+
+**Revert the Phase 0.6 ACT patch before the session.** It is **still applied** to the local lerobot
+checkout — the bench above emitted `WARNING: Missing key(s) when loading model:
+{'model.camera_id_embed.weight'}` on both ACT arms, which is that patch reporting that a Phase 0.7
+checkpoint has no camera-identity embedding to load:
+
+```bash
+git -C /home/bj/code/lerobot checkout src/lerobot/policies/act/modeling_act.py
+```
+
+[phase06 F2](phase06_camera_ablation_training.md) verified that a non-F2 checkpoint under the patched
+ACT keeps the embedding at its zero-init, and zero added to the features is exactly stock ACT — so this
+is **not** changing the Phase 0.7 results, and the bench numbers above stand. Revert it anyway, for one
+reason: that warning is indistinguishable from the warning a *real* state-dict mismatch produces, and
+lerobot does not raise on either. With the patch reverted, a clean ACT load prints nothing, so any
+warning that does appear means something. The only asset that still needs the patch is
+`act_both_s1000_camemb`, which belongs to Phase 0.6 and is not used here — re-apply
+`scripts/patch_act_camera_embed.py` if the outstanding F3 blocks 2–3 are ever picked up.
+
+**SmolVLA fetches its VLM backbone at load time.** `HuggingFaceTB/SmolVLM2-500M-Video-Instruct` is
+pulled from the Hub on every `from_pretrained`, not bundled in the checkpoint. It is in
+`~/.cache/huggingface` now, so the session does not need network — but a cleared cache means the
+`sv5k`/`sv20k` blocks need it back.
+
+## 10.2 — Every arm re-observes at the same rate: `n_action_steps=25`
+
+All six arms run `--policy.n_action_steps=25`, overriding what each checkpoint stores (ACT 100,
+both VLAs 50). This is a deployment-only flag — the policy still predicts its full `chunk_size`; the
+flag says how much of the chunk to execute before re-predicting — so it changes no weights and voids
+nothing about training.
+
+**Why matched, and why 25 rather than 50.** [phase06 §2](phase06_camera_ablation_training.md) rejected a
+rollout setting *specifically* because it would have given the three conditions different effective
+control rates, and then had to accept exactly that problem in reverse when the stored 100 throttled the
+effect under test down to ~9 observations per 30 s episode. Round 1 compares three policy families whose
+stored values differ by 2×, so leaving them alone would confound the cross-family comparison with the
+re-observation rate. 25 is the matched value that is also the *tightest* one every arm can afford:
+0.83 s of open-loop motion, ~36 observations per 30 s episode, and the measured worst case is 316 ms of
+an 833 ms budget (§10.1).
+
+**It is also the value Phase 0.6 F3 confirmed, on trimmed data.** 25 stalled the arm at the home pose on
+untrimmed Phase 0.5 data — the idle-attractor failure of
+[phase06 §4a](phase06_camera_ablation_training.md) — and worked immediately once the training data was
+idle-trimmed. Phase 0.7 trains exclusively on the trimmed copy (§8), so the condition F3 identified is
+satisfied by construction.
+
+> If an arm stalls at the home pose anyway, that is a **result, not a setup failure** — do not
+> hand-wave at the camera, and do not quietly raise `n_action_steps` for one arm. Record it as a stall
+> (§10.5) and keep the flag identical across all six. Changing it mid-session makes the whole comparison
+> unreadable.
+
+## 10.3 — Positions, schedule, and what the mirror buys
+
+**Nine marked grid tray spots, `T1`–`T9`** — the 3×3 grid of §8, each of which has 5 training episodes
+behind it. Round 1 is entirely in-distribution. The five off-grid placements of episodes 45–49 are
+**not** evaluated here; they test a different question (the memorisation hypothesis of
+[training §3](phase07_training.md)) and are deferred to round 2, so that there is an in-distribution
+baseline to read them against.
+
+The schedule is pre-generated into
+[phase07_eval_log.csv](phase07_eval_log.csv) — 54 rows, outcome columns blank:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && python3 scripts/make_phase07_eval_schedule.py --seed 0 > Details/phase07_eval_log.csv
+```
+
+`lerobot-rollout` records N episodes of one checkpoint in a row, so a fully interleaved trial order
+would mean 54 process restarts and 54 model reloads — at 9.35 GB a time for π0.5. Instead the nine spots
+split into two halves and every arm runs once per half, in **mirrored order**:
+
+```
+half A = T2 T4 T5 T6 T8  (5 spots)      half B = T1 T3 T7 T9  (4 spots)
+  block  1: act40k (A) -> T4  T2  T8  T5  T6      block  7: pi10k  (B) -> T1  T7  T3  T9
+  block  2: act60k (A) -> T5  T2  T6  T4  T8      block  8: pi5k   (B) -> T3  T9  T7  T1
+  block  3: sv5k   (A) -> T4  T8  T6  T5  T2      block  9: sv20k  (B) -> T9  T3  T7  T1
+  block  4: sv20k  (A) -> T4  T6  T8  T2  T5      block 10: sv5k   (B) -> T9  T3  T7  T1
+  block  5: pi5k   (A) -> T4  T2  T8  T6  T5      block 11: act60k (B) -> T9  T3  T1  T7
+  block  6: pi10k  (A) -> T8  T2  T4  T6  T5      block 12: act40k (B) -> T3  T7  T9  T1
+```
+
+**12 blocks, 54 trials, 9 per arm.** Three properties, and the script asserts the third rather than
+trusting it:
+
+- **Each arm sees each of the nine spots exactly once**, so tray spot is a within-arm constant and
+  cannot confound any arm against any other. This is why 9 trials per arm rather than 10 — a tenth trial
+  would have to repeat a spot and break that.
+- **Each policy's two checkpoints are adjacent** (blocks 1–2, 3–4, 5–6, and mirrored 7–8, 9–10, 11–12),
+  so the primary question — which checkpoint — is settled across a few minutes of session time rather
+  than across the whole afternoon.
+- **Every arm has the same mean session position**, 6.5 of 12: `act40k` runs blocks 1 and 12, `act60k`
+  2 and 11, down to `pi10k` at 6 and 7. So drift that is linear in session time — lighting, servo
+  warm-up, operator fatigue — cancels out of *every* comparison instead of landing on whoever ran last.
+  This is the 6-arm generalisation of the ABBA interleave [phase06 F2](phase06_camera_ablation_training.md)
+  used for 2.
+
+**Budget: ~2–2.5 h.** 54 episodes at up to 60 s plus 10 s resets is ~45–60 min of episode time; 12
+model loads add ~10 min (π0.5 dominates); the rest is setup and the between-block cylinder moves.
+
+## 10.4 — Step 1: the twelve commands
+
+Rig setup is [§4a Step 2](phase06_camera_ablation_training.md) unchanged — **follower only** on
+`/dev/ttyACM0` (no leader: with no teleop connected the episodic strategy returns the arm to the joint
+positions captured at startup between episodes), arm **in the home pose before you start**, Cameractrls
+presets loaded, board and fixture on their outlines. Run §10.6's preflight first.
+
+Re-check the device paths with `ls /dev/v4l/by-id/` — they change if a camera was swapped.
+
+> **The assignments must be separated by `&&`, not spaces.** Written as a command *prefix*
+> (`ARM=act40k lerobot-rollout … $ARM …`) the shell expands `$ARM` on that same line *before* applying
+> the assignment, so the policy path silently becomes a garbage string and `from_pretrained` falls
+> through to the Hub with `HFValidationError: Repo id must be in the form 'repo_name' or
+> 'namespace/repo_name'`. [phase06 §4a](phase06_camera_ablation_training.md) lost a session to this.
+
+### ACT — blocks 1, 2, 11, 12
+
+No `--rename_map`: ACT trained on `observation.images.top` / `.wrist` directly, which is what the robot
+produces. Block 1 (`act40k`, half A, 5 episodes):
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/hub/act_tray_cylinder_s1000_trim/checkpoints/040000/pretrained_model && NAME=rollout_phase07_r1_act40k_a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### SmolVLA — blocks 3, 4, 9, 10
+
+Adds `--rename_map`. **This is mandatory, not cosmetic:** the checkpoint's feature names come from
+`smolvla_base` and win over the dataset's, so it expects `camera1`/`camera2` and the run dies on a
+feature mismatch without the map. It is the same map training used. Block 3 (`sv5k`, half A):
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/hub/smolvla_tray_cylinder_s1000_trim/checkpoints/005000/pretrained_model && NAME=rollout_phase07_r1_sv5k_a && NEP=5 && RENAME='{"observation.images.top": "observation.images.camera1", "observation.images.wrist": "observation.images.camera2"}' && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --rename_map="$RENAME" --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### π0.5 — blocks 5, 6, 7, 8
+
+Same shape, different map: `top` → `base_0_rgb`, `wrist` → `left_wrist_0_rgb`. Block 5 (`pi5k`,
+half A):
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/hub/pi05_tray_cylinder_s1000_trim_A100/checkpoints/005000/pretrained_model && NAME=rollout_phase07_r1_pi5k_a && NEP=5 && RENAME='{"observation.images.top": "observation.images.base_0_rgb", "observation.images.wrist": "observation.images.left_wrist_0_rgb"}' && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --rename_map="$RENAME" --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### The twelve blocks
+
+Change only `POLICY`, `NAME`, `NEP` and (for the VLAs) `RENAME`. Half A is `NEP=5`, half B is `NEP=4`.
+
+| Block | Arm | `POLICY` | `NAME` | `NEP` |
+|---|---|---|---|---|
+| 1 | `act40k` | `outputs/hub/act_tray_cylinder_s1000_trim/checkpoints/040000/pretrained_model` | `rollout_phase07_r1_act40k_a` | 5 |
+| 2 | `act60k` | `outputs/hub/act_tray_cylinder_s1000_trim/checkpoints/060000/pretrained_model` | `rollout_phase07_r1_act60k_a` | 5 |
+| 3 | `sv5k` | `outputs/hub/smolvla_tray_cylinder_s1000_trim/checkpoints/005000/pretrained_model` | `rollout_phase07_r1_sv5k_a` | 5 |
+| 4 | `sv20k` | `outputs/hub/smolvla_tray_cylinder_s1000_trim/checkpoints/020000/pretrained_model` | `rollout_phase07_r1_sv20k_a` | 5 |
+| 5 | `pi5k` | `outputs/hub/pi05_tray_cylinder_s1000_trim_A100/checkpoints/005000/pretrained_model` | `rollout_phase07_r1_pi5k_a` | 5 |
+| 6 | `pi10k` | `outputs/hub/pi05_tray_cylinder_s1000_trim_A100/checkpoints/010000/pretrained_model` | `rollout_phase07_r1_pi10k_a` | 5 |
+| 7 | `pi10k` | *(as block 6)* | `rollout_phase07_r1_pi10k_b` | 4 |
+| 8 | `pi5k` | *(as block 5)* | `rollout_phase07_r1_pi5k_b` | 4 |
+| 9 | `sv20k` | *(as block 4)* | `rollout_phase07_r1_sv20k_b` | 4 |
+| 10 | `sv5k` | *(as block 3)* | `rollout_phase07_r1_sv5k_b` | 4 |
+| 11 | `act60k` | *(as block 2)* | `rollout_phase07_r1_act60k_b` | 4 |
+| 12 | `act40k` | *(as block 1)* | `rollout_phase07_r1_act40k_b` | 4 |
+
+Cylinder order inside each block is the schedule's, listed in §10.3 and in the CSV.
+
+### Why each flag is what it is
+
+Carried from [phase06 §4a](phase06_camera_ablation_training.md), with the Phase 0.7 differences marked.
+
+- **`--policy.n_action_steps=25`** — §10.2. Identical on all six arms. **New in Phase 0.7**: Phase 0.6
+  ran the stored 100.
+- **`--rename_map` on the VLAs only.** Verified to be wired into the rollout path, not just training:
+  `build_rollout_context` passes it to the `rename_observations_processor`
+  (`rollout/context.py:473`) and through `rename_stats` for the dataset statistics.
+- **Both cameras always connected**, named `top` and `wrist`, for all six arms. The physical scene stays
+  identical across arms and both views land on video for review.
+- **The third declared camera is fine, and it differs between the two VLAs.** Both checkpoints declare a
+  camera the two-camera rig cannot feed — SmolVLA a `camera3`, π0.5 a `right_wrist_0_rgb`. Verified in
+  the source and confirmed by actually running both (§10.1): **SmolVLA drops it** (`empty_cameras=0`, so
+  `modeling_smolvla.py:374-375` breaks out of the padding loop on the first iteration and 2 images are
+  fed), while **π0.5 pads it with −1 and masks it out** (`modeling_pi05.py:1011-1012`). Both match what training did
+  exactly, since training also fed only two. Nothing to configure — but it is why the model card's
+  auto-generated `lerobot-rollout` command does not work as printed: it carries no rename map.
+- **`--dataset.no_stamp=true`** keeps the repo name predictable instead of appending a timestamp.
+- **The name must start with `rollout_`.** `build_rollout_context` rejects anything else
+  (`rollout/context.py:431`). It is a **runtime** check, so it fires only after the robot and cameras
+  have already connected.
+- **`episode_time_s=60`**, against a 30 s success window — the window still defines success, but a hard
+  cutoff leaves no slack on a loaded CPU. Press **→** when the outcome is clear.
+- **`reset_time_s=10`** is the window to move the cylinder to the next scheduled spot.
+- **`--display_data=true`** gives the live rerun view; use it to confirm image quality before the first
+  episode commits.
+- **No `--inference.type=rtc`** — §10.1 measured that sync inference has 2.6× headroom on the slowest
+  arm, and leaving RTC off keeps one fewer thing different between arms.
+- **`--dataset.push_to_hub=false`.** 54 episodes of two 480×640 streams stay local; episodes land in
+  `~/.cache/huggingface/lerobot/HALDijkstraaa/rollout_phase07_r1_<arm>_<half>/`.
+- **Stale action queues are handled.** The episodic strategy calls `engine.reset()` between episodes,
+  which resets the policy, preprocessor and postprocessor — no leftover chunk carries over.
+
+## 10.5 — Step 2: during the session
+
+- **→** ends the current episode or reset early · **←** discards and re-records · **Esc** stops the block.
+- Use **←** only for a *rig* problem — cylinder knocked over during reset, wrong spot placed. **Do not
+  re-record because the policy failed.** The failures are the data.
+- Between episodes, move the cylinder to the next spot in that block's list.
+- **If an arm does not move by ~10 s, record it as a stall and press →.** Do not wave at the camera
+  (§10.2).
+- Note `duration_s` and anything odd in `notes` as you go; `success` and `fail_stage` are scored from
+  video afterwards (§10.6).
+
+## 10.6 — Preflight, and Step 3: scoring
+
+**Preflight — the rig is reported untouched since the 2026-10-03 recording, so this verifies rather than
+rebuilds.** Both checks are cheap and both are hard stops:
+
+1. **Replay a recorded episode** (`lerobot-replay`, [01 Step 4](../01_setup_robot.md)). This is the only
+   acceptance test that separates "the calibration frame is right" from "it looks right" — it plays
+   recorded actions straight to the servos with no policy, no camera and no feedback, so a miss is
+   unambiguously the physical↔encoder mapping. It is how the Phase 0.6 `shoulder_pan` drift was caught
+   ([phase06](phase06_camera_ablation_training.md) §"The leftward insertion offset"). The Phase 0.7
+   calibration pair is already live and byte-identical to
+   [`calibration/current/`](calibration/current/) — verified 2026-10-12 — so nothing needs restoring.
+2. **Compare the top camera against the reference still** in [`figs/`](figs/) with the arm at home.
+   §3's reference still is the "is the board set up right" check.
+
+If either fails, fix it *before* any rollout: a rig shift and a policy failure are indistinguishable
+afterwards, and 54 trials is too many to throw away.
+
+**Scoring — from video, blind to arm.** Per [phase06 §4b](phase06_camera_ablation_training.md), scoring
+live favours whichever arm you expect to win. The arm name is in the dataset directory name, so scoring
+blind means shuffling the episodes rather than browsing per-arm folders.
+
+Fill in [phase07_eval_log.csv](phase07_eval_log.csv):
+
+| Column | Values |
+|---|---|
+| `success` | 1 if, **within 30 s**, the cylinder is fully seated in the top-left blue hole and the gripper released — the task card's definition, unchanged (§5) |
+| `fail_stage` | `reach` · `grasp` · `transport` · `insert` · `retreat` · `none`, plus **`stall`** if the arm never started (§10.2) |
+| `duration_s` | time to the outcome |
+| `notes` | and for every grasp attempt, **`shoulder_pan`** — [phase06 §6.5.3](phase06_camera_ablation_training.md) tracks reach by its slope, and the bird's-eye rig is supposed to have fixed exactly that |
+
+**`fail_stage` is the column that carries the result**, not `success`. At 9 trials an arm's success count
+has a ±16 point standard error, but the *stage* an arm fails at is a per-trial observation, and a shift
+from `reach` to `insert` failures is visible in 9 trials when a rate difference is not. It is also the
+direct test of the §2 prediction that the bird's-eye view fixes reach.
+
+## 10.7 — Pre-registration: confirm or edit before the session
+
+[08 §A.2](../08_data_quality_research.md) asks for predicted orderings committed *before* the comparison
+is read, and [training §5](phase07_training.md) notes that the loss comparison can no longer be
+pre-registered — all three runs are done — but **the rollouts can, because they have not started.**
+
+**These are the doc author's predictions and reasoning, not yet yours. Confirm, edit or replace them,
+then commit — and do it before block 1, or this subsection is worthless.**
+
+| # | Prediction | Confidence | Reasoning |
+|---|---|---|---|
+| 1 | `act40k` ≈ `act60k`, within 2/9 | **high** | Eval loss is flat from 20k and the 20k–60k spread is checkpoint wobble. If it holds, the dial grid drops ACT to ~30k steps and halves its compute across 19 conditions × 3 seeds |
+| 2 | `sv5k` > `sv20k` | **medium** | Held-out loss rises monotonically +61%, which is far stronger than the sub-wobble differences phase06 dismissed. But loss↛success is exactly what phase06 established, so `sv20k` acting better than its loss is a live possibility |
+| 3 | `pi10k` > `pi5k` | **medium-low** | π0.5 got only 6.0 epochs, so it is probably still underfit rather than overfit — more training should still help. If this is *wrong*, π0.5 overfits faster than SmolVLA did and 002500 matters |
+| 4 | At matched 320k samples, `act40k` ≥ `sv5k` | **low** | 45 episodes is tiny for a 100 M-parameter VLA, and ACT's from-scratch chunked inductive bias suits a single-task, single-operator, deliberately low-variance dataset. Against that, SmolVLA carries pretrained visual and language priors that ACT has none of. Genuinely uncertain, and the cleanest Q2 result round 1 can produce |
+| 5 | π0.5 is the weakest family | **medium** | It is the sample-starved arm — 160k samples against 320k/480k — and the largest model. A confound, not a verdict on π0.5 |
+| 6 | `insert` overtakes `reach` as the dominant `fail_stage` | **medium** | §2's whole claim for the bird's-eye view is that it fixes reach, where the third-person top view was aliased and `top+wrist` under-reached 6/10. If reach failures stay dominant, that claim is in trouble |
+
+**What would change the plan.** If every arm scores ≤1/9, the problem is the rig or the task, not the
+checkpoints — stop and diagnose before spending round 2. If all six are indistinguishable at 7–9/9, the
+task is too easy to separate policies and round 2 needs the off-grid spots to create headroom.
+
+**After the session, read π0.5's loss curve.** Either off wandb run `sxpkx9st`, or by re-measuring with
+[`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py) (all four checkpoints are on the
+Hub; it repeats each under three seeds and prints the noise floor, which π0.5's flow-matching loss
+needs). The question is no longer which checkpoint to use — the robot will have answered that — but
+**whether held-out loss predicted the robot's ordering**, across three policy families on one dataset.
+That is a genuinely useful Q2 result and it is free once the rollouts are done.
+
+---
+
+# 11 — Round 2, once round 1 picks the checkpoints
+
+Sketched, not specified — the design depends on round 1's numbers. Recorded so round 1's choices are
+made with it in view.
+
+| | Round 1 (§10) | Round 2 |
+|---|---|---|
+| Question | Which checkpoint per policy | **Success rate** per policy, and off-grid generalisation |
+| Arms | 6 (2 checkpoints × 3 policies) | 3 (the winners) × {on-grid, off-grid} |
+| Trials | 9 per arm, **54** | 30 per policy on-grid + 12 off-grid, **~126** |
+| Resolution | ±16 points — ranks, does not measure | **±9 points** at 50%, per [phase06 §4b](phase06_camera_ablation_training.md) |
+| Time | ~2–2.5 h | ~4–5 h, two sessions |
+
+Three things round 2 adds:
+
+1. **Enough trials to quote a rate.** 30 per policy is the [phase06 §4b](phase06_camera_ablation_training.md)
+   figure: ±9 points at 50%, where 20 trials gives ±11 and would miss a real 15-point effect.
+2. **The off-grid spots**, which test the mechanism [training §3](phase07_training.md) proposed for
+   SmolVLA's overfitting: if a policy memorised nine discrete tray positions it should fail specifically
+   at unmarked ones. Needs 3 new marks on the tray and a second success rate per policy. Round 1's
+   on-grid rate is the baseline that makes the off-grid number mean something.
+3. **Seeds.** [phase06 §4b](phase06_camera_ablation_training.md) notes that at 50 episodes seed variance
+   is comparable to the effect size, so a single-seed ranking is not a policy-family result. This is the
+   expensive item — 3 seeds × 3 policies is 9 training runs — and it is what [08 §A.4](../08_data_quality_research.md)
+   already budgets for the dial grid.
+
+**`phase07_log.csv` is still missing** and round 2 does not need it, but the per-episode `success` and
+`stage` of the *training* data are not recoverable ([verification §6](phase07_data_verification.md)) —
+so if any analysis wants to relate rollout outcomes to the demonstration quality at the same tray spot,
+that is gone for these 50 episodes and is a reason to record it for the next dataset.

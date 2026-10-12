@@ -284,8 +284,12 @@ Two ways to fill it in, answering slightly different questions:
    number per checkpoint cannot be told apart from its own sampling noise. The script prints the noise
    floor, and a gap smaller than that floor is not a result.
 
-Until one of those lands, **which checkpoint to roll out is unsettled**. Do not default to 010000; §3 is
-the standing reminder that the last checkpoint can be the worst one.
+**Resolved differently, 2026-10-12.** Rather than wait on either, the round-1 run book rolls out **two**
+π0.5 checkpoints — 005000 and 010000, i.e. 3.0 and 6.0 epochs — and lets the robot rank them
+([phase07_portable_rig.md §10](phase07_portable_rig.md)). That costs one extra arm and removes the
+dependency on credentials this machine does not have, and it ranks the checkpoints by the quantity that
+actually matters. §3 stands as the reminder that made this the right call: the last checkpoint can be the
+worst one, so 010000 is not the default.
 
 ### One thing to carry into the rollouts
 
@@ -518,13 +522,23 @@ first item on the plan's own cut list, which makes the risk tolerable.
 
 # 5 — Open
 
+**The rollout run book is written:** [phase07_portable_rig.md §10](phase07_portable_rig.md) — six arms
+(two checkpoints per policy), 54 trials, mirrored interleave, with the commands and the blind-scoring
+protocol. It also records a measurement this doc could not make: **all six checkpoints load and run
+inside the control-loop budget on the 5080**, π0.5 included, at 8.87 GiB peak and 316 ms per chunk
+against an 833 ms budget. Not yet run.
+
 - **Rollouts.** Interleaved across checkpoints, blind-scored, on the robot. Nothing here substitutes for
-  that, and §2 explains why the loss numbers cannot settle Q2.
-- **π0.5's held-out curve.** Four checkpoints sit on the Hub with no loss beside them (§4). Read it off
-  wandb run `sxpkx9st`, or re-measure it, before choosing a checkpoint to roll out.
+  that, and §2 explains why the loss numbers cannot settle Q2. → [§10](phase07_portable_rig.md)
+- **π0.5's held-out curve.** Four checkpoints sit on the Hub with no loss beside them (§4). The run book
+  deliberately lets the **robot** pick π0.5's checkpoint rather than waiting on this, so it is no longer
+  a blocker — but reading it afterwards (off wandb run `sxpkx9st`, or by re-measuring) answers a better
+  question than it would have before: **did held-out loss predict the robot's ordering**, across three
+  policy families on one dataset? [§10.7](phase07_portable_rig.md)
 - **Pre-registration.** [08 §A.2](../08_data_quality_research.md) asks for predicted orderings committed
   *before* the comparison is read. All three training runs are now done, so the *loss* comparison can no
-  longer be pre-registered — but the **rollouts** have not started, and they are what actually answers
-  Q2. Worth writing the predicted rollout ordering down now, while it is still honest to do so.
+  longer be pre-registered — but the **rollouts** have not started. A six-row predicted ordering with
+  reasoning and confidence is drafted in [§10.7](phase07_portable_rig.md) and **needs confirming or
+  editing before block 1 runs**, or it is worthless.
 - **`phase07_log.csv`** still does not exist; per-episode `success` and `stage` are not recoverable from
   the data and the rollout protocol compares against them.

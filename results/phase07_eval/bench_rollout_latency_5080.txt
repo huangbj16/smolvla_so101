@@ -1,0 +1,38 @@
+######## act_tray_cylinder_s1000_trim / 040000
+WARNING:root:Missing key(s) when loading model: {'model.camera_id_embed.weight'}
+parameters      : 51,598,214
+peak VRAM       : 0.27 GiB of 15.5 GiB
+chunk latency   : median 8 ms, worst 9 ms over 6 calls
+control budget  : 833 ms  (n_action_steps 25 / 30 fps)
+verdict         : OK - 94.0x headroom. Sync inference is comfortable.
+######## act_tray_cylinder_s1000_trim / 060000
+WARNING:root:Missing key(s) when loading model: {'model.camera_id_embed.weight'}
+parameters      : 51,598,214
+peak VRAM       : 0.27 GiB of 15.5 GiB
+chunk latency   : median 9 ms, worst 9 ms over 6 calls
+control budget  : 833 ms  (n_action_steps 25 / 30 fps)
+verdict         : OK - 88.8x headroom. Sync inference is comfortable.
+######## smolvla_tray_cylinder_s1000_trim / 005000
+parameters      : 450,046,176
+peak VRAM       : 0.91 GiB of 15.5 GiB
+chunk latency   : median 105 ms, worst 106 ms over 6 calls
+control budget  : 833 ms  (n_action_steps 25 / 30 fps)
+verdict         : OK - 7.9x headroom. Sync inference is comfortable.
+######## smolvla_tray_cylinder_s1000_trim / 020000
+parameters      : 450,046,176
+peak VRAM       : 0.91 GiB of 15.5 GiB
+chunk latency   : median 100 ms, worst 101 ms over 6 calls
+control budget  : 833 ms  (n_action_steps 25 / 30 fps)
+verdict         : OK - 8.3x headroom. Sync inference is comfortable.
+######## pi05_tray_cylinder_s1000_trim_A100 / 005000
+parameters      : 4,143,404,816
+peak VRAM       : 8.87 GiB of 15.5 GiB
+chunk latency   : median 282 ms, worst 316 ms over 6 calls
+control budget  : 833 ms  (n_action_steps 25 / 30 fps)
+verdict         : OK - 2.6x headroom. Sync inference is comfortable.
+######## pi05_tray_cylinder_s1000_trim_A100 / 010000
+parameters      : 4,143,404,816
+peak VRAM       : 8.87 GiB of 15.5 GiB
+chunk latency   : median 288 ms, worst 316 ms over 6 calls
+control budget  : 833 ms  (n_action_steps 25 / 30 fps)
+verdict         : OK - 2.6x headroom. Sync inference is comfortable.
