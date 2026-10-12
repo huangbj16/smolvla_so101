@@ -1,7 +1,7 @@
 # Phase 0.7 — portable rig: bird's-eye top camera, and a new dataset
 
 Run book for the rebuilt rig, the data collection that follows it (§1–§9), and the **round-1 policy
-evaluation** (§10–§12). Everything — both arms, both cameras, the tray and the fixture — is now mounted
+evaluation** (§10–§13). Everything — both arms, both cameras, the tray and the fixture — is now mounted
 on a single acrylic board, and the top camera has been raised from a third-person view to a **bird's-eye
 overview of the board**.
 
@@ -16,7 +16,7 @@ eval added 2026-10-12.
 recording, but the idle lead-in of §8 did not shrink, so all training uses the idle-trimmed copy
 ([verification](phase07_data_verification.md)). **All three policies are trained**
 ([training](phase07_training.md)). **Next: run §10** — 54 rollouts over six arms, which picks one
-checkpoint per policy; **§11 has the results**, and §12 is round 2.
+checkpoint per policy; **§11 has the results**, and **§12 is the agreed round-2 plan**.
 
 Items marked *Default:* are suggestions — fix them before the first episode, then do not change them
 mid-collection.
@@ -307,7 +307,7 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 | 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
 | 4a ✅ | **Round 1 run book**: six arms, 54 trials, two checkpoints per policy, mirrored interleave, 9 grid spots | **§10** · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
 | 4 ✅ | **Round 1 run and scored 2026-10-12** — 54 trials. SmolVLA 6/18, ACT 5/18, π0.5 2/18 (0/18 excluding the two the operator called lucky). Held-out loss ranked the families backwards, and spot difficulty turned out to be policy-specific | **§11** · [phase07_eval_log.csv](phase07_eval_log.csv) |
-| 5 | Round 2: success rates at ±9 points, plus the off-grid spots and seeds | **§12** |
+| 5 ◐ | **Round 2 plan agreed 2026-10-12** — data, not more trials: a continuously-randomised varied dataset, perturbed/recovery episodes, head-only trim, ACT + SmolVLA retrained | **§12** · §13 holds the deferred success-rate design |
 
 Train/eval split for all three: holdout **`[9, 19, 29, 39, 49]`**, placed in the tail of
 `--dataset.episodes` so lerobot's "last N" split takes exactly those. The default split would otherwise
@@ -346,7 +346,7 @@ and impossible to answer from the loss curves:
 
 So round 1 runs **two checkpoints per policy** and lets the robot rank them. Success counts come out of
 it, and they are the first real success numbers for this rig — but at 9 trials per arm they carry a ±16
-point standard error, so **the rate is round 2's job** (§12). What round 1 settles is which six
+point standard error, so **the rate is round 2's job** (§13). What round 1 settles is which six
 checkpoints become three.
 
 > **π0.5's checkpoint is decided here rather than from wandb, deliberately.** Reading the curve would
@@ -1249,46 +1249,222 @@ Worth checking against the per-position grasp bearings in round 2, since a bias 
 - **Round 2 cannot just be "more trials of the same".** At these rates, measuring 33% to ±9 points is
   precision about a policy nobody wants to deploy. §12 is revised accordingly.
 
-# 12 — Round 2, once round 1 picks the checkpoints
-
-> **Revised 2026-10-12, after round 1.** The original sketch — 126 trials to measure each policy's
-> success rate to ±9 points — is now the wrong next move, and §11.8 says why: the best arm is 33%, so
-> that session would buy precision about a policy nobody would deploy. **More data beats more trials
-> at this point.** The original plan is kept below the line because it becomes right again once a
-> policy is good enough to be worth measuring.
-
-## What round 1 changed
-
-| | Original plan | Revised |
-|---|---|---|
-| Next bottleneck | measurement precision | **the training set** — 50 episodes, one operator, one grasp style, no failure recovery |
-| Trials | ~126 | defer until a policy clears ~50% |
-| First action | book a 5 h robot session | **collect stage-targeted data** (below), retrain SmolVLA |
-
-**Three things round 1 says to do first, in order.** These are the operator's proposals from the session
-debrief, with the round-1 evidence for each:
-
-1. **Collect stage-targeted data.** Round 1 failed at `grasp` (14 trials) and `insert` (9); **zero**
-   trials failed at transport. Recording more full episodes spends most of its frames on the stage that
-   already works. Collecting ~100 episodes of close-range reach-and-grasp and ~100 of insertion puts the
-   data where the failures are. Two caveats to settle before recording: a stage-only episode has a
-   different start distribution than the full task (the arm begins mid-task, holding the cylinder, which
-   the current task string does not describe), and mixing stage clips with full episodes needs either a
-   task string per stage or a single policy that handles both. Worth a short design note before the
-   first episode.
-2. **Add failure-recovery demonstrations.** Nothing in the training set shows what to do after a missed
-   grasp or a mis-aligned insert, so no policy can recover from either — and the two retry-then-succeed
-   trials in round 1 were the operator's luck, not learned behaviour. This is the single clearest gap.
-3. **Keep the tail idle frames** (§11.5). Trim the head, keep the tail, record a deliberate pause after
-   release. Costs nothing and directly targets the terminal-motion failure SmolVLA showed.
-
-**Training, per round 1 rather than per loss:** ACT needs no more steps (40k ≈ 60k); SmolVLA is the most
-promising and should be trained *longer* than 20k, not shorter, despite the eval curve; π0.5 needs both
-more steps and, probably, more than action-expert-only fine-tuning (§11.4).
-
 ---
 
-## The original round-2 design, for when a policy is worth measuring
+# 12 — Round 2 plan, agreed 2026-10-12
+
+Supersedes the original sketch, which is kept as §13. §11.8's conclusion drives it: the best arm is 33%, so more trials
+would buy precision about a policy nobody would deploy. **This round spends its effort on data, not on
+measurement.** **§13** stays below as the design to return to once a policy earns it.
+
+| Step | What | Time | Status |
+|---|---|---|---|
+| 1 | **Pre-register the divergence prediction** (§12.1) | 0 | **before collecting** |
+| 2 | **D1: 50 full-task episodes, continuously randomised, deliberately varied** (§12.2) | ~2.5 h | — |
+| 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
+| 4 | **Processing: head-only trim, jerk + per-stage loss** (§12.4) | ~2 h | — |
+| 5 | **Retrain ACT and SmolVLA** (§12.5) | ~18 h GPU | — |
+| 6 | **π0.5 frozen-feature probe**, during training (§12.6) | ~30 min | — |
+
+**Dropped from the original plan, with reasons:** separate reach-and-grasp / insertion datasets (§12.3
+explains what replaces them), and a third π0.5 training run before §12.6 answers whether more steps can
+possibly help. **Deferred:** the second location (§12.7), HG-DAgger infrastructure, and the 126-trial
+success-rate pass (§13).
+
+## 12.1 — Pre-registration: committed before D1 is recorded
+
+[08 §A.2](../08_data_quality_research.md) asks for predictions committed before the comparison is read.
+§11.6 found that demonstration divergence during the reach correlates **−0.63 with ACT** progress and
+**+0.79 with SmolVLA** — and as a single planned test, the ACT-minus-SmolVLA gap against reach
+divergence gives **ρ = −0.814, p = 0.012**. D1 deliberately raises that divergence, so it is a test of
+the mechanism rather than only a bigger dataset.
+
+**The mechanism being tested.** ACT's only component for representing multimodal actions is the CVAE
+latent, and its KLD collapsed to 0.0002 on D0 ([training §2](phase07_training.md)) — so ACT behaved as
+a plain L1 chunk regressor, and L1 regresses toward the conditional *median*, which where
+demonstrations disagree is a path no demonstrator took. SmolVLA's flow matching samples the conditional
+distribution instead of averaging it.
+
+**Predict the *gap*, not the levels.** D1 changes several things at once — more data, varied approaches,
+tail kept, perturbed episodes — and all of those help both families. Only the **differential** isolates
+the mechanism.
+
+| # | Prediction | How it is scored |
+|---|---|---|
+| **P1** | **The ACT−SmolVLA progress gap moves negative.** Round 1 pooled: ACT 2.22 − SmolVLA 2.17 = **+0.06**. Predict **< −0.3** after D1 | round-2 rollouts, same progress scale |
+| **P2** | SmolVLA's absolute progress improves more than ACT's | round-2 vs round-1 per-family progress |
+| **P3** | **ACT's KLD does *not* collapse to ~0.0002 this time.** If D1 is genuinely more multimodal the latent has something to encode | free, read off the training log |
+| **P4** | Measured `div_reach` on D1 exceeds D0's range (0.24–0.39) | [`analyze_phase07_positions.py`](../scripts/analyze_phase07_positions.py) on D1 |
+
+**If P4 fails, P1–P3 are not tested** — the manipulation did not take, and the round is a data-volume
+experiment rather than a mechanism test. Check P4 first, immediately after collection.
+
+**What would falsify the mechanism:** the gap moves *positive* (ACT benefits more from varied data than
+SmolVLA), or P4 holds while P1 and P3 both fail. Either would say the §11.6 correlation was a
+nine-point coincidence.
+
+## 12.2 — D1: 50 full-task episodes, continuously randomised
+
+**Three changes from D0, and nothing else.** Everything not listed is deliberately identical, because
+D1 must stay mergeable with D0: same cameras and camera *names*, same calibration frame, same task
+string, 30 fps, same fixture and tray.
+
+1. **Cylinder position is randomised continuously within the tray** — not the nine marked spots. This
+   is the highest-value change in the round. It kills the block confound that has now appeared twice
+   (Phase 0.5 and 0.7), removes the nine-point memorisation target, and raises reach divergence as a
+   side effect, because different positions force different approaches. **Nothing analytic is lost:**
+   the grasp pose recovers cylinder position to ~0.3° (§11.6), so position can be binned or regressed
+   after the fact. The nine marked spots stay, for **evaluation only**, where reproducibility matters.
+2. **Vary the approach deliberately** — see the box below.
+3. **Keep a deliberate tail.** After the cylinder is seated and released, **hold still for ~2 seconds**
+   before pressing →. D0's episodes already carry ~1.4 s of tail; the trim is what removed it (§12.4).
+   Making it deliberate rather than operator lag is what turns it into a usable "task complete" signal.
+
+> ### Vary the path, not the outcome
+>
+> This inverts §5's "one grasp style", on purpose, and it is the manipulation §12.1 tests. **Vary:**
+> the approach angle to the cylinder, the standoff height before descending, the speed of the
+> approach, the path taken from tray to fixture. **Hold fixed:** the final seated pose, the success
+> criterion, and the smoothness of each individual path.
+>
+> **The distinction that matters is modes versus noise.** Several distinct, clean ways of reaching the
+> same cylinder broaden the conditional action distribution with *valid* alternatives — that is what a
+> flow-matching policy can represent. Jitter, hesitation and unlabelled mid-course corrections are
+> noise, and they would hurt both families; they are also what the smoothness literature in
+> [08 §A.1](../08_data_quality_research.md) (RINSE, PSD scores) penalises. **Each path smooth; the set
+> of paths varied.**
+
+**Timing, from D0's actuals.** D0's 50 episodes ran ~1.5 h, with a median episode of 23.5 s — so
+overhead, not episode length, dominates. Budget **~2.5 h**: 20 min preflight, ~1.5–2 h recording,
+20 min verify and push. Record the actual wall clock in §8's log table.
+
+`episode_time_s` is raised 30 → **35**. D0's cap was never binding (median 705 frames, max 878 of a
+900-frame cap, 0/50 at the cap), but a varied approach plus a 2 s tail eats the margin, and the value
+is only a ceiling — episodes still end when → is pressed.
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-record --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 --teleop.id=my_leader --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=50 --dataset.episode_time_s=35 --dataset.reset_time_s=5 --dataset.fps=30 --dataset.push_to_hub=true --dataset.private=true --display_data=true
+```
+
+- **The task string is byte-identical to D0's** — required, both for merging and so the VLAs see one
+  instruction.
+- **`reset_time_s` 3 → 5.** Placing the cylinder at a *free* position and varying the next approach
+  needs more than 3 s, and a rushed reset is how position creeps back into a pattern.
+- **Do not re-run `lerobot-calibrate`.** A new frame makes D1 unmergeable with D0, which defeats the
+  point. [calibration/README.md](calibration/README.md).
+- 0.6.1 appends a timestamp, giving `so101_tray_cylinder_varied_<stamp>` — **record the full stamped
+  name in §8** before doing anything else with it.
+- Preflight first: §10.6's replay and top-camera check, which also confirms the frame is still D0's.
+
+## 12.3 — D1-perturb: ~30 perturbed and recovery episodes
+
+**This replaces the separate reach-and-grasp / insertion datasets**, which were dropped for two
+specific reasons:
+
+1. **ACT is not language-conditioned.** Verified in the source — it takes images and state only, no
+   `task` input. So ACT cannot tell a stage clip from the matching portion of a full episode by
+   instruction; only the VLAs could.
+2. **Worse, a stage clip injects multimodality exactly where ACT averages.** An insertion clip starts
+   from "holding the cylinder, at rest"; in a full episode that same state is passed through *at
+   speed*. One observation, two very different action distributions — which is precisely the failure
+   §11.6 diagnosed. It would manufacture the problem.
+
+**Perturbed full episodes give the same stage coverage without the split**, and they supply the
+failure-recovery data that was otherwise deferred to R3. Run the whole task, but create the hard case
+mid-episode:
+
+| Perturbation | Targets | ~n |
+|---|---|---|
+| Nudge the cylinder after it is sighted, before the grasp | re-approach, close-range reach | 10 |
+| Let the grasp slip or miss, then re-approach and succeed | **grasp recovery** — 14 of 41 round-1 failures | 10 |
+| Begin a mis-aligned insert, detect it, lift and re-seat | **insert recovery** — 9 of 41 failures | 10 |
+
+**Record them into D1 with `--resume=true`,** not as a separate repo. They become episodes 50–79 of the
+same dataset, which guarantees compatibility and keeps one dataset to manage — and they stay ablatable,
+because `--dataset.episodes` selects subsets by index. Training can then compare `0–49` against `0–79`
+with nothing else changed.
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && STAMPED=so101_tray_cylinder_varied_CHANGEME && lerobot-record --resume=true --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 --teleop.id=my_leader --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$STAMPED --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=30 --dataset.episode_time_s=45 --dataset.reset_time_s=5 --dataset.fps=30 --dataset.push_to_hub=true --dataset.private=true --display_data=true
+```
+
+Replace `CHANGEME` with the stamp from §12.2's recorded name. `episode_time_s` is 45 here: a recovery
+takes longer than a clean run. **Keep the ~2 s tail.** Log which perturbation each episode used — that
+column cannot be reconstructed afterwards, which is the same mistake `phase07_log.csv` already
+represents.
+
+## 12.4 — Processing: trim the head only, and add two metrics
+
+**Head-only trim.** [`make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) currently trims
+both ends. The head trim is justified — [phase06 F3](phase06_camera_ablation_training.md) showed the
+idle lead-in is an attractor the policy cannot escape at the start. **The tail is the opposite**: it is
+the only place a policy can learn that the task is finished, and §11.5 measured the cost of removing
+it (SmolVLA moves 3.6× as much as ACT in the final second). Change the rule to head-only and keep the
+deliberate 2 s tail that §12.2 records.
+
+**`eval_chunk_jerk` in wandb.** §11.3a has the patch and the reasoning: the training loop needs no
+change, because `MetricsTracker.update_metrics` auto-registers a meter for every new scalar. Use the
+eval-branch version, which works for all three families and costs one denoising loop per eval batch.
+**Pre-registered**: SmolVLA 5k should show ~2× the jerk of 20k — the same 2.0× measured on the robot,
+visible with no robot attached. If it does, the dial grid can be scored on loss **and** jerk.
+
+**Per-stage held-out loss.** Pool the held-out frames by task stage and report loss per stage rather
+than one number. The segmentation already exists — `grasp_seated_index` in
+[`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py) is the validated detector, and it
+splits every episode into reach / carry / insert from the gripper trace. **This is what validates the
+jerk metric:** without it there is one unproven proxy and no way to tell whether it works.
+Pre-registered prediction from §11.3: **SmolVLA 5k and 20k separate at the grasp and insert stages
+specifically**, where tolerance is tightest, even though 5k wins the pooled number.
+
+## 12.5 — Training: ACT and SmolVLA first
+
+| | Steps | Why |
+|---|---|---|
+| **SmolVLA** | **longer than 20k** | the most promising policy (§11.8), and round 1 says train *longer* despite the eval curve, because 20k beat the loss-optimal 5k on the robot |
+| **ACT** | **40k** | 40k ≈ 60k was confirmed (§11.2 P1), so 60k is wasted compute — round 1's one clean win for the dial grid |
+| **π0.5** | **not yet** | §12.6 first |
+
+Run both with `--dataset.episodes` covering `0–49` and `0–79` if the compute allows, so the perturbed
+episodes are ablatable rather than merely included. Keep seed 1000 and the rest of
+[training §1](phase07_training.md) fixed.
+
+## 12.6 — The π0.5 gate: can more steps possibly fix the reach?
+
+π0.5 is **0/18 excluding luck**, with 11 of 18 trials failing at reach, and it costs the most compute
+and 11.55 GB per checkpoint. §11.4 gives three candidate causes; only one of them is fixed by more
+training. **Run this before committing another training run** — ~30 minutes, no training, and it can
+be done while ACT and SmolVLA train:
+
+**Probe whether the frozen vision encoder resolves the cylinder at all.** `freeze_vision_encoder=true`
+means π0.5's SigLIP features never adapted to this rig. Extract them for held-out frames and fit a
+linear regression from features to the cylinder's position (recoverable from the grasp pose, §11.6).
+
+| Outcome | Reading |
+|---|---|
+| Features predict position well | The representation is fine; the action expert is simply undertrained. **More steps is the right fix.** |
+| They do not | **No amount of action-expert training can fix the reach** — the information is not in the representation. Unfreeze the encoder, or drop π0.5 for this phase |
+
+Either way it converts "π0.5 needs more steps" from an assumption into a decision.
+
+## 12.7 — Deferred, and why each is safe to defer
+
+- **Second location.** Still the only direct test of the portability claim this whole phase is built on
+  (§9 item 3), and still untested. Deferred because D1 must stay mergeable with D0 and a location
+  change adds a variable mid-dataset. **Do not defer it twice** — it belongs in round 3, either as a
+  held-out eval site or as its own small dataset.
+- **HG-DAgger infrastructure.** §12.3's perturbed episodes deliver the recovery data a round earlier
+  without it. Revisit when recovery needs to be *interactive* rather than demonstrated.
+- **The 126-trial success-rate pass** (§13). Right again once a policy clears ~50%.
+- **Pure stage-split clips.** Only if §12.3's perturbed episodes under-cover the grasp and insert
+  stages, and only with the start-state problem solved first.
+
+
+# 13 — The deferred success-rate design, for when a policy earns it
+
+> **Superseded for now by §12.** 126 trials to measure each policy's success rate to ±9 points is the
+> wrong next move at a 33% best arm (§11.8) — it would buy precision about a policy nobody would
+> deploy. Kept in full because it becomes the right design again as soon as a policy clears ~50%, and
+> because its three components are what round 3 will need.
 
 | | Round 1 (§10) | Round 2 |
 |---|---|---|
