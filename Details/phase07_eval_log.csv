@@ -1,55 +1,55 @@
 block,arm,policy,checkpoint,half,episode_in_block,tray_spot,episode_index,duration_s,success,fail_stage,notes
-1,act40k,act,040000,A,1,T4,,,,,
-1,act40k,act,040000,A,2,T2,,,,,
-1,act40k,act,040000,A,3,T8,,,,,
-1,act40k,act,040000,A,4,T5,,,,,
-1,act40k,act,040000,A,5,T6,,,,,
-2,act60k,act,060000,A,1,T5,,,,,
-2,act60k,act,060000,A,2,T2,,,,,
-2,act60k,act,060000,A,3,T6,,,,,
-2,act60k,act,060000,A,4,T4,,,,,
-2,act60k,act,060000,A,5,T8,,,,,
-3,sv5k,smolvla,005000,A,1,T4,,,,,
-3,sv5k,smolvla,005000,A,2,T8,,,,,
-3,sv5k,smolvla,005000,A,3,T6,,,,,
-3,sv5k,smolvla,005000,A,4,T5,,,,,
-3,sv5k,smolvla,005000,A,5,T2,,,,,
-4,sv20k,smolvla,020000,A,1,T4,,,,,
-4,sv20k,smolvla,020000,A,2,T6,,,,,
-4,sv20k,smolvla,020000,A,3,T8,,,,,
-4,sv20k,smolvla,020000,A,4,T2,,,,,
-4,sv20k,smolvla,020000,A,5,T5,,,,,
-5,pi5k,pi05,005000,A,1,T4,,,,,
-5,pi5k,pi05,005000,A,2,T2,,,,,
-5,pi5k,pi05,005000,A,3,T8,,,,,
-5,pi5k,pi05,005000,A,4,T6,,,,,
-5,pi5k,pi05,005000,A,5,T5,,,,,
-6,pi10k,pi05,010000,A,1,T8,,,,,
-6,pi10k,pi05,010000,A,2,T2,,,,,
-6,pi10k,pi05,010000,A,3,T4,,,,,
-6,pi10k,pi05,010000,A,4,T6,,,,,
-6,pi10k,pi05,010000,A,5,T5,,,,,
-7,pi10k,pi05,010000,B,1,T1,,,,,
-7,pi10k,pi05,010000,B,2,T7,,,,,
-7,pi10k,pi05,010000,B,3,T3,,,,,
-7,pi10k,pi05,010000,B,4,T9,,,,,
-8,pi5k,pi05,005000,B,1,T3,,,,,
-8,pi5k,pi05,005000,B,2,T9,,,,,
-8,pi5k,pi05,005000,B,3,T7,,,,,
-8,pi5k,pi05,005000,B,4,T1,,,,,
-9,sv20k,smolvla,020000,B,1,T9,,,,,
-9,sv20k,smolvla,020000,B,2,T3,,,,,
-9,sv20k,smolvla,020000,B,3,T7,,,,,
-9,sv20k,smolvla,020000,B,4,T1,,,,,
-10,sv5k,smolvla,005000,B,1,T9,,,,,
-10,sv5k,smolvla,005000,B,2,T3,,,,,
-10,sv5k,smolvla,005000,B,3,T7,,,,,
-10,sv5k,smolvla,005000,B,4,T1,,,,,
-11,act60k,act,060000,B,1,T9,,,,,
-11,act60k,act,060000,B,2,T3,,,,,
-11,act60k,act,060000,B,3,T1,,,,,
-11,act60k,act,060000,B,4,T7,,,,,
-12,act40k,act,040000,B,1,T3,,,,,
-12,act40k,act,040000,B,2,T7,,,,,
-12,act40k,act,040000,B,3,T9,,,,,
-12,act40k,act,040000,B,4,T1,,,,,
+1,act40k,act,040000,A,1,T4,0,26.5,n,grasp,off to left
+1,act40k,act,040000,A,2,T2,1,21.3,n,insert,off to top
+1,act40k,act,040000,A,3,T8,2,17.7,y,,
+1,act40k,act,040000,A,4,T5,3,35.4,n,grasp,
+1,act40k,act,040000,A,5,T6,4,25.1,n,insert,grasp failed 1st try then succeed but failed at insert
+2,act60k,act,060000,A,1,T5,0,15.8,n,reach,off to left
+2,act60k,act,060000,A,2,T2,1,21.5,y,,
+2,act60k,act,060000,A,3,T6,2,22.7,n,grasp,
+2,act60k,act,060000,A,4,T4,3,26.2,n,grasp,
+2,act60k,act,060000,A,5,T8,4,17.1,y,,
+3,sv5k,smolvla,005000,A,1,T4,0,31.1,n,grasp,shaky
+3,sv5k,smolvla,005000,A,2,T8,1,20.0,n,reach,
+3,sv5k,smolvla,005000,A,3,T6,2,19.6,n,reach,
+3,sv5k,smolvla,005000,A,4,T5,3,35.3,y,,slow use about 40s
+3,sv5k,smolvla,005000,A,5,T2,4,35.0,y,,grasp failed 1st try then succeed
+4,sv20k,smolvla,020000,A,1,T4,0,20.9,y,,very smooth
+4,sv20k,smolvla,020000,A,2,T6,1,24.9,n,insert,off to right
+4,sv20k,smolvla,020000,A,3,T8,2,24.2,n,reach,
+4,sv20k,smolvla,020000,A,4,T2,3,20.5,n,insert,off to top
+4,sv20k,smolvla,020000,A,5,T5,4,20.9,y,,
+5,pi5k,pi05,005000,A,1,T4,0,29.6,n,reach,
+5,pi5k,pi05,005000,A,2,T2,1,14.9,n,reach,
+5,pi5k,pi05,005000,A,3,T8,2,17.3,y,,lucky move kick the cylinder into hole
+5,pi5k,pi05,005000,A,4,T6,3,14.8,n,reach,
+5,pi5k,pi05,005000,A,5,T5,4,15.4,n,reach,off to left
+6,pi10k,pi05,010000,A,1,T8,0,15.8,n,reach,
+6,pi10k,pi05,010000,A,2,T2,1,20.7,n,reach,
+6,pi10k,pi05,010000,A,3,T4,2,29.2,n,reach,
+6,pi10k,pi05,010000,A,4,T6,3,18.8,n,reach,
+6,pi10k,pi05,010000,A,5,T5,4,30.9,n,insert,
+7,pi10k,pi05,010000,B,1,T1,0,22.3,n,grasp,off to left
+7,pi10k,pi05,010000,B,2,T7,1,30.9,n,insert,off to top
+7,pi10k,pi05,010000,B,3,T3,2,15.8,n,reach,
+7,pi10k,pi05,010000,B,4,T9,3,30.9,y,,lucky move
+8,pi5k,pi05,005000,B,1,T3,0,30.9,n,grasp,
+8,pi5k,pi05,005000,B,2,T9,1,19.5,n,reach,off to left
+8,pi5k,pi05,005000,B,3,T7,2,19.6,n,grasp,
+8,pi5k,pi05,005000,B,4,T1,3,18.0,n,reach,
+9,sv20k,smolvla,020000,B,1,T9,0,20.2,n,grasp,
+9,sv20k,smolvla,020000,B,2,T3,1,35.5,n,grasp,
+9,sv20k,smolvla,020000,B,3,T7,2,21.7,n,insert,
+9,sv20k,smolvla,020000,B,4,T1,3,21.4,y,,very smooth
+10,sv5k,smolvla,005000,B,1,T9,0,14.6,n,grasp,
+10,sv5k,smolvla,005000,B,2,T3,1,13.6,n,grasp,
+10,sv5k,smolvla,005000,B,3,T7,2,35.4,y,,very shaky
+10,sv5k,smolvla,005000,B,4,T1,3,17.7,n,grasp,
+11,act60k,act,060000,B,1,T9,0,19.6,n,insert,off to right
+11,act60k,act,060000,B,2,T3,1,19.0,y,grasp,lucky grasp
+11,act60k,act,060000,B,3,T1,2,24.0,n,grasp,
+11,act60k,act,060000,B,4,T7,3,16.8,n,grasp,
+12,act40k,act,040000,B,1,T3,0,13.7,n,grasp,
+12,act40k,act,040000,B,2,T7,1,19.8,n,insert,
+12,act40k,act,040000,B,3,T9,2,17.3,y,,
+12,act40k,act,040000,B,4,T1,3,16.3,n,grasp,off to left

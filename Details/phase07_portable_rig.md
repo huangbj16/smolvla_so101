@@ -1,7 +1,7 @@
 # Phase 0.7 — portable rig: bird's-eye top camera, and a new dataset
 
 Run book for the rebuilt rig, the data collection that follows it (§1–§9), and the **round-1 policy
-evaluation** (§10–§11). Everything — both arms, both cameras, the tray and the fixture — is now mounted
+evaluation** (§10–§12). Everything — both arms, both cameras, the tray and the fixture — is now mounted
 on a single acrylic board, and the top camera has been raised from a third-person view to a **bird's-eye
 overview of the board**.
 
@@ -16,7 +16,7 @@ eval added 2026-10-12.
 recording, but the idle lead-in of §8 did not shrink, so all training uses the idle-trimmed copy
 ([verification](phase07_data_verification.md)). **All three policies are trained**
 ([training](phase07_training.md)). **Next: run §10** — 54 rollouts over six arms, which picks one
-checkpoint per policy; §11 then measures success rates properly.
+checkpoint per policy; **§11 has the results**, and §12 is round 2.
 
 Items marked *Default:* are suggestions — fix them before the first episode, then do not change them
 mid-collection.
@@ -305,8 +305,9 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 | 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
 | 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
 | 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
-| 4 ◐ | **Round 1 rollouts: six arms, 54 trials** — two checkpoints per policy, mirrored interleave, 9 grid spots. Written and preflighted (all six load and run on the 5080); **not yet run** | **§10** · [phase07_eval_log.csv](phase07_eval_log.csv) · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
-| 5 | Round 2: success rates at ±9 points, plus the off-grid spots and seeds | **§11** |
+| 4a ✅ | **Round 1 run book**: six arms, 54 trials, two checkpoints per policy, mirrored interleave, 9 grid spots | **§10** · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
+| 4 ✅ | **Round 1 run and scored 2026-10-12** — 54 trials. SmolVLA 6/18, ACT 5/18, π0.5 2/18 (0/18 excluding the two the operator called lucky) | **§11** · [phase07_eval_log.csv](phase07_eval_log.csv) |
+| 5 | Round 2: success rates at ±9 points, plus the off-grid spots and seeds | **§12** |
 
 Train/eval split for all three: holdout **`[9, 19, 29, 39, 49]`**, placed in the tail of
 `--dataset.episodes` so lerobot's "last N" split takes exactly those. The default split would otherwise
@@ -345,7 +346,7 @@ and impossible to answer from the loss curves:
 
 So round 1 runs **two checkpoints per policy** and lets the robot rank them. Success counts come out of
 it, and they are the first real success numbers for this rig — but at 9 trials per arm they carry a ±16
-point standard error, so **the rate is round 2's job** (§11). What round 1 settles is which six
+point standard error, so **the rate is round 2's job** (§12). What round 1 settles is which six
 checkpoints become three.
 
 > **π0.5's checkpoint is decided here rather than from wandb, deliberately.** Reading the curve would
@@ -760,7 +761,8 @@ is read, and [training §5](phase07_training.md) notes that the loss comparison 
 pre-registered — all three runs are done — but **the rollouts can, because they have not started.**
 
 **Committed 2026-10-12, before any rollout.** Predictions 1–3 and 5 are the operator's call;
-4 and 6 are deliberately left open. Reasoning is recorded so the post-hoc read is honest about which
+4 and 6 are deliberately left open. **Scored against the outcome in [§11.2](#112--prediction-scorecard-against-107):
+1 and 3 confirmed, 2 and 5 wrong — and both wrong ones were the loss-based ones.** Reasoning is recorded so the post-hoc read is honest about which
 predictions were well-founded and which were guesses.
 
 | # | Prediction | Confidence | Reasoning |
@@ -839,10 +841,305 @@ every piece needed already exists in
 
 ---
 
-# 11 — Round 2, once round 1 picks the checkpoints
+# 11 — Round 1 results — run and scored 2026-10-12
 
-Sketched, not specified — the design depends on round 1's numbers. Recorded so round 1's choices are
-made with it in view.
+54 trials, 12 blocks, as §10 specifies. Scored blind from video into
+[phase07_eval_log.csv](phase07_eval_log.csv); `episode_index` and `duration_s` recovered from the
+recordings by [`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py), which also produces
+every number and figure below. Summary tables:
+[`results/phase07_eval/`](../results/phase07_eval/).
+
+**Headline: nothing works well yet, and the held-out loss ranking was exactly inverted.** The policy
+with the *lowest* held-out loss (π0.5, §10.7a) is the only one that never completed the task on its own;
+the policy whose loss said it was 61% overfit (SmolVLA 20k) is the most capable thing in the set.
+
+| | ACT | SmolVLA | π0.5 |
+|---|---|---|---|
+| Success | 5/18 · **27.8%** | **6/18 · 33.3%** | 2/18 · 11.1% |
+| Success, excluding "lucky" | 4/18 · 22.2% | **6/18 · 33.3%** | **0/18 · 0.0%** |
+| 95% Wilson | 12.5–50.9% | 16.3–56.3% | 3.1–32.8% |
+| Mean progress (of 4 stages) | 2.22 | 2.17 | **0.94** |
+| Dominant failure | **grasp** (8) | grasp (6) | **reach (11)** |
+| Held-out loss rank | 3rd | 2nd | **1st** |
+
+![success and progress](figs/phase07_eval_success.png)
+
+## 11.1 — Per arm
+
+| Arm | Success | Clean | Progress | Duration | Jerk | Terminal motion | reach / grasp / insert |
+|---|---|---|---|---|---|---|---|
+| ACT 40k | 2/9 | 2 | 2.33 | 21.5 s | 25 | **4.3** | 0 / 4 / 3 |
+| ACT 60k | 3/9 | 2 | 2.11 | 20.3 s | **22** | 7.1 | 1 / 4 / 1 |
+| SmolVLA 5k | 3/9 | 3 | 1.78 | 24.7 s | **63** | **28.2** | 2 / 4 / 0 |
+| SmolVLA 20k | 3/9 | 3 | **2.56** | 23.4 s | 32 | 12.1 | 1 / 2 / 3 |
+| π0.5 5k | 1/9 | **0** | 0.67 | 20.0 s | 32 | 12.7 | 6 / 2 / 0 |
+| π0.5 10k | 1/9 | **0** | 1.22 | 23.9 s | 33 | 15.0 | 5 / 1 / 2 |
+
+**Three trials carry a "lucky" note** and they matter disproportionately: π0.5 5k's only success was a
+cylinder *kicked* into the hole, π0.5 10k's was another "lucky move", and ACT 60k's was a "lucky grasp".
+Excluding them, **π0.5 scores 0/18** — it never performed the task deliberately. They are kept in the
+primary count because they meet the task card's definition, and split out everywhere because they are
+not evidence of capability.
+
+**Durations are uninformative** (20.0–24.7 s across all six arms, against a 30 s success window and a
+60 s recording cap). The operator pressed → once the outcome was clear, so duration mostly measures how
+long it took *to become obvious*, not how long the task took. Not a discriminator here.
+
+![failure stages and directional bias](figs/phase07_eval_failure.png)
+
+**No trial failed in transport, across all 54.** Every policy that got the cylinder off the tray got it
+over the fixture. That confirms the session impression that transport is the easy stage, and it is the
+basis of §11.5's data-collection proposal.
+
+## 11.2 — Prediction scorecard against §10.7
+
+| # | Predicted | Outcome | |
+|---|---|---|---|
+| 1 | `act40k` ≈ `act60k`, within 2/9 | 2/9 vs 3/9 — within 1, and progress 2.33 vs 2.11 runs the *other* way | ✅ **confirmed** |
+| 2 | `sv5k` > `sv20k` | 3/9 vs 3/9 on success, but 20k leads on progress (2.56 vs 1.78) and is half as jerky | ❌ **wrong — reversed** |
+| 3 | `pi10k` > `pi5k` | 1/9 each, but progress 1.22 vs 0.67 and 10k is the only one to reach an insert | ✅ **weakly confirmed** |
+| 4 | open — `act40k` vs `sv5k` at matched 320k samples | 2/9 vs 3/9, progress 2.33 vs 1.78. Inside noise either way | — **unresolved**, as expected |
+| 5 | π0.5 strongest | π0.5 is **last** on every measure, and 0/18 excluding luck | ❌ **wrong, decisively** |
+| 6 | open — dominant fail stage | No single stage dominates: π0.5 fails at reach (11/18), ACT and SmolVLA at grasp | — **answered: it is policy-specific** |
+
+**Two of four committed predictions were wrong, and both wrong ones came from held-out loss.** 1 and 3
+were loss-based too but happen to be the two where loss and behaviour agreed. Predictions 2 and 5 were
+the ones where the loss comparison was load-bearing — and §10.7a's caveat that loss is "the wrong units
+for the question" turned out to be the whole story.
+
+## 11.3 — The SmolVLA inversion, and why a per-frame loss cannot see it
+
+This is the most interesting result in round 1. **SmolVLA 5k has the best held-out loss in its family by
+61% and behaves worse on the robot than 20k.** The session note called 5k "shaky" and 20k "very smooth",
+and that is measurable in the recorded actions rather than a matter of impression:
+
+![smoothness and duration](figs/phase07_eval_smoothness.png)
+
+| | SmolVLA 5k | SmolVLA 20k |
+|---|---|---|
+| Held-out loss | **0.1258** (best in family) | ~0.2029 (+61%) |
+| Success | 3/9 | 3/9 |
+| Mean progress | 1.78 | **2.56** |
+| **Action jerk** | **63.5** | **32.3** — half |
+| Failures | 2 reach, 4 grasp, **0 insert** | 1 reach, 2 grasp, **3 insert** |
+
+5k is **2.0× jerkier** than 20k, and the failure profile shifts: 5k mostly never gets the cylinder, 20k
+usually does and then misses the hole. Getting far enough to fail at insertion is strictly more progress
+than failing at the grasp.
+
+**Why the loss misses it — the operator's hypothesis, and it is the right one.** Held-out loss is a
+*per-frame, teacher-forced* quantity: each prediction is scored against ground truth from a state the
+*demonstrator* reached. A rollout is the opposite — the policy is scored from states *it* reached, so a
+small per-frame error feeds the next observation and compounds. That is the classic covariate-shift /
+compounding-error gap, and it has a specific shape here:
+
+- A **jittery** policy can have excellent per-frame loss. Jitter is high-frequency and roughly
+  zero-mean, so it barely moves an L1/MSE average, while on hardware it shakes the gripper off a 
+  cylinder that needs millimetre placement. Jerk is a *second-difference* property; the loss is a
+  *zeroth-difference* one. They are nearly orthogonal, which is exactly why 5k can win one and lose the
+  other.
+- **Training longer smooths the policy even as it overfits the frames.** 20k memorises the training
+  frames harder (train loss 0.0193, eval 0.2029) but produces a more coherent action sequence. Overfit
+  in the per-frame sense is not the same as degraded as a controller.
+
+**What would show it directly, and it is cheap:** the per-stage / per-phase held-out loss both the
+session notes and §10.7a asked for. Pool the held-out frames by task stage (reach / grasp / transport /
+insert, segmentable by the gripper trace with the detector already in
+[`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py)) and report loss per stage instead of
+one pooled number. The prediction this makes is testable: **5k and 20k should separate at the grasp and
+insert stages specifically**, where tolerance is tightest, even though 5k wins pooled. Adding a
+smoothness term — the jerk of the *predicted chunk*, which needs no robot — would make the offline
+metric track the rollout ordering much better than loss alone.
+
+## 11.4 — π0.5: it never learned to reach
+
+**11 of 18 π0.5 trials failed at reach**, against 1 for ACT and 3 for SmolVLA — and the two scored
+successes were both annotated lucky, so its deliberate success rate is **0/18**. A policy that cannot
+position the gripper over the cylinder has not learned the first thing the task needs, and the operator's
+reading — that it frequently goes out of distribution and stalls — matches the failure profile.
+
+Three candidate causes, and they are separable:
+
+1. **Not enough training.** π0.5 saw 160k samples / 6.0 epochs, against ACT's 480k / 18.0 and SmolVLA's
+   1.28M / 47.9. Its eval loss was still falling (§10.7a), so it is genuinely underfit. **This is the
+   leading explanation and the cheapest to test**: more steps.
+2. **Action-expert-only fine-tuning may not be enough.** Only 693 M of 3.3 B parameters trained, with
+   `freeze_vision_encoder=true`. If the frozen SigLIP features do not resolve a white cylinder in a green
+   tray at this scale, no amount of action-expert training fixes the reach, because the information is
+   not in the representation. Testable by unfreezing the vision encoder, or by probing whether the frozen
+   features linearly predict cylinder position.
+3. **50 episodes is simply too few for a 3.3 B model.** The most likely truth is a combination of this
+   and (1).
+
+**What this does not support is "π0.5 is bad at this task".** It is the arm with the least training and
+the most parameters, evaluated at 6 epochs. The honest claim is narrower: **at this data and compute
+budget, π0.5 is not competitive, and its held-out loss gave no warning of that.**
+
+## 11.5 — Failure stages, and the idle-state observation
+
+**Terminal motion confirms the session note precisely.** The operator observed that ACT parks when the
+task is done while SmolVLA keeps moving regardless of the hole's state. Measured as joint motion in the
+final second before the episode was stopped:
+
+| | ACT | SmolVLA | π0.5 |
+|---|---|---|---|
+| Terminal motion | **5.7** | **20.2** — 3.6× ACT | 13.9 |
+
+SmolVLA 5k is the worst at 28.2, ACT 40k the best at 4.3. The operator's explanation for *why* is worth
+recording because it is a falsifiable mechanism: ACT appears to gate on the hole's appearance — it moves
+when colour shows near the hole and does not when the hole is faked white or black — whereas SmolVLA
+moves unconditionally.
+
+**The actionable conclusion is a data-collection change, and it reverses an earlier decision.**
+Phase 0.7 trims idle frames from *both* ends of every episode (§8), and the head trim is well justified:
+[phase06 F3](phase06_camera_ablation_training.md) showed the idle lead-in creates an attractor the policy
+cannot escape at the start. But the **tail** trim removes the only frames that teach "the task is done —
+now hold still." Keeping them is how a policy learns a terminal state.
+
+> **For the next dataset: trim the head, keep the tail.** A second or two of deliberate stillness after
+> the cylinder is seated and released, recorded on purpose rather than as operator lag. The head and the
+> tail are not the same frames and should not share a rule — which is a correction to §8's blanket
+> "trim idle" guidance, earned by this round's measurements.
+
+## 11.6 — Per-position: T8, and why the deeper analysis is blocked
+
+![per-position results](figs/phase07_eval_position.png)
+
+**T8 is the best spot at 3/6 (50%), as the session impression had it — but the interval is 18.8–81.2%
+and overlaps every other spot.** At 6 trials per spot nothing here is statistically separable; the
+honest statement is a ranking, not a difference. What *is* informative is the composition:
+
+| T8 | outcome |
+|---|---|
+| ACT 40k | ✅ success |
+| ACT 60k | ✅ success |
+| SmolVLA 5k · SmolVLA 20k · π0.5 10k | ❌ all failed at **reach** |
+| π0.5 5k | ⚠ "lucky — kicked in" |
+
+So T8 is not "an easy spot" — it is **the only spot where both ACT checkpoints succeeded**, while all
+three VLA arms never even reached it. That is a policy × position interaction, not a position effect,
+and it is the opposite of what a "this spot is easier for everyone" story predicts.
+
+### The training-demo comparison cannot be done yet — and the reason is fixable in a minute
+
+The plan was to ask whether T8's five training demonstrations are more consistent than the others. The
+per-spot consistency of the training data computes cleanly (using the verification report's validated
+grasp detector, reproducing its 27× block separation):
+
+| spot block | grasp `shoulder_pan` | within-block std | grasp-pose std | mean length |
+|---|---|---|---|---|
+| 0 | −1.96° | 0.22° | 1.65 | 794 |
+| 1 | +2.47° | 0.18° | 2.72 | 709 |
+| 2 | +7.29° | **0.09°** | **1.49** | 735 |
+| 3 | −5.74° | 0.41° | **4.40** | 730 |
+| 4 | −1.10° | 0.28° | 3.44 | 722 |
+| 5 | +3.77° | 0.36° | 2.59 | 694 |
+| 6 | −10.75° | 0.31° | 2.80 | 686 |
+| 7 | −6.67° | **0.49°** | 3.35 | **635** |
+| 8 | −0.91° | 0.32° | 2.60 | 684 |
+
+**But `T1`–`T9` were never pinned to physical spots.** §10.3 asked for the mapping to be written down
+before block 1 and it was not, so there is no way to say which row above is T8. Recovering it from the
+rollout data was attempted and **fails**: it needs the grasp bearing from trials that actually grasped,
+and with 41 of 54 trials failing there are only 1–4 usable grasps per spot. The result is not one-to-one
+(three labels claim block 0) and the smallest margin to the runner-up is **0.02°** against a 0.3°
+within-block demo spread. Recorded in
+[`results/phase07_eval/tray_spot_mapping.csv`](../results/phase07_eval/tray_spot_mapping.csv).
+
+> **The fix costs a minute and unlocks the whole analysis:** photograph the tray with the nine marks
+> labelled, write the mapping into §10.3, and this table joins to the rollout results directly. Do it
+> before round 2. A low success rate is itself what broke the recovery — the better the policies get,
+> the easier it is to recover afterwards, which is exactly backwards from when you need it.
+
+### The planned per-position analysis, once the mapping exists
+
+Cheap, and all of it runs off the already-cached training parquet:
+
+1. **Within-spot demonstration divergence** — pairwise DTW distance between the five demos at each spot,
+   over joint space and over the top-camera embedding. This is the Phase 0.5 divergence metric applied
+   per spot rather than per camera.
+2. **Grasp-pose and seated-pose spread** — already computed above; the question is whether it correlates
+   with per-spot rollout success across the nine.
+3. **Occlusion check** — whether the arm hides the cylinder from the bird's-eye camera more at some
+   spots, which §6's preflight was supposed to rule out but never measured per spot.
+4. **Distance to the nearest training spot**, for the off-grid placements in round 2.
+
+With nine spots, a correlation across them has n = 9 — enough to see a strong effect, not a subtle one.
+Treat it as hypothesis-generating for the data-collection design, not as a result.
+
+## 11.7 — The leftward miss, and why it is probably not the arm
+
+11 of 41 failures carry a direction: **6 left, 3 top, 2 right**. Phase 0.6 saw a systematic leftward
+insertion offset that turned out to be a `shoulder_pan` calibration drift
+([phase06](phase06_camera_ablation_training.md)), so a leftward skew deserves a hardware check.
+
+**The split by policy argues against hardware:**
+
+| | off left | off right | off top |
+|---|---|---|---|
+| ACT | 3 | 1 | 1 |
+| π0.5 | 3 | 0 | 1 |
+| SmolVLA | **0** | 1 | 1 |
+
+A calibration offset is a property of the robot and would bias all three families equally. SmolVLA
+missed left zero times. So this looks like a learned bias in ACT and π0.5 rather than a drifted frame —
+consistent with the §10.6 preflight replay having passed. Worth one `lerobot-replay` re-check before
+round 2 regardless, since it costs two minutes and the Phase 0.6 precedent is real.
+
+## 11.8 — What round 1 settles
+
+- **Checkpoints.** ACT: 40k and 60k are indistinguishable, so **use 40k** and take the 33% compute
+  saving (prediction 1, confirmed — this is the one clean win for the dial grid). SmolVLA: **use 20k**,
+  not the loss-optimal 5k. π0.5: unsettled, because neither checkpoint works; 10k is ahead on progress.
+- **Held-out loss does not rank policies on this task.** It inverted the family ordering completely. The
+  §10.7a proposal — un-normalised L1 in degrees — would not have fixed this either, since the failure is
+  per-frame-vs-rollout, not units. **Per-stage loss plus a smoothness term is the thing to try** (§11.3).
+- **Nothing here is a usable policy.** The best arm is 33% with 9 trials. The gap to a deployable policy
+  is a data problem before it is a model problem: 50 episodes, one operator, one grasp style, no failure
+  recovery anywhere in the training set.
+- **Round 2 cannot just be "more trials of the same".** At these rates, measuring 33% to ±9 points is
+  precision about a policy nobody wants to deploy. §12 is revised accordingly.
+
+# 12 — Round 2, once round 1 picks the checkpoints
+
+> **Revised 2026-10-12, after round 1.** The original sketch — 126 trials to measure each policy's
+> success rate to ±9 points — is now the wrong next move, and §11.8 says why: the best arm is 33%, so
+> that session would buy precision about a policy nobody would deploy. **More data beats more trials
+> at this point.** The original plan is kept below the line because it becomes right again once a
+> policy is good enough to be worth measuring.
+
+## What round 1 changed
+
+| | Original plan | Revised |
+|---|---|---|
+| Next bottleneck | measurement precision | **the training set** — 50 episodes, one operator, one grasp style, no failure recovery |
+| Trials | ~126 | defer until a policy clears ~50% |
+| First action | book a 5 h robot session | **collect stage-targeted data** (below), retrain SmolVLA |
+
+**Three things round 1 says to do first, in order.** These are the operator's proposals from the session
+debrief, with the round-1 evidence for each:
+
+1. **Collect stage-targeted data.** Round 1 failed at `grasp` (14 trials) and `insert` (9); **zero**
+   trials failed at transport. Recording more full episodes spends most of its frames on the stage that
+   already works. Collecting ~100 episodes of close-range reach-and-grasp and ~100 of insertion puts the
+   data where the failures are. Two caveats to settle before recording: a stage-only episode has a
+   different start distribution than the full task (the arm begins mid-task, holding the cylinder, which
+   the current task string does not describe), and mixing stage clips with full episodes needs either a
+   task string per stage or a single policy that handles both. Worth a short design note before the
+   first episode.
+2. **Add failure-recovery demonstrations.** Nothing in the training set shows what to do after a missed
+   grasp or a mis-aligned insert, so no policy can recover from either — and the two retry-then-succeed
+   trials in round 1 were the operator's luck, not learned behaviour. This is the single clearest gap.
+3. **Keep the tail idle frames** (§11.5). Trim the head, keep the tail, record a deliberate pause after
+   release. Costs nothing and directly targets the terminal-motion failure SmolVLA showed.
+
+**Training, per round 1 rather than per loss:** ACT needs no more steps (40k ≈ 60k); SmolVLA is the most
+promising and should be trained *longer* than 20k, not shorter, despite the eval curve; π0.5 needs both
+more steps and, probably, more than action-expert-only fine-tuning (§11.4).
+
+---
+
+## The original round-2 design, for when a policy is worth measuring
 
 | | Round 1 (§10) | Round 2 |
 |---|---|---|
@@ -852,7 +1149,7 @@ made with it in view.
 | Resolution | ±16 points — ranks, does not measure | **±9 points** at 50%, per [phase06 §4b](phase06_camera_ablation_training.md) |
 | Time | ~2–2.5 h | ~4–5 h, two sessions |
 
-Three things round 2 adds:
+Three things it adds:
 
 1. **Enough trials to quote a rate.** 30 per policy is the [phase06 §4b](phase06_camera_ablation_training.md)
    figure: ±9 points at 50%, where 20 trials gives ±11 and would miss a real 15-point effect.
@@ -864,6 +1161,9 @@ Three things round 2 adds:
    is comparable to the effect size, so a single-seed ranking is not a policy-family result. This is the
    expensive item — 3 seeds × 3 policies is 9 training runs — and it is what [08 §A.4](../08_data_quality_research.md)
    already budgets for the dial grid.
+
+**Whenever round 2 runs, write down the `T1`–`T9` mapping first** (§11.6). It is a minute of work and it
+is the only thing blocking the per-position analysis.
 
 **`phase07_log.csv` is still missing** and round 2 does not need it, but the per-episode `success` and
 `stage` of the *training* data are not recoverable ([verification §6](phase07_data_verification.md)) —
