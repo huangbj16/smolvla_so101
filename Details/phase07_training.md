@@ -12,7 +12,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 |---|---|---|
 | **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
 | **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [Colab](../colab_phase07_pi05_Colab.ipynb) · [4090](../colab_phase07_pi05.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve still to read (§4) |
+| **π0.5** | [Colab](../colab_phase07_pi05_Colab.ipynb) · [4090](../colab_phase07_pi05.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
 
 ---
 
@@ -37,13 +37,24 @@ the list, which would hold out exactly 45–49 — the only unmarked placements 
 and making validation measure nothing but off-grid generalisation. Reordering the episode list puts a
 balanced holdout in the tail instead: the last episode of blocks 2, 4, 6, 8 plus one off-grid.
 
-> ⚠ **Held-out loss does not compare across the three.** They optimise different objectives — ACT is
-> L1 + KLD over a VAE latent, SmolVLA and π0.5 are flow-matching — and they normalise actions
-> differently (ACT/SmolVLA `MEAN_STD`, π0.5 `QUANTILES`). The logs make this plain: ACT reports
-> `l1_loss`/`kld_loss`, SmolVLA `losses_after_forward`, π0.5 a bare `loss`. They share one wandb project
-> so that **conditions and seeds within a policy** overlay, which is what the dial grid needs. Reading
-> ACT's 0.185 against SmolVLA's or π0.5's number is meaningless. **Across policy families, only rollout
-> success answers Q2.**
+> ⚠ **Held-out loss does not compare ACT against either VLA.** They optimise different objectives — ACT
+> is L1 + KLD over a VAE latent, SmolVLA and π0.5 are flow-matching — and the logs make it plain: ACT
+> reports `l1_loss`/`kld_loss`, SmolVLA `losses_after_forward`, π0.5 a bare `loss`. An L1 on predicted
+> actions and an MSE on a flow-matching velocity residual have no conversion between them, so reading
+> ACT's 0.185 against either VLA's number is meaningless in both directions.
+>
+> **Refined 2026-10-12: SmolVLA and π0.5 *do* compare, up to one measurable factor.** This paragraph
+> originally said all three were incomparable, and that was too strong. Checked in the source: the two
+> VLAs share the objective, the reduction over the real 6 action dims, the `Beta(1.5, 1.0)` flow
+> timestep distribution and the Gaussian noise. They differ only in the action normaliser — `MEAN_STD`
+> against π0.5's `QUANTILES` — and that factor is computable from the dataset's own statistics rather
+> than unknown: ≈1.3× deflation of π0.5's loss. Worked through in
+> [phase07_portable_rig.md §10.7a](phase07_portable_rig.md), which is also where the π0.5 curve finally
+> gets read.
+>
+> They share one wandb project so that **conditions and seeds within a policy** overlay, which is what
+> the dial grid needs. **Across policy families, still only rollout success answers Q2** — a loss gap,
+> even a comparable one, is the wrong units for the question.
 
 **Hyperparameters are per-policy on purpose.** Each uses its own published recipe; [08 §A.4](../08_data_quality_research.md)
 holds hyperparameters fixed *after one clean run*, not identical across policy families. **Freeze what
@@ -59,7 +70,7 @@ Measured, not estimated — each row comes from that policy's own smoke test or 
 | Trainable params | 51.6 M (all) | 99.9 M of 450 M | 693 M of 3.3 B |
 | Batch × steps | 8 × 60,000 | 64 × 20,000 | 16 × **10,000** |
 | Samples / **epochs** | 480 k / **18.0** | 1.28 M / **47.9** | 160 k / **6.0** |
-| Best eval loss | 0.1792 @ 50k (+3% at end) | **0.1258 @ 5k (+61% at end)** | **not yet read** (§4) |
+| Best eval loss | 0.1792 @ 50k (+3% at end) | **0.1258 @ 5k (+61% at end)** | **≈0.0515 @ 10k — still falling** (§4) |
 | Throughput | 4.47 step/s | 2.00 s/step | 2.06 s/step |
 | **Wall clock** | **3.85 h** (done) | **14.2 h** (done) | **5.7 h** compute, 22 h elapsed (done) |
 | Peak GPU | 3.8 GiB | 16.5 GiB | 18.2 GiB (smoke) |
@@ -265,13 +276,31 @@ That rate also identifies the card independently of the job name: at 2.06 s/step
 L4, which was projected 2.5–3.5× slower, i.e. 5–7 s/step. **The L4 projection of 14–19 h stays
 untested**, and so does the 4090 projection of 17–25 h.
 
-### Still missing: the held-out loss curve
+### The held-out loss curve — read 2026-10-12: π0.5 does **not** overfit
 
-The Hub stores weights, optimizer state and configuration — **not metrics**. The four `eval_loss` values
-at 2,500 / 5,000 / 7,500 / 10,000 exist only in wandb run `sxpkx9st` of `phase07-policy-transfer`, which
-needs credentials this machine does not have. **So nothing verified here says whether π0.5 overfits the
-way SmolVLA did**, and §3 is what makes that the urgent number: SmolVLA bottomed out at 12 epochs on
-this same dataset, and π0.5 got 6.0.
+**It is still falling at the last checkpoint.** Read off wandb run
+[`sxpkx9st`](https://forge.coreweave.com/wandb/bj-huang-university-of-toronto/phase07-policy-transfer/runs/sxpkx9st):
+eval loss decreases monotonically from ≈0.0532 at 2,500 to ≈0.0515 by 7,500, with **no minimum reached
+anywhere in range**. Compare §3, where SmolVLA bottomed out at 5,000 on this same dataset and ended
++61% above it.
+
+**So the two flow-matching VLAs behave oppositely on identical data, holdout and seed** — SmolVLA
+overfitting by 48 epochs, π0.5 still underfit at 6.0. That is a Q2 result in itself, and it says the
+10,000 steps the A100 inherited from the L4 notebook were **short rather than merely different**: the
+run stopped while the curve was still improving, on a card that could have afforded 30,000 in ~16 h.
+
+Two consequences:
+
+- **Which π0.5 checkpoint to roll out is no longer a coin flip.** 010000 should be the better one, and
+  the round-1 run book still rolls out both — 18 of 54 trials — because it is the only on-robot evidence
+  either way, but as a confirmation rather than a gamble.
+- **π0.5 has the lowest held-out loss of the three.** How far that carries is the subject of
+  [phase07_portable_rig.md §10.7a](phase07_portable_rig.md): sound against SmolVLA after a ≈1.3×
+  normalisation correction, unavailable against ACT, and in no case a statement about task success.
+
+The Hub stores weights, optimizer state and configuration — **not metrics** — which is why this needed
+wandb at all, and why [`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py) exists as
+the credential-free alternative.
 
 Two ways to fill it in, answering slightly different questions:
 
@@ -530,11 +559,12 @@ against an 833 ms budget. Not yet run.
 
 - **Rollouts.** Interleaved across checkpoints, blind-scored, on the robot. Nothing here substitutes for
   that, and §2 explains why the loss numbers cannot settle Q2. → [§10](phase07_portable_rig.md)
-- **π0.5's held-out curve.** Four checkpoints sit on the Hub with no loss beside them (§4). The run book
-  deliberately lets the **robot** pick π0.5's checkpoint rather than waiting on this, so it is no longer
-  a blocker — but reading it afterwards (off wandb run `sxpkx9st`, or by re-measuring) answers a better
-  question than it would have before: **did held-out loss predict the robot's ordering**, across three
-  policy families on one dataset? [§10.7](phase07_portable_rig.md)
+- **π0.5's held-out curve — done 2026-10-12.** It does not overfit; it is still falling at 10k (§4), so
+  π0.5 is underfit rather than over-trained and 10,000 steps was short. What remains open is the
+  question that is now worth more than checkpoint selection ever was: **did held-out loss predict the
+  robot's ordering**, across three policy families on one dataset?
+  [§10.7a](phase07_portable_rig.md) sets out how far the cross-family comparison carries and proposes
+  the policy-agnostic metric (un-normalised L1 in degrees) that would settle it.
 - **Pre-registration.** [08 §A.2](../08_data_quality_research.md) asks for predicted orderings committed
   *before* the comparison is read. All three training runs are now done, so the *loss* comparison can no
   longer be pre-registered — but the **rollouts** have not started. A six-row predicted ordering with

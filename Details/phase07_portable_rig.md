@@ -420,23 +420,34 @@ Three things follow, and they are what make §10.4's commands as simple as they 
    316 ms of an 833 ms budget. Leaving RTC off keeps one fewer thing different between the arms.
 3. **`n_action_steps=25` is affordable for every arm**, which is what §10.2 spends it on.
 
-**Revert the Phase 0.6 ACT patch before the session.** It is **still applied** to the local lerobot
-checkout — the bench above emitted `WARNING: Missing key(s) when loading model:
-{'model.camera_id_embed.weight'}` on both ACT arms, which is that patch reporting that a Phase 0.7
-checkpoint has no camera-identity embedding to load:
+**The Phase 0.6 ACT patch is reverted — done 2026-10-12.** It had been left applied to the local lerobot
+checkout since the F2 session, and the first bench run emitted `WARNING: Missing key(s) when loading
+model: {'model.camera_id_embed.weight'}` on both ACT arms.
 
 ```bash
 git -C /home/bj/code/lerobot checkout src/lerobot/policies/act/modeling_act.py
 ```
 
-[phase06 F2](phase06_camera_ablation_training.md) verified that a non-F2 checkpoint under the patched
-ACT keeps the embedding at its zero-init, and zero added to the features is exactly stock ACT — so this
-is **not** changing the Phase 0.7 results, and the bench numbers above stand. Revert it anyway, for one
-reason: that warning is indistinguishable from the warning a *real* state-dict mismatch produces, and
-lerobot does not raise on either. With the patch reverted, a clean ACT load prints nothing, so any
-warning that does appear means something. The only asset that still needs the patch is
-`act_both_s1000_camemb`, which belongs to Phase 0.6 and is not used here — re-apply
-`scripts/patch_act_camera_embed.py` if the outstanding F3 blocks 2–3 are ever picked up.
+**It did not affect the rollout, and that is measured rather than argued.** The patch adds a
+`camera_id_embed` that is `nn.init.zeros_`-initialised and added to the camera features; a Phase 0.7
+checkpoint carries no such key, so it stays zero and `cam_features + 0` is stock ACT. Checked by
+predicting an action from the same fixed input under both versions of the file:
+
+| | action (6 joints, degrees) |
+|---|---|
+| patched | `[4.041168, -43.549736, 43.588104, 26.216066, 5.247201, 21.356627]` |
+| stock | `[4.041168, -43.549736, 43.588104, 26.216066, 5.247201, 21.356627]` |
+
+**Bit-identical, max abs diff 0.0.** So the §10.1 bench numbers taken under the patch stand unchanged,
+and no Phase 0.6 result that used a non-F2 checkpoint is in question either.
+
+Reverted anyway, for two reasons. The camera-identity embedding was tested in F2 and
+**found no benefit**, so nothing depends on keeping it. And the warning it produced is textually
+indistinguishable from the one a *real* state-dict mismatch produces — which lerobot logs rather than
+raises, so it is the kind of thing that silently voids a run. A clean ACT load now prints nothing, which
+means any warning that does appear from here is worth stopping for. If the outstanding Phase 0.6 F3
+blocks 2–3 are ever picked up, `act_both_s1000_camemb` is the one asset that needs
+`scripts/patch_act_camera_embed.py` re-applied.
 
 **SmolVLA fetches its VLM backbone at load time.** `HuggingFaceTB/SmolVLM2-500M-Video-Instruct` is
 pulled from the Hub on every `from_pretrained`, not bundled in the checkpoint. It is in
@@ -477,6 +488,16 @@ behind it. Round 1 is entirely in-distribution. The five off-grid placements of 
 **not** evaluated here; they test a different question (the memorisation hypothesis of
 [training §3](phase07_training.md)) and are deferred to round 2, so that there is an in-distribution
 baseline to read them against.
+
+> **Assign `T1`–`T9` to the nine physical marks once, write the mapping down here, and do not change
+> it.** The labels in the schedule are arbitrary until they are pinned to the board. The recording
+> order is recoverable — [the verification report §5](phase07_data_verification.md) separates the nine
+> blocks by grasp `shoulder_pan` at 27×, and [`figs/phase07_tray_spots.png`](figs/phase07_tray_spots.png)
+> plots them — so the natural choice is `T1`–`T9` in the order episodes 0–44 visited them, which makes
+> `T1` the spot episodes 0–4 used and lets any per-spot result be read against the training data.
+>
+> Mapping (fill in before block 1): `T1` ___ · `T2` ___ · `T3` ___ · `T4` ___ · `T5` ___ · `T6` ___ ·
+> `T7` ___ · `T8` ___ · `T9` ___
 
 The schedule is pre-generated into
 [phase07_eval_log.csv](phase07_eval_log.csv) — 54 rows, outcome columns blank:
@@ -631,15 +652,35 @@ Carried from [phase06 §4a](phase06_camera_ablation_training.md), with the Phase
 **Preflight — the rig is reported untouched since the 2026-10-03 recording, so this verifies rather than
 rebuilds.** Both checks are cheap and both are hard stops:
 
-1. **Replay a recorded episode** (`lerobot-replay`, [01 Step 4](../01_setup_robot.md)). This is the only
-   acceptance test that separates "the calibration frame is right" from "it looks right" — it plays
-   recorded actions straight to the servos with no policy, no camera and no feedback, so a miss is
-   unambiguously the physical↔encoder mapping. It is how the Phase 0.6 `shoulder_pan` drift was caught
-   ([phase06](phase06_camera_ablation_training.md) §"The leftward insertion offset"). The Phase 0.7
-   calibration pair is already live and byte-identical to
-   [`calibration/current/`](calibration/current/) — verified 2026-10-12 — so nothing needs restoring.
-2. **Compare the top camera against the reference still** in [`figs/`](figs/) with the arm at home.
-   §3's reference still is the "is the board set up right" check.
+**1. Replay episode 0 of the portable-rig dataset.** This is the only acceptance test that separates
+"the calibration frame is right" from "it looks right": `lerobot-replay` plays a recorded episode's
+**actions** straight to the servos — no policy, no camera, no feedback — so if it no longer reaches
+what it reached on 2026-10-03, the problem is physical and nothing about the policies is in question.
+It is how the Phase 0.6 `shoulder_pan` drift was caught
+([phase06](phase06_camera_ablation_training.md) §"The leftward insertion offset").
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912 --dataset.episode=0
+```
+
+Before running it: **arm at the home pose**, cylinder standing in the tray at **the spot episodes 0–4
+used** (the first of the nine grid blocks — [`figs/phase07_tray_spots.png`](figs/phase07_tray_spots.png)
+shows the layout), fixture on its outline. Then watch the two moments that matter — **the grasp** and
+**the insertion** — and compare against the recorded video of the same episode.
+
+- **The raw dataset, not the trimmed one.** Episode 0 is 878 frames (29.3 s) raw against 743 (24.8 s)
+  trimmed, and the 135-frame difference is exactly the idle lead-in and tail. The raw episode therefore
+  **starts at the home pose**, which is where the arm is; replaying the trimmed copy would begin with
+  the arm already mid-reach and snap it there from home. The raw copy is also the archival record of
+  what the session actually did.
+- **A clean replay clears the arm, the base, the fixture and the calibration frame in one go.** A miss
+  means something physical moved, and [`scripts/joint_offset_check.py`](../scripts/joint_offset_check.py)
+  plus [phase06 §8](phase06_camera_ablation_training.md) turn the miss into a correction.
+- Nothing needs restoring first: the live calibration pair is byte-identical to
+  [`calibration/current/`](calibration/current/), verified 2026-10-12.
+
+**2. Compare the top camera against the reference still** in [`figs/`](figs/) with the arm at home.
+§3's reference still is the "is the board set up right" check.
 
 If either fails, fix it *before* any rollout: a rig shift and a policy failure are indistinguishable
 afterwards, and 54 trials is too many to throw away.
@@ -668,28 +709,83 @@ direct test of the §2 prediction that the bird's-eye view fixes reach.
 is read, and [training §5](phase07_training.md) notes that the loss comparison can no longer be
 pre-registered — all three runs are done — but **the rollouts can, because they have not started.**
 
-**These are the doc author's predictions and reasoning, not yet yours. Confirm, edit or replace them,
-then commit — and do it before block 1, or this subsection is worthless.**
+**Committed 2026-10-12, before any rollout.** Predictions 1–3 and 5 are the operator's call;
+4 and 6 are deliberately left open. Reasoning is recorded so the post-hoc read is honest about which
+predictions were well-founded and which were guesses.
 
 | # | Prediction | Confidence | Reasoning |
 |---|---|---|---|
 | 1 | `act40k` ≈ `act60k`, within 2/9 | **high** | Eval loss is flat from 20k and the 20k–60k spread is checkpoint wobble. If it holds, the dial grid drops ACT to ~30k steps and halves its compute across 19 conditions × 3 seeds |
-| 2 | `sv5k` > `sv20k` | **medium** | Held-out loss rises monotonically +61%, which is far stronger than the sub-wobble differences phase06 dismissed. But loss↛success is exactly what phase06 established, so `sv20k` acting better than its loss is a live possibility |
-| 3 | `pi10k` > `pi5k` | **medium-low** | π0.5 got only 6.0 epochs, so it is probably still underfit rather than overfit — more training should still help. If this is *wrong*, π0.5 overfits faster than SmolVLA did and 002500 matters |
-| 4 | At matched 320k samples, `act40k` ≥ `sv5k` | **low** | 45 episodes is tiny for a 100 M-parameter VLA, and ACT's from-scratch chunked inductive bias suits a single-task, single-operator, deliberately low-variance dataset. Against that, SmolVLA carries pretrained visual and language priors that ACT has none of. Genuinely uncertain, and the cleanest Q2 result round 1 can produce |
-| 5 | π0.5 is the weakest family | **medium** | It is the sample-starved arm — 160k samples against 320k/480k — and the largest model. A confound, not a verdict on π0.5 |
-| 6 | `insert` overtakes `reach` as the dominant `fail_stage` | **medium** | §2's whole claim for the bird's-eye view is that it fixes reach, where the third-person top view was aliased and `top+wrist` under-reached 6/10. If reach failures stay dominant, that claim is in trouble |
+| 2 | `sv5k` > `sv20k` | **medium** | Held-out loss rises monotonically +61%, far stronger than the sub-wobble differences phase06 dismissed. But loss↛success is what phase06 established, so `sv20k` acting better than its loss is live |
+| 3 | `pi10k` > `pi5k` | **high** *(raised)* | **The curve was read** (§10.7a): π0.5's eval loss is still falling at the last checkpoint, with no minimum anywhere in range. It is underfit, not overfit — so the later checkpoint should be the better one, and the SmolVLA-style reversal that motivated running both is ruled out |
+| 4 | At matched 320k samples, `act40k` vs `sv5k` | **open — no prediction** | 45 episodes is tiny for a 100 M-parameter VLA and ACT's from-scratch chunked bias suits a single-task, low-variance dataset; against that, SmolVLA carries pretrained visual and language priors ACT has none of. Genuinely uncertain, and the cleanest Q2 result round 1 can produce |
+| 5 | **π0.5 is the strongest family** | **medium** | Operator's call, on held-out loss: π0.5 sits at ≈0.052 against SmolVLA's best 0.126 and ACT's 0.179, and it is the only one still improving. §10.7a sets out how far that comparison carries — it is sound against SmolVLA and not available against ACT |
+| 6 | Dominant `fail_stage` | **open — no prediction** | §2's claim for the bird's-eye view is that it fixes reach, where the third-person top view was aliased and `top+wrist` under-reached 6/10. Whether `insert` overtakes `reach` is what the column is there to find out |
+
+> **Prediction 5 reverses the original draft, which had π0.5 weakest on a sample-count argument** —
+> 160k samples against ACT's 480k and SmolVLA's 320k. That argument is not wrong, but it was made
+> before the loss curve was read, and an underfit policy that is still the best of the three on
+> held-out loss is a stronger signal than its epoch budget is a worry. Both readings are on the record;
+> the rollouts settle it.
 
 **What would change the plan.** If every arm scores ≤1/9, the problem is the rig or the task, not the
 checkpoints — stop and diagnose before spending round 2. If all six are indistinguishable at 7–9/9, the
 task is too easy to separate policies and round 2 needs the off-grid spots to create headroom.
 
-**After the session, read π0.5's loss curve.** Either off wandb run `sxpkx9st`, or by re-measuring with
-[`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py) (all four checkpoints are on the
-Hub; it repeats each under three seeds and prints the noise floor, which π0.5's flow-matching loss
-needs). The question is no longer which checkpoint to use — the robot will have answered that — but
-**whether held-out loss predicted the robot's ordering**, across three policy families on one dataset.
-That is a genuinely useful Q2 result and it is free once the rollouts are done.
+## 10.7a — π0.5's held-out curve, and how far it compares across families
+
+**Read from wandb run [`sxpkx9st`](https://forge.coreweave.com/wandb/bj-huang-university-of-toronto/phase07-policy-transfer/runs/sxpkx9st) on 2026-10-12**, closing the gap
+[training §4](phase07_training.md) left open. The curve **falls monotonically across the whole logged
+range** — ≈0.0532 at 2,500 down to ≈0.0515 by 7,500 — with **no minimum reached**.
+
+Two things follow, and they point opposite ways:
+
+1. **π0.5 does not overfit on this dataset**, where SmolVLA did badly at the same 45 episodes. At 6.0
+   epochs it is still underfit, so `pi10k` should beat `pi5k` (prediction 3) and **more steps would
+   probably still help** — the 10,000 the A100 inherited from the L4 notebook was, in hindsight, short
+   rather than merely different. That is a Q2-relevant result in its own right: two flow-matching VLAs
+   on identical data, holdout and seed, with opposite overfitting behaviour at 48 vs 6 epochs.
+2. **The flat eval curve means the checkpoint question was never the risk for π0.5** that it was for
+   SmolVLA. Running both π0.5 arms is still the right call — it costs 18 of 54 trials and it is the only
+   on-robot evidence either way — but it is now a confirmation rather than a coin flip.
+
+### How far 0.052 vs 0.126 vs 0.179 actually carries
+
+[training §1](phase07_training.md) warns that held-out loss does not compare across the three. That
+warning is **right about ACT and too strong about the other two**, and the difference matters because
+prediction 5 rests on it. Checked in the source and in the dataset's own statistics:
+
+| | ACT | SmolVLA | π0.5 |
+|---|---|---|---|
+| Objective | **L1 + KLD on actions** | flow-matching MSE on the velocity field | flow-matching MSE on the velocity field |
+| Reduced over | 6 action dims | 6 — truncated before the mean (`modeling_smolvla.py:303`) | 6 — truncated before the mean (`modeling_pi05.py:1081`) |
+| Flow timestep sampling | — | `Beta(1.5, 1.0)`, scale 0.999, offset 0.001 | **identical** |
+| Action normalisation | `MEAN_STD` | `MEAN_STD` | **`QUANTILES`** |
+
+- **ACT against either VLA: no comparison exists.** An L1 on predicted actions and an MSE on a
+  flow-matching velocity residual are different quantities with no conversion between them. Nothing can
+  be said about ACT from these numbers, in either direction.
+- **SmolVLA against π0.5: comparable, up to one measurable factor.** Same objective, same reduction,
+  same timestep distribution, same Gaussian noise — the two were more alike than the blanket warning
+  implied. The only difference is the action normaliser, and its size can be computed from the
+  dataset's statistics rather than guessed: `QUANTILES` divides by `(q99−q01)/2`, which across the six
+  joints is **1.36× the `std`** that `MEAN_STD` divides by, so π0.5's targets are ≈0.74× SmolVLA's.
+  Through the flow target `ε − a` that is a **≈1.3× deflation** of π0.5's loss. Correcting for it puts
+  π0.5 at an effective ≈0.067 against SmolVLA's best 0.126 — **still roughly half**, so the gap
+  survives the correction and prediction 5 is well-founded *against SmolVLA*.
+- **The one thing none of it establishes is task success.** [phase06 §2](phase06_camera_ablation_training.md)
+  is the standing counterexample: held-out loss separated three conditions by less than one curve's
+  wobble while the robot showed a decisive double dissociation. A 2× loss gap is far larger than that —
+  but it is still the wrong units for the question, and it says nothing about ACT, which is half of
+  prediction 5.
+
+**What would settle it properly, and is cheap.** Evaluate all three on one policy-agnostic metric:
+L1 between the predicted action chunk and the ground truth on the held-out episodes, **un-normalised,
+in degrees**. That is the same quantity for every policy family, it is directly interpretable, and
+every piece needed already exists in
+[`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py) — it would take swapping
+`policy.forward`'s loss for `predict_action_chunk` plus an inverse-normalisation step. Worth doing
+**after** the rollouts, so the loss-vs-success comparison is not read before the robot has spoken.
 
 ---
 
