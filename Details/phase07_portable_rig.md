@@ -306,7 +306,7 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 | 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
 | 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
 | 4a ✅ | **Round 1 run book**: six arms, 54 trials, two checkpoints per policy, mirrored interleave, 9 grid spots | **§10** · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
-| 4 ✅ | **Round 1 run and scored 2026-10-12** — 54 trials. SmolVLA 6/18, ACT 5/18, π0.5 2/18 (0/18 excluding the two the operator called lucky) | **§11** · [phase07_eval_log.csv](phase07_eval_log.csv) |
+| 4 ✅ | **Round 1 run and scored 2026-10-12** — 54 trials. SmolVLA 6/18, ACT 5/18, π0.5 2/18 (0/18 excluding the two the operator called lucky). Held-out loss ranked the families backwards, and spot difficulty turned out to be policy-specific | **§11** · [phase07_eval_log.csv](phase07_eval_log.csv) |
 | 5 | Round 2: success rates at ±9 points, plus the off-grid spots and seeds | **§12** |
 
 Train/eval split for all three: holdout **`[9, 19, 29, 39, 49]`**, placed in the tail of
@@ -540,15 +540,14 @@ behind it. Round 1 is entirely in-distribution. The five off-grid placements of 
 [training §3](phase07_training.md)) and are deferred to round 2, so that there is an in-distribution
 baseline to read them against.
 
-> **Assign `T1`–`T9` to the nine physical marks once, write the mapping down here, and do not change
-> it.** The labels in the schedule are arbitrary until they are pinned to the board. The recording
-> order is recoverable — [the verification report §5](phase07_data_verification.md) separates the nine
-> blocks by grasp `shoulder_pan` at 27×, and [`figs/phase07_tray_spots.png`](figs/phase07_tray_spots.png)
-> plots them — so the natural choice is `T1`–`T9` in the order episodes 0–44 visited them, which makes
-> `T1` the spot episodes 0–4 used and lets any per-spot result be read against the training data.
+> **`T1`–`T9` are the nine spots in recording order** — confirmed 2026-10-12. `T`*k* is the *k*-th
+> spot visited during collection, so its five demonstrations are episodes 5(*k*−1)…5(*k*−1)+4 and
+> `T1` is the spot episodes 0–4 used. Verified against the operator's dataset screenshots and against
+> the grid geometry (§11.6): laid out 3×3 row-major the grasp bearing is a regular raster, +4.1…+5.8°
+> along each row and −3.5…−5.6° down each column.
 >
-> Mapping (fill in before block 1): `T1` ___ · `T2` ___ · `T3` ___ · `T4` ___ · `T5` ___ · `T6` ___ ·
-> `T7` ___ · `T8` ___ · `T9` ___
+> This mapping is what lets rollout outcomes be joined to the demonstrations recorded at the same
+> spot, which is the whole of §11.6. **Keep using it; do not relabel.**
 
 The schedule is pre-generated into
 [phase07_eval_log.csv](phase07_eval_log.csv) — 54 rows, outcome columns blank:
@@ -849,6 +848,32 @@ recordings by [`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py), w
 every number and figure below. Summary tables:
 [`results/phase07_eval/`](../results/phase07_eval/).
 
+## The four findings to carry forward
+
+1. **Held-out loss does not predict real-robot performance — it ranked the three families exactly
+   backwards.** The cause is compounding error: loss is a *per-frame, teacher-forced* quantity scored
+   from states the demonstrator reached, while a rollout is scored from states the policy reached.
+   §11.3.
+2. **A smoothness metric computed from the predicted chunk would close most of that gap, and it can be
+   logged to wandb during training with no change to lerobot's training loop.** §11.3a gives the patch.
+3. **Keep the tail idle frames.** Trim the head (the [F3](phase06_camera_ablation_training.md) idle
+   attractor is real), but the tail is the only place a policy can learn "the task is done — hold
+   still", and its absence is measurable: SmolVLA moves 3.6× as much as ACT in the final second. §11.5.
+4. **Tray-spot difficulty is a property of the *policy*, not of the position.** The three families
+   disagree about which spots are hard (Kendall's W = 0.19; a concordance that low arises from
+   sampling noise alone only 3% of the time), and ACT's best spot is SmolVLA's worst. §11.6.
+
+> **Finding 4 is the one with reach beyond this phase.** [08 §A.1](../08_data_quality_research.md)
+> records that the 2025 causal-quality line — CUPID and its successors — paid for rigour by making
+> quality "**tied to one policy** … the score only holds for that policy," and that 2026's reaction
+> was to retreat to model-free proxies (RINSE, PSD scores) on the argument that policy-in-the-loop
+> curation does not scale. **Round 1 is a direct empirical instance of the thing the model-free line
+> assumes away**: the same 50 demonstrations, with everything held fixed but the policy, produce
+> opposite per-position outcomes. A model-free score cannot express that, because the quantity it is
+> estimating does not exist independently of the learner. It does not make model-free proxies useless —
+> it bounds what they can ever claim, and it says a Q2 answer must be reported per policy family rather
+> than pooled.
+
 **Headline: nothing works well yet, and the held-out loss ranking was exactly inverted.** The policy
 with the *lowest* held-out loss (π0.5, §10.7a) is the only one that never completed the task on its own;
 the policy whose loss said it was 61% overfit (SmolVLA 20k) is the most capable thing in the set.
@@ -951,6 +976,66 @@ insert stages specifically**, where tolerance is tightest, even though 5k wins p
 smoothness term — the jerk of the *predicted chunk*, which needs no robot — would make the offline
 metric track the rollout ordering much better than loss alone.
 
+## 11.3a — Logging chunk smoothness to wandb during training: yes, and it is small
+
+**The training loop needs no change at all.** `MetricsTracker.update_metrics`
+(`lerobot/utils/logging_utils.py:163`) *auto-registers an `AverageMeter` for every new scalar key* it
+is handed, and `update_policy` passes the policy's whole `output_dict` into it
+(`lerobot_train.py:206-207`). So any extra scalar a policy returns alongside its loss is averaged over
+the log window and shipped to wandb automatically — the same route `l1_loss` and `losses_after_forward`
+already take.
+
+That gives two insertion points, and they answer different questions.
+
+**(a) Train-time, for ACT — one line in the policy.** ACT's `forward` already has the predicted chunk
+in hand, so the jerk of its own output is free:
+
+```python
+# in ACTPolicy.forward, beside the existing l1_loss / kld_loss entries
+jerk = actions_hat.diff(dim=1).diff(dim=1).std(dim=(1, 2)).mean()
+loss_dict["chunk_jerk"] = jerk.item()
+```
+
+It appears in wandb as `chunk_jerk` with no further work. **This does not transfer to the VLAs as
+written:** SmolVLA and π0.5 compute a flow-matching velocity-field loss and never materialise an action
+chunk during `forward`, so there is nothing to differentiate. Getting one costs a full denoising loop
+(`num_steps=10` extra forward passes), which is far too expensive per training step.
+
+**(b) Eval-time, for all three — the one actually worth doing.** The eval branch
+(`lerobot_train.py:653-674`) already pays for a pass over the held-out set at `eval_steps` cadence, and
+at that cadence a denoising loop is affordable. Call `predict_action_chunk` on each eval batch, take
+the jerk, and log it beside `eval_loss`:
+
+```python
+# inside the `if is_eval_step:` loop, after `loss, _ = policy.forward(eval_batch)`
+chunk = policy.predict_action_chunk(eval_batch)          # (B, chunk_size, action_dim)
+jerk_sum += chunk.diff(dim=1).diff(dim=1).std(dim=(1, 2)).mean().item()
+...
+# beside the existing eval_loss log
+wandb_logger.log_dict({"eval_loss": eval_loss, "eval_chunk_jerk": jerk}, step=step, mode="eval")
+```
+
+**Why (b) is the right one.** It measures the jerk of *the chunk the policy would actually execute*,
+on held-out observations, for every family on one scale — which is precisely the quantity §11.3 found
+tracks rollout behaviour where loss does not. Normalise per joint by the training-set σ (as
+[`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py) does) so the number is comparable
+across policies, and it becomes a second eval curve to read beside the loss.
+
+**Cost.** One denoising loop per eval batch. π0.5's eval pass is ~5 held-out episodes; at the measured
+277 ms per chunk this is well under a minute per eval point, against `eval_steps` of 2,500. Negligible.
+
+**The prediction this makes, worth pre-registering before it is run:** retrain SmolVLA with
+`eval_chunk_jerk` logged, and the 5k checkpoint should show **~2× the jerk of 20k** — matching the
+2.0× measured on the robot (§11.3), and visible *without* a robot. If it does, the metric is a usable
+offline proxy for the thing loss misses, and the dial grid can be scored on loss **and** jerk.
+
+> **This has a literature hook.** [08 §A.1](../08_data_quality_research.md) records RINSE (Kulkarni,
+> Dhar & Cui, 2026) scoring *demonstrations* by smoothness — spectral arc length plus a
+> trajectory-envelope distance — and a PSD-based successor. Round 1 points at the mirror image:
+> smoothness of the **policy's output**, not of the training data. The two are complementary, and the
+> same spectral-arc-length statistic would work here in place of the plain second difference; jerk is
+> the cheaper first cut.
+
 ## 11.4 — π0.5: it never learned to reach
 
 **11 of 18 π0.5 trials failed at reach**, against 1 for ACT and 3 for SmolVLA — and the two scored
@@ -1001,71 +1086,101 @@ now hold still." Keeping them is how a policy learns a terminal state.
 > tail are not the same frames and should not share a rule — which is a correction to §8's blanket
 > "trim idle" guidance, earned by this round's measurements.
 
-## 11.6 — Per-position: T8, and why the deeper analysis is blocked
+## 11.6 — Per-position: difficulty belongs to the policy, not the spot
 
-![per-position results](figs/phase07_eval_position.png)
+**The mapping is known as of 2026-10-12** — `T`*k* is the *k*-th spot in recording order, so its five
+demonstrations are episodes 5(*k*−1)…5(*k*−1)+4. Confirmed twice over: the operator's dataset
+screenshots (episode 1 → position 1, episode 9 → position 2) and the grid geometry itself. Laid out
+3×3 row-major, the grasp bearing moves **+4.1…+5.8°** along every row and **−3.5…−5.6°** down every
+column — a regular raster, which is only true if the labelling is right.
 
-**T8 is the best spot at 3/6 (50%), as the session impression had it — but the interval is 18.8–81.2%
-and overlaps every other spot.** At 6 trials per spot nothing here is statistically separable; the
-honest statement is a ranking, not a difference. What *is* informative is the composition:
+Analysis: [`analyze_phase07_positions.py`](../scripts/analyze_phase07_positions.py) ·
+[`per_position_joined.csv`](../results/phase07_eval/per_position_joined.csv).
 
-| T8 | outcome |
-|---|---|
-| ACT 40k | ✅ success |
-| ACT 60k | ✅ success |
-| SmolVLA 5k · SmolVLA 20k · π0.5 10k | ❌ all failed at **reach** |
-| π0.5 5k | ⚠ "lucky — kicked in" |
+![per-position grid](figs/phase07_position_grid.png)
 
-So T8 is not "an easy spot" — it is **the only spot where both ACT checkpoints succeeded**, while all
-three VLA arms never even reached it. That is a policy × position interaction, not a position effect,
-and it is the opposite of what a "this spot is easier for everyone" story predicts.
+### T8 is not an easy spot — it is ACT's spot
 
-### The training-demo comparison cannot be done yet — and the reason is fixable in a minute
+The session impression that T8 was good was right about T8 and wrong about why. Pooled, T8 is the best
+spot (3/6). Split by family, it is the sharpest disagreement in the whole set:
 
-The plan was to ask whether T8's five training demonstrations are more consistent than the others. The
-per-spot consistency of the training data computes cleanly (using the verification report's validated
-grasp detector, reproducing its 27× block separation):
+| | ACT | SmolVLA | π0.5 |
+|---|---|---|---|
+| **T8** | **4.0** — both trials seated | **0.0** — neither trial reached | 2.0 |
+| **T5** | **0.5** | **4.0** — both trials seated | 1.5 |
 
-| spot block | grasp `shoulder_pan` | within-block std | grasp-pose std | mean length |
+**A clean double dissociation**, in the same sense [phase06 §6.5](phase06_camera_ablation_training.md)
+used the phrase: ACT's best spot is SmolVLA's worst, and SmolVLA's best is ACT's worst. Each family's
+best spot is different — ACT T8, SmolVLA T5, π0.5 T7 — and so is each family's worst.
+
+![the interaction](figs/phase07_position_interaction.png)
+
+### The interaction survives a noise test, which the raw concordance alone would not
+
+| Statistic | Value | Reading |
+|---|---|---|
+| Kendall's W, 3 families × 9 spots | **0.192** | 1.0 would be identical rankings |
+| Permutation p (null: *no* shared ordering) | 0.823 | cannot reject "no agreement" |
+| **Bootstrap p (null: *one* shared ordering, 2 trials/cell)** | **0.030** | **a concordance this low is not just noise** |
+| Spearman ρ, ACT vs SmolVLA | **−0.645** (p = 0.066) | negatively correlated, not merely uncorrelated |
+| Spearman ρ, ACT vs π0.5 | +0.285 (p = 0.45) | — |
+| Spearman ρ, SmolVLA vs π0.5 | −0.228 (p = 0.55) | — |
+
+**The second test is the one that carries the claim, and it is why the first is reported beside it.**
+With only 2 trials per (family, spot) cell, sampling noise attenuates W even when every family shares
+one ordering — so a low W is, on its own, weak evidence. The bootstrap asks the right question
+directly: simulate the world in which position difficulty *is* shared (pooled position effect + a
+per-family offset, with residuals resampled from the real data), draw 2 trials per cell, and see how
+often W comes out this low. **Answer: 3.0% of the time.**
+
+Supporting it, the ACT↔SmolVLA correlation is **negative**, and noise alone centres ρ at zero, not
+below it. Two independent angles, same conclusion.
+
+**Still: 2 trials per cell.** This is a real effect at p ≈ 0.03, not a measured effect size. Round 2
+should carry per-position outcomes rather than pooling them.
+
+### Does the training data at a spot explain it? One candidate, flagged not concluded
+
+Spearman ρ across the nine positions, between each training-data property and rollout progress:
+
+| Training metric | pooled | ACT | SmolVLA | π0.5 |
 |---|---|---|---|---|
-| 0 | −1.96° | 0.22° | 1.65 | 794 |
-| 1 | +2.47° | 0.18° | 2.72 | 709 |
-| 2 | +7.29° | **0.09°** | **1.49** | 735 |
-| 3 | −5.74° | 0.41° | **4.40** | 730 |
-| 4 | −1.10° | 0.28° | 3.44 | 722 |
-| 5 | +3.77° | 0.36° | 2.59 | 694 |
-| 6 | −10.75° | 0.31° | 2.80 | 686 |
-| 7 | −6.67° | **0.49°** | 3.35 | **635** |
-| 8 | −0.91° | 0.32° | 2.60 | 684 |
+| Divergence of the 5 demos, **reach phase** | +0.05 | **−0.63** (p = .08) | **+0.79** (p = .02) | −0.24 |
+| Divergence, whole episode | −0.29 | −0.20 | +0.07 | −0.14 |
+| Divergence, carry phase | +0.05 | −0.03 | +0.16 | −0.09 |
+| Grasp-pose spread across the 5 demos | +0.14 | −0.21 | +0.36 | +0.11 |
+| Mean episode length | −0.50 | −0.64 (p = .07) | +0.32 | −0.56 |
+| Mean idle lead-in | −0.50 | −0.54 | −0.03 | +0.05 |
 
-**But `T1`–`T9` were never pinned to physical spots.** §10.3 asked for the mapping to be written down
-before block 1 and it was not, so there is no way to say which row above is T8. Recovering it from the
-rollout data was attempted and **fails**: it needs the grasp bearing from trials that actually grasped,
-and with 41 of 54 trials failing there are only 1–4 usable grasps per spot. The result is not one-to-one
-(three labels claim block 0) and the smallest margin to the runner-up is **0.02°** against a 0.3°
-within-block demo spread. Recorded in
-[`results/phase07_eval/tray_spot_mapping.csv`](../results/phase07_eval/tray_spot_mapping.csv).
+**Nothing is significant pooled** (every p > 0.17) — which is itself consistent with §11.6's main
+result: a position property that helps one family and hurts another cannot show up in the pooled
+column, because the two cancel.
 
-> **The fix costs a minute and unlocks the whole analysis:** photograph the tray with the nine marks
-> labelled, write the mapping into §10.3, and this table joins to the rollout results directly. Do it
-> before round 2. A low success rate is itself what broke the recovery — the better the policies get,
-> the easier it is to recover afterwards, which is exactly backwards from when you need it.
+**The one pattern worth a hypothesis** is `div_reach`, the disagreement among the five demonstrations
+during the reach: **ACT −0.63, SmolVLA +0.79 — strong, and opposite in sign.** Where the demonstrations
+disagree about how to approach the cylinder, ACT does worse and SmolVLA does better. A plausible
+mechanism, and it matches each family's inductive bias: ACT is trained from scratch on 45 episodes and
+regresses a chunk, so inconsistent demonstrations are conflicting targets it has no prior to arbitrate;
+SmolVLA carries a pretrained visuomotor prior and generates by flow matching, so variation in the
+demonstrations is closer to the multimodality that training assumes — and may act as augmentation
+rather than noise.
 
-### The planned per-position analysis, once the mapping exists
+**Read this as a hypothesis, not a result.** Three reasons: *n* = 9 positions; the table is 10 metrics
+× 4 targets = **40 tests**, where ~2 hits at p < 0.05 are expected by chance alone, and SmolVLA's
+p = 0.015 is one hit; and 2 trials per cell. What makes it worth keeping rather than discarding is that
+it was not fished for — it is the same ACT↔SmolVLA opposition the W test found independently, now with
+a candidate cause attached. **The test is a prediction**: if demonstration divergence during the reach
+is really what separates them, then deliberately collecting *more varied* approach demonstrations
+should help SmolVLA and hurt ACT. That is a cheap, directional, falsifiable experiment for the next
+collection round.
 
-Cheap, and all of it runs off the already-cached training parquet:
+### What this changes about collection
 
-1. **Within-spot demonstration divergence** — pairwise DTW distance between the five demos at each spot,
-   over joint space and over the top-camera embedding. This is the Phase 0.5 divergence metric applied
-   per spot rather than per camera.
-2. **Grasp-pose and seated-pose spread** — already computed above; the question is whether it correlates
-   with per-spot rollout success across the nine.
-3. **Occlusion check** — whether the arm hides the cylinder from the bird's-eye camera more at some
-   spots, which §6's preflight was supposed to rule out but never measured per spot.
-4. **Distance to the nearest training spot**, for the off-grid placements in round 2.
-
-With nine spots, a correlation across them has n = 9 — enough to see a strong effect, not a subtle one.
-Treat it as hypothesis-generating for the data-collection design, not as a result.
+- **Report Q2 per family, never pooled.** A pooled per-position number averages away a real effect.
+- **Per-position outcomes in round 2.** Position is not a nuisance variable to average over.
+- **The "best" demonstration set may differ by policy.** If the data-quality score the programme is
+  chasing is policy-dependent in this way, a single curated subset serving all three families may not
+  exist — which is the bound finding 4 puts on the model-free line in [08](../08_data_quality_research.md).
 
 ## 11.7 — The leftward miss, and why it is probably not the arm
 
@@ -1082,9 +1197,14 @@ insertion offset that turned out to be a `shoulder_pan` calibration drift
 | SmolVLA | **0** | 1 | 1 |
 
 A calibration offset is a property of the robot and would bias all three families equally. SmolVLA
-missed left zero times. So this looks like a learned bias in ACT and π0.5 rather than a drifted frame —
-consistent with the §10.6 preflight replay having passed. Worth one `lerobot-replay` re-check before
-round 2 regardless, since it costs two minutes and the Phase 0.6 precedent is real.
+missed left zero times.
+
+**Settled: it is not the arm.** The §10.6 preflight replay was run before the rollouts and passed, so
+the calibration frame was good going in — the Phase 0.6 diagnosis does not recur here. The leftward
+skew is therefore a **learned** bias in ACT and π0.5, which makes it a data property rather than a
+hardware one: both families place the gripper short on the same side, on demonstrations that do not.
+Worth checking against the per-position grasp bearings in round 2, since a bias that grows with
+|shoulder_pan| would point at the extremes of the workspace rather than at the policy.
 
 ## 11.8 — What round 1 settles
 
