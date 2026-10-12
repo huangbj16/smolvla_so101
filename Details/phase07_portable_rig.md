@@ -410,6 +410,14 @@ Full output: [`results/phase07_eval/bench_rollout_latency_5080.txt`](../results/
 cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && python scripts/bench_rollout_latency.py --policy outputs/hub/pi05_tray_cylinder_s1000_trim_A100/checkpoints/010000/pretrained_model --n-action-steps 25 --cameras observation.images.base_0_rgb observation.images.left_wrist_0_rgb
 ```
 
+> **A low power reading during a rollout is expected — do not chase it.** `nvidia-smi` sampled during a
+> π0.5 run shows something like 38 W of an 80 W cap at 2% utilisation, which looks like the GPU is
+> being held back. It is not: that is an **idle sample between chunks**. Measured over a 140 s sustained
+> π0.5 loop at 0.25 s resolution, the GPU is at **96–100% utilisation, 78.7 W median (82.1 W peak),
+> P0, 51–55 °C** whenever it is actually computing — and it computes for only **35% of the wall clock**,
+> because a 277 ms chunk inside an 833 ms budget is a 33% duty cycle. The average therefore *has* to
+> look low. See §10.1a before changing any power setting.
+
 Three things follow, and they are what make §10.4's commands as simple as they are:
 
 1. **π0.5 fits, with 6.6 GiB spare.** 8.87 GiB peak of 15.5 GiB available. Its 9.35 GB checkpoint is
@@ -453,6 +461,48 @@ blocks 2–3 are ever picked up, `act_both_s1000_camemb` is the one asset that n
 pulled from the Hub on every `from_pretrained`, not bundled in the checkpoint. It is in
 `~/.cache/huggingface` now, so the session does not need network — but a cleared cache means the
 `sv5k`/`sv20k` blocks need it back.
+
+## 10.1a — GPU power: leave it alone, and above all do not change it mid-session
+
+Measured 2026-10-12 under a 140 s sustained π0.5 inference loop, sampled every 0.25 s.
+
+| | Idle, between chunks | **Computing** |
+|---|---|---|
+| Utilisation | 0–2% | **96–100%** |
+| Power | 11–17 W | **78.7 W median, 82.1 W peak** |
+| SM clock | 180 MHz | **1,740 MHz median, 1,882 MHz peak** |
+| P-state / temp | P8, 40 °C | **P0, 51–55 °C** |
+
+**The card is power-limited, not thermally limited, and not idle-throttled.** `Current Power Limit` and
+`Default Power Limit` are both **80 W** against a `Max Power Limit` of **175 W**; `SW Power Cap` reads
+Active while `HW Thermal Slowdown` reads Not Active at 51 °C. So the 80 W is an OEM/platform TGP, and
+SM clocks sit at 1,740 of a possible 3,090 MHz because of it. Raising it would genuinely make inference
+faster.
+
+**Do not.** Three reasons, in order of how much they matter:
+
+1. **It buys nothing here.** π0.5 uses 277 ms of an 833 ms budget — 2.9× headroom. Cutting the chunk to
+   ~190 ms changes no policy output (inference is deterministic given the same observation) and changes
+   no rollout timing, because the policy is called on a fixed 25-step cadence either way. The eval is
+   not latency-bound.
+2. **Changing it between blocks would be a real confound** — and one the schedule does *not* protect
+   against. §10.3's mirror controls for drift that is continuous in session time; a power-limit change
+   at block 7 is a step intervention that lands on specific arms. If an arm's numbers then differ, there
+   is no way to separate the checkpoint from the clock.
+3. **A 2.5 h session at 175 W risks introducing the drift you were trying to avoid.** At 80 W the card
+   settles at 51–55 °C and will hold that all afternoon. At 175 W on a laptop chassis it may thermal-
+   throttle partway through, which is exactly a mid-session step change in behaviour.
+
+If you want the higher limit anyway, **set it once before block 1 and never touch it again** — and
+record that you did, since it makes these bench numbers non-comparable:
+
+```bash
+sudo nvidia-smi -pl 175    # may be refused: on many laptops the TGP is OEM-locked
+```
+
+**Where the 80 W cap does cost you is training, not this eval.** Any future local run on the 5080 — the
+dial grid's ACT column, say — is a sustained 100%-duty-cycle load, and there the clock difference is the
+whole wall clock.
 
 ## 10.2 — Every arm re-observes at the same rate: `n_action_steps=25`
 
