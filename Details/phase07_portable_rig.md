@@ -1165,6 +1165,35 @@ SmolVLA carries a pretrained visuomotor prior and generates by flow matching, so
 demonstrations is closer to the multimodality that training assumes — and may act as augmentation
 rather than noise.
 
+**Stated as one test, it is much stronger — and it is not a workspace effect.** The two opposite
+correlations are one claim, so the direct expression of it is a single variable: the **ACT-minus-SmolVLA
+progress gap** at each spot, against reach divergence.
+
+| Gap (ACT − SmolVLA progress) vs | ρ | p |
+|---|---|---|
+| **divergence of the demos, reach phase** | **−0.814** | **0.012** |
+| workspace extremity (\|grasp pan\|) | +0.136 | 0.74 |
+| mean episode length | −0.542 | 0.14 |
+| grasp-pose spread | −0.356 | 0.35 |
+
+That is **one planned test rather than one of forty**, and it survives a Bonferroni correction over the
+four candidates above (0.012 × 4 = 0.048). The obvious confound is ruled out directly: `div_reach` is
+uncorrelated with workspace extremity (ρ = −0.23, p = 0.56), with grasp-pose spread (p = 0.26) and with
+episode length (p = 0.23) — it correlates only with the other divergence measures, as it should. So
+"the demonstrations disagree here" is not standing in for "this spot is at the edge of the reachable
+area".
+
+**ACT's own training log supplies the missing half of the mechanism.** ACT has exactly one component
+for representing multimodal actions — the CVAE latent — and on this dataset
+[**its KLD collapsed to 0.0002**](phase07_training.md), because 45 single-operator episodes are almost
+unimodal. So the latent went unused, and ACT was in effect a plain L1 chunk regressor. **L1 regresses
+toward the conditional median**: where demonstrations genuinely disagree about the approach, the median
+path is one no demonstrator took, and it can thread between the modes and miss the cylinder. SmolVLA's
+flow matching *samples* the conditional distribution instead of averaging it, so the same spread is
+represented rather than collapsed. That is the inductive-bias difference in one line: **the two
+families do opposite things with action multimodality, and this dataset's divergence is concentrated
+exactly where it hurts one and helps the other.**
+
 **Read this as a hypothesis, not a result.** Three reasons: *n* = 9 positions; the table is 10 metrics
 × 4 targets = **40 tests**, where ~2 hits at p < 0.05 are expected by chance alone, and SmolVLA's
 p = 0.015 is one hit; and 2 trials per cell. What makes it worth keeping rather than discarding is that
