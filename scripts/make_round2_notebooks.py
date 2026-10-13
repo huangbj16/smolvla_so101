@@ -27,9 +27,9 @@ D1 = "so101_tray_cylinder_varied_20261013_082911_trimmed"
 # (source nb, output nb, round-1 job, round-2 job, old steps, new steps, save_freq, eval_steps, lr)
 SPECS = [
     ("colab_phase07_act.ipynb", "colab_phase07_r2_act.ipynb",
-     "act_tray_cylinder_s1000_trim", "act_tray_cylinder_s1000_d1", 60000, 20000, 5000, 5000, None),
+     "act_tray_cylinder_s1000_trim", "act_tray_cylinder_s1000_d1", 60000, 40000, 10000, 5000, None),
     ("colab_phase07_smolvla.ipynb", "colab_phase07_r2_smolvla.ipynb",
-     "smolvla_tray_cylinder_s1000_trim", "smolvla_tray_cylinder_s1000_d1", 20000, 10000, 2500, 2500, "1e-5"),
+     "smolvla_tray_cylinder_s1000_trim", "smolvla_tray_cylinder_s1000_d1", 20000, 20000, 5000, 5000, "1e-5"),
 ]
 
 # The D0 holdout comment explains a block structure D1 does not have. Replaced rather than kept,
@@ -119,11 +119,12 @@ def title_for(spec) -> str:
              "**Colab L4** — batch 64 peaked at 16.5 of 24 GiB in round 1, which does not fit the "
              "5080's 15.5 GiB, and lerobot has no gradient accumulation to work around it")
     runtime = "**~2.1 h** for 40k steps locally" if name == "ACT" else "**~21 h** for 30k steps on an L4"
-    matched = ("20,000 further steps over D1 = ~5.3 epochs of the new data, on top of round 1's 18.0 "
-               "epochs of D0"
+    matched = ("40,000 further steps = **320,000 samples = 10.6 epochs** of D1, on top of round 1's "
+               "18.0 epochs of D0"
                if name == "ACT" else
-               "10,000 further steps over D1 = ~21 epochs of the new data, on top of round 1's 47.9 "
-               "epochs of D0 — kept short because round 1 showed SmolVLA overfitting this dataset size")
+               "20,000 further steps = 1,280,000 samples = 42.5 epochs of D1. **Its 5,000-step "
+               "checkpoint is 320,000 samples — exactly sample-matched to ACT's whole run**, so the "
+               "clean comparison and the train-longer arm come out of one run")
     return f"""# Phase 0.7 round 2 — fine-tune {name} on D1, the varied dataset
 
 One of **two notebooks**, one per policy. Round 2 trains only {name}; π0.5 is gated on the

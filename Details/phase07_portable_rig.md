@@ -917,6 +917,50 @@ long it took *to become obvious*, not how long the task took. Not a discriminato
 over the fixture. That confirms the session impression that transport is the easy stage, and it is the
 basis of §11.5's data-collection proposal.
 
+## 11.1a — How much of the family difference is just epoch count?
+
+Raised 2026-10-13, and it is the right question to ask of §11.1. **The three families did not see the
+same amount of data** — [training §1](phase07_training.md) held the dataset, holdout, seed and cameras
+fixed but let each policy keep its own published recipe, and the recipes differ in batch and steps:
+
+| | batch × steps | samples | **epochs of D0** |
+|---|---|---|---|
+| ACT | 8 × 60,000 | 480,000 | **18.0** |
+| SmolVLA | 64 × 20,000 | 1,280,000 | **47.9** |
+| π0.5 | 16 × 10,000 | 160,000 | **6.0** |
+
+SmolVLA saw **2.7×** ACT's epochs and **8.0×** π0.5's. So yes — any comparison of the *pooled* per-family
+rates in §11.1 carries an epoch confound, and it should not be read as "SmolVLA beats ACT" full stop.
+
+**Where it matters most: π0.5.** Its 0/18 is the headline of §11.4, and it is also the arm with **one
+third** of ACT's data exposure and **one eighth** of SmolVLA's. §11.4 already states the honest version —
+"at this data and compute budget, π0.5 is not competitive" — and the epoch table is why that hedge is
+there rather than "π0.5 is bad at this task".
+
+**Where it does not matter: the sample-matched pair.** Round 1's rolled-out checkpoints were not all at
+the recipe's endpoint, and two of them land on the same number:
+
+| checkpoint | samples | epochs of D0 |
+|---|---|---|
+| **ACT 40k** | **320,000** | **12.0** |
+| **SmolVLA 5k** | **320,000** | **12.0** |
+| ACT 60k | 480,000 | 18.0 |
+| SmolVLA 20k | 1,280,000 | 47.9 |
+
+**ACT 40k and SmolVLA 5k are exactly sample-matched**, and that pair went **2/9 vs 3/9** with mean
+progress **2.33 vs 1.78** — i.e. no separation either way, well inside noise at n = 9. The clean
+comparison round 1 contains says the two families are indistinguishable at matched data; the 4-point
+pooled gap in §11.1 is the epoch asymmetry showing through.
+
+**Where it is largely immune: §11.6's interaction.** The policy × position finding is about *which*
+spots each family does well at, not its overall level. An epoch difference shifts a family's level up or
+down across all nine spots; it does not reorder them. So the double dissociation at T5/T8 — ACT 4.0/0.5
+against SmolVLA 0.0/4.0 — survives the confound, which is part of why it is the most robust result in
+round 1.
+
+**Carried into round 2:** §12.6 keeps the sample-matched pair deliberately rather than by luck —
+SmolVLA's 5,000-step checkpoint is again 320,000 samples, identical to ACT's whole 40,000-step run.
+
 ## 11.2 — Prediction scorecard against §10.7
 
 | # | Predicted | Outcome | |
@@ -1265,7 +1309,7 @@ measurement.** **§13** stays below as the design to return to once a policy ear
 | 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
 | 3b | **D2: compositional collection, 130 stage episodes** (§12.4) | **to be timed** | — |
 | 4 ◐ | **Processing: head trim + 2 s tail cap, jerk, per-stage loss** (§12.5) | trim **35.7 min**, local CPU | **trim done** (33,337 frames, 87%) · detector fixed · jerk + per-stage loss pending |
-| 5 ◐ | **Continue ACT (local, ~1.1 h) and SmolVLA (Colab, ~7 h) from the round-1 checkpoints on D1** (§12.6) | ~8 h GPU | notebooks ready · ACT warm start **smoke-tested** · driver repaired |
+| 5 ◐ | **Continue ACT (local, ~2.1 h) and SmolVLA (Colab, ~14 h) from the round-1 checkpoints on D1** (§12.6) | ~16 h GPU | notebooks ready · ACT warm start **smoke-tested** · driver repaired |
 | 6 | **π0.5 frozen-feature probe**, during training (§12.7) | ~30 min | — |
 
 **Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
@@ -1753,13 +1797,13 @@ over D1.
 |---|---|---|
 | Notebook | [colab_phase07_r2_act.ipynb](../colab_phase07_r2_act.ipynb) | [colab_phase07_r2_smolvla.ipynb](../colab_phase07_r2_smolvla.ipynb) |
 | Starts from | `act_tray_cylinder_s1000_trim` | `smolvla_tray_cylinder_s1000_trim` |
-| Batch × further steps | 8 × **20,000** | 64 × **10,000** |
-| New-data coverage | ~5.3 epochs of D1 | ~21 epochs of D1 |
+| Batch × further steps | 8 × **40,000** | 64 × **20,000** |
+| New-data coverage | 320,000 samples · **10.6 epochs** of D1 | 1,280,000 samples · 42.5 epochs |
 | Learning rate | **1e-5, unchanged** | **1e-5 — lowered 10×** (see below) |
-| Checkpoints | every 5k → 4 | every 2.5k → 4 |
+| Checkpoints | every 10k → 4 | every 5k → 4 |
 | Where | **local 5080** | **Colab L4** |
 | Measured | **5.4 it/s, 3.73 GiB** | 2.00 s/step, 16.5 GiB (round 1) |
-| Runtime | **~1.1 h** | **~7 h** |
+| Runtime | **~2.1 h** | **~14 h** |
 | Output | `act_tray_cylinder_s1000_d1` | `smolvla_tray_cylinder_s1000_d1` |
 
 > **What the warm start costs.** §12.1 pre-registered P1–P3 against *fresh* training on D1. Continuing
@@ -1783,10 +1827,28 @@ would largely undo the warm start. The notebook therefore passes `--policy.optim
 the peak 10×; the cosine still runs, pinned to the real step count, so the run anneals rather than
 sitting flat.
 
+### The sample-matched pair survives, for free
+
+Steps are the wrong unit when the batch sizes differ 8×: 40,000 ACT steps and 20,000 SmolVLA steps are
+**10.6 and 42.5 epochs** of D1 respectively, a 4× gap in how much of the new data each family sees. Left
+there, that gap would mimic exactly the effect P1 predicts, and a SmolVLA improvement could not be told
+apart from "it simply saw D1 four times more".
+
+**`save_freq` rescues it at no cost.** SmolVLA's **5,000-step checkpoint is 320,000 samples — identical
+to ACT's entire 40,000-step run.** So one pair of runs yields both:
+
+| comparison | ACT | SmolVLA | |
+|---|---|---|---|
+| **sample-matched** | 40k (320,000) | **5k checkpoint** (320,000) | the clean read on P1 |
+| train-longer | 40k | 20k (1,280,000) | the best-policy read |
+
+This is the same coincidence round 1 had — 8× the batch, ⅛ the steps — and §11 relied on it there too.
+**Report P1 from the matched pair, not from the final checkpoints.**
+
 ### ACT: the local command
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && EPISODES="[0,1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,36,37,38,40,41,42,43,44,45,46,47,48,9,19,29,39,49]" && lerobot-train --policy.path=HALDijkstraaa/act_tray_cylinder_s1000_trim --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_tray_cylinder_s1000_d1 --policy.private=true --save_checkpoint_to_hub=true --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed --dataset.episodes="$EPISODES" --dataset.eval_split=0.1 --eval_steps=5000 --batch_size=8 --steps=20000 --num_workers=8 --seed=1000 --save_freq=5000 --log_freq=200 --output_dir=outputs/train/act_tray_cylinder_s1000_d1 --job_name=act_tray_cylinder_s1000_d1 --wandb.enable=true --wandb.project=phase07-policy-transfer
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && EPISODES="[0,1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,36,37,38,40,41,42,43,44,45,46,47,48,9,19,29,39,49]" && lerobot-train --policy.path=HALDijkstraaa/act_tray_cylinder_s1000_trim --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_tray_cylinder_s1000_d1 --policy.private=true --save_checkpoint_to_hub=true --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed --dataset.episodes="$EPISODES" --dataset.eval_split=0.1 --eval_steps=5000 --batch_size=8 --steps=40000 --num_workers=8 --seed=1000 --save_freq=10000 --log_freq=200 --output_dir=outputs/train/act_tray_cylinder_s1000_d1 --job_name=act_tray_cylinder_s1000_d1 --wandb.enable=true --wandb.project=phase07-policy-transfer
 ```
 
 **`--policy.path` is what makes it a continuation**, replacing round 1's `--policy.type=act`. The
@@ -1807,8 +1869,8 @@ from one Hub repo and pushing to another is fine; they do not collide.
 | Throughput | 4.47 it/s (L4) | **5.4 it/s**, 3.73 GiB |
 
 A from-scratch run starts near 6.8; starting at 0.27 is the proof the weights loaded. Throughput
-matches [phase06 §5](phase06_camera_ablation_training.md)'s 5.4 it/s exactly, so **20,000 steps is
-~62 min** plus eval — call it **~1.1 h**.
+matches [phase06 §5](phase06_camera_ablation_training.md)'s 5.4 it/s exactly, so **40,000 steps is
+~124 min** plus eval — call it **~2.1 h**.
 
 > The local GPU driver was repaired 2026-10-13 (now 595.99.02) by installing the kernel-module package
 > that the 7.0.0-38 upgrade had outrun. Recorded because the failure mode recurs on every kernel bump:
