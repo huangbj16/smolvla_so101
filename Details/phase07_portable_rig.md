@@ -241,12 +241,13 @@ lerobot-record \
 their divergence numbers are compared. Extend toward the N = 100 per-condition figure in
 [08 §A.4](../08_data_quality_research.md) once the rig is proven.
 
-## The datasets, as recorded (2026-10-03)
+## The datasets, as recorded
 
 | | Repo | Episodes | Frames | Use |
 |---|---|---|---|---|
-| **Raw** | [`so101_tray_cylinder_portable_20261003_211912`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912) | 50 | 35,141 | archive · analysis |
-| **Trimmed** | [`..._20261003_211912_trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed) | 50 | **29,462** (83.8%) | **all training** |
+| **D0 raw** (2026-10-03) | [`so101_tray_cylinder_portable_20261003_211912`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912) | 50 | 35,141 | archive · analysis |
+| **D0 trimmed** | [`..._20261003_211912_trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed) | 50 | **29,462** (83.8%) | round-1 training |
+| **D1 raw** (2026-10-13) | [`so101_tray_cylinder_varied_20261013_082911`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911) | 50 | **38,389** | §12.2 — continuously randomised, deliberately varied |
 
 Both private, `v3.0`, 30 fps, `top` + `wrist` at 480×640 AV1. The trimmed copy was built 2026-10-05 by
 [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) with the `dev > 2.0°` / 5-frame-pad
@@ -1259,8 +1260,8 @@ measurement.** **§13** stays below as the design to return to once a policy ear
 
 | Step | What | Time | Status |
 |---|---|---|---|
-| 1 | **Pre-register the divergence prediction** (§12.1) | 0 | **before collecting** |
-| 2 | **D1: 50 full-task episodes, continuously randomised, deliberately varied** (§12.2) | ~2.5 h | — |
+| 1 ✅ | **Pre-register the divergence prediction** (§12.1) | 0 | committed 2026-10-12, before collection |
+| 2 ✅ | **D1: 50 full-task episodes, continuously randomised, deliberately varied** (§12.2) | done 2026-10-13 | 50 ep / 38,389 frames · **P4 PASS** |
 | 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
 | 4 | **Processing: head-only trim, jerk + per-stage loss** (§12.4) | ~2 h | — |
 | 5 | **Retrain ACT and SmolVLA** (§12.5) | ~18 h GPU | — |
@@ -1302,6 +1303,59 @@ experiment rather than a mechanism test. Check P4 first, immediately after colle
 **What would falsify the mechanism:** the gap moves *positive* (ACT benefits more from varied data than
 SmolVLA), or P4 holds while P1 and P3 both fail. Either would say the §11.6 correlation was a
 nine-point coincidence.
+
+### P4 outcome — **PASS**, verified 2026-10-13
+
+D1 recorded as `so101_tray_cylinder_varied_20261013_082911`: 50 episodes, 38,389 frames, median
+episode 25.7 s (D0: 23.5 s). Checked with
+[`check_d1_divergence.py`](../scripts/check_d1_divergence.py) before anything else was done with the
+data, as this section requires.
+
+**The measurement had to be position-controlled or it would have been meaningless.** In D0 the five
+demos behind a spot sat at the *same* position, so divergence between them was pure approach
+variation. D1 randomises position continuously, so any two episodes differ partly because the cylinder
+was elsewhere — a naive whole-dataset divergence would be inflated by that and would "confirm" P4 for
+the wrong reason. So divergence is measured within **k = 5 nearest neighbours in grasp-pose space**
+(the grasp pose fixes where the cylinder was), and the metric is validated against D0 first:
+
+| | div_reach | neighbourhood position spread |
+|---|---|---|
+| D0, native 9 blocks of 5 | 0.239–0.389 (mean **0.317**) | 2.78° |
+| D0, same kNN metric | 0.231–0.406 (mean **0.322**) | 2.50° |
+| **D1, kNN** | 0.344–0.683 (mean **0.478**) | 4.27° |
+
+The kNN mean reproduces the block mean on D0 to **1.4%**, so the two datasets are on one scale.
+**D1 − D0 = +0.156, permutation p < 0.0001**, and D1's *minimum* neighbourhood (0.344) sits near D0's
+*maximum* (0.406).
+
+**The one real threat was tested, not caveated.** D1's neighbourhoods span 1.71× wider positions, so
+some of the rise could be position rather than approach. Restricting both datasets to the pose-spread
+range they share (2.57–4.64°, D0 n = 24, D1 n = 31) gives **+0.113, p < 0.0001 — 72% of the
+difference survives**. The manipulation genuinely raised approach variation.
+
+**P1–P3 are therefore live.** Measure them after round-2 training and rollouts.
+
+> **A trap when re-running the verifier on a second dataset.** `verify_phase07_dataset.py` writes its
+> figures to `Details/figs/phase07_idle.png` and `phase07_tray_spots.png` under **fixed names**, even
+> when `--out` points elsewhere — so running it on D1 silently overwrites D0's, which
+> [phase07_data_verification.md](phase07_data_verification.md) embeds. D1's copies are kept as
+> `phase07_d1_*.png`; restore D0's from git if the verifier is re-run.
+
+### The other two collection changes also took
+
+| | D0 | D1 | |
+|---|---|---|---|
+| Idle **head** before first motion | 71 frames (2.38 s) | 66 frames (2.20 s) | unchanged, as expected — the head trim handles it |
+| Idle **tail** after last motion | 45 frames (1.50 s) | **95 frames (3.17 s)** | **2.1× — the deliberate hold worked** |
+| 9 tray-spot blocks separable | **27×** | **1×** | **the block structure is gone** |
+
+![D1 tray spots and idle](figs/phase07_d1_tray_spots.png)
+
+The tray-spot result is the one to read twice. `verify_phase07_dataset.py` reports "9 tray-spot blocks
+of 5 are separable" as a WARN because for D0 the *presence* of block structure was the finding; for D1
+the *absence* is the success. Within-block spread 2.92° against between-centre 3.90° is **1×
+separation** — i.e. no blocks, which is exactly what continuous randomisation was for. The companion
+"position is confounded with session time" WARN is hard-coded text from the D0 era and does not apply.
 
 ## 12.2 — D1: 50 full-task episodes, continuously randomised
 

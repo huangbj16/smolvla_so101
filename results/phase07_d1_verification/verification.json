@@ -1,0 +1,510 @@
+{
+  "repo_id": "HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911",
+  "verdict": "NOT READY - see BLOCK rows",
+  "counts": {
+    "PASS": 45,
+    "INFO": 22,
+    "BLOCK": 1,
+    "WARN": 9
+  },
+  "rows": [
+    {
+      "section": "1 manifest",
+      "check": "info.json vs episodes meta",
+      "status": "PASS",
+      "detail": "50 episode rows vs total_episodes=50"
+    },
+    {
+      "section": "1 manifest",
+      "check": "info.json vs frame parquet",
+      "status": "PASS",
+      "detail": "38389 parquet rows vs total_frames=38389"
+    },
+    {
+      "section": "1 manifest",
+      "check": "episode lengths sum to total",
+      "status": "PASS",
+      "detail": "sum(length)=38389 vs 38389"
+    },
+    {
+      "section": "1 manifest",
+      "check": "episode_index is 0..n-1",
+      "status": "PASS",
+      "detail": "0..49, 50 unique"
+    },
+    {
+      "section": "1 manifest",
+      "check": "global index contiguous",
+      "status": "PASS",
+      "detail": "0..38388, strictly increasing=True"
+    },
+    {
+      "section": "1 manifest",
+      "check": "episode slices tile the frame table",
+      "status": "PASS",
+      "detail": "from[0]=0, to[-1]=38389, contiguous=True"
+    },
+    {
+      "section": "1 manifest",
+      "check": "feature observation.images.top",
+      "status": "PASS",
+      "detail": "video [480, 640, 3] codec=av1"
+    },
+    {
+      "section": "1 manifest",
+      "check": "feature observation.images.wrist",
+      "status": "PASS",
+      "detail": "video [480, 640, 3] codec=av1"
+    },
+    {
+      "section": "1 manifest",
+      "check": "fps / robot_type / codebase_version",
+      "status": "INFO",
+      "detail": "fps=30 robot_type=so_follower v=v3.0"
+    },
+    {
+      "section": "1 manifest",
+      "check": "task string matches Phase 0.7 \u00a75",
+      "status": "PASS",
+      "detail": "1 task(s): 'Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture'"
+    },
+    {
+      "section": "1 manifest",
+      "check": "Hub codebase-version tag",
+      "status": "BLOCK",
+      "detail": "tags=NONE, need v3.0"
+    },
+    {
+      "section": "1 manifest",
+      "check": "stats cover mean/std and quantiles",
+      "status": "PASS",
+      "detail": "pi05 needs q01/q99 (QUANTILES norm); all present"
+    },
+    {
+      "section": "2 timing",
+      "check": "frame_index 0..n-1 per episode",
+      "status": "PASS",
+      "detail": "all 50 contiguous"
+    },
+    {
+      "section": "2 timing",
+      "check": "timestamp starts at 0 per episode",
+      "status": "PASS",
+      "detail": "all 50 start at 0.000"
+    },
+    {
+      "section": "2 timing",
+      "check": "per-episode length matches meta",
+      "status": "PASS",
+      "detail": "all 50 match"
+    },
+    {
+      "section": "2 timing",
+      "check": "inter-frame dt uniform",
+      "status": "PASS",
+      "detail": "worst |dt - 33.33ms| = 0.0033 ms (tolerance_s=1e-4 -> 0.1 ms)"
+    },
+    {
+      "section": "2 timing",
+      "check": "episode duration",
+      "status": "INFO",
+      "detail": "511-1046 frames (17.0-34.9s), median 772 (25.7s)"
+    },
+    {
+      "section": "3 video layout",
+      "check": "top: files present",
+      "status": "PASS",
+      "detail": "4 file(s), 38389 frames"
+    },
+    {
+      "section": "3 video layout",
+      "check": "top: episodes contiguous in file",
+      "status": "PASS",
+      "detail": "worst inter-episode timestamp gap 0.000 ms"
+    },
+    {
+      "section": "3 video layout",
+      "check": "top: timestamp span matches frame count",
+      "status": "PASS",
+      "detail": "worst |span - frames/fps| = 0.000 ms"
+    },
+    {
+      "section": "3 video layout",
+      "check": "wrist: files present",
+      "status": "PASS",
+      "detail": "2 file(s), 38389 frames"
+    },
+    {
+      "section": "3 video layout",
+      "check": "wrist: episodes contiguous in file",
+      "status": "PASS",
+      "detail": "worst inter-episode timestamp gap 0.000 ms"
+    },
+    {
+      "section": "3 video layout",
+      "check": "wrist: timestamp span matches frame count",
+      "status": "PASS",
+      "detail": "worst |span - frames/fps| = 0.000 ms"
+    },
+    {
+      "section": "4 decode",
+      "check": "top: decoded without error",
+      "status": "PASS",
+      "detail": "38389 frames in 65s (587 frame/s)"
+    },
+    {
+      "section": "4 decode",
+      "check": "top: frame count matches parquet",
+      "status": "PASS",
+      "detail": "38389 decoded vs 38389 rows"
+    },
+    {
+      "section": "4 decode",
+      "check": "top: every parquet row has a frame",
+      "status": "PASS",
+      "detail": "0 rows with no decoded frame"
+    },
+    {
+      "section": "4 decode",
+      "check": "wrist: decoded without error",
+      "status": "PASS",
+      "detail": "38389 frames in 64s (603 frame/s)"
+    },
+    {
+      "section": "4 decode",
+      "check": "wrist: frame count matches parquet",
+      "status": "PASS",
+      "detail": "38389 decoded vs 38389 rows"
+    },
+    {
+      "section": "4 decode",
+      "check": "wrist: every parquet row has a frame",
+      "status": "PASS",
+      "detail": "0 rows with no decoded frame"
+    },
+    {
+      "section": "5 frames",
+      "check": "top: no black / blown frames",
+      "status": "PASS",
+      "detail": "0 frames below mean 8.0, 0 above 247.0; luminance 133.2-159.7 (mean 147.4)"
+    },
+    {
+      "section": "5 frames",
+      "check": "top: no featureless frames",
+      "status": "PASS",
+      "detail": "0 frames with luminance std < 1.0 (min 64.1)"
+    },
+    {
+      "section": "5 frames",
+      "check": "top: zero-difference frames are the video.g=2 artifact",
+      "status": "INFO",
+      "detail": "6462 bit-identical frames (16.8%), 0 of them on a keyframe (expect 0); keyframes are 50% of frames"
+    },
+    {
+      "section": "5 frames",
+      "check": "top: no frozen-frame runs (stride-2 difference)",
+      "status": "PASS",
+      "detail": "0 runs of >=5 frames with stride-2 MAE < 0.05 (longest run 0); min 1.000, median 1.69 grey levels"
+    },
+    {
+      "section": "5 frames",
+      "check": "wrist: no black / blown frames",
+      "status": "PASS",
+      "detail": "0 frames below mean 8.0, 0 above 247.0; luminance 47.6-191.9 (mean 116.9)"
+    },
+    {
+      "section": "5 frames",
+      "check": "wrist: no featureless frames",
+      "status": "PASS",
+      "detail": "0 frames with luminance std < 1.0 (min 32.9)"
+    },
+    {
+      "section": "5 frames",
+      "check": "wrist: zero-difference frames are the video.g=2 artifact",
+      "status": "INFO",
+      "detail": "3586 bit-identical frames (9.3%), 0 of them on a keyframe (expect 0); keyframes are 50% of frames"
+    },
+    {
+      "section": "5 frames",
+      "check": "wrist: no frozen-frame runs (stride-2 difference)",
+      "status": "PASS",
+      "detail": "0 runs of >=5 frames with stride-2 MAE < 0.05 (longest run 0); min 0.609, median 6.10 grey levels"
+    },
+    {
+      "section": "6 exposure",
+      "check": "top: no monotone drift",
+      "status": "WARN",
+      "detail": "Spearman rho=+0.64 vs episode index; per-episode mean luminance 146.0-148.9 (spread 2.9), first5 146.5 vs last5 147.5"
+    },
+    {
+      "section": "6 exposure",
+      "check": "wrist: no monotone drift",
+      "status": "PASS",
+      "detail": "Spearman rho=+0.06 vs episode index; per-episode mean luminance 111.2-121.2 (spread 10.0), first5 117.7 vs last5 118.4"
+    },
+    {
+      "section": "7 pose drift",
+      "check": "top: mount stable vs episode 0",
+      "status": "PASS",
+      "detail": "best block-shift non-zero in 0 episode(s); episode-mean correlation 0.994-1.000"
+    },
+    {
+      "section": "7 pose drift",
+      "check": "wrist: mount stable vs episode 0",
+      "status": "PASS",
+      "detail": "best block-shift non-zero in 0 episode(s); episode-mean correlation 0.783-1.000"
+    },
+    {
+      "section": "8 sync",
+      "check": "top: aligned during transport",
+      "status": "WARN",
+      "detail": "median lag +2 frame (+67 ms), 72% of episodes within +/-2 frames; median peak correlation 0.69"
+    },
+    {
+      "section": "8 sync",
+      "check": "wrist: aligned during transport",
+      "status": "PASS",
+      "detail": "median lag +1 frame (+33 ms), 96% of episodes within +/-2 frames; median peak correlation 0.80"
+    },
+    {
+      "section": "8 sync",
+      "check": "top: motion-onset edge",
+      "status": "INFO",
+      "detail": "image motion leaves the noise floor +10 frames after the joints start moving (median over 50 episodes, range +4..+136)"
+    },
+    {
+      "section": "8 sync",
+      "check": "wrist: motion-onset edge",
+      "status": "INFO",
+      "detail": "image motion leaves the noise floor +0 frames after the joints start moving (median over 50 episodes, range -10..+109)"
+    },
+    {
+      "section": "8 sync",
+      "check": "top-vs-wrist onset gap is view geometry, not timing",
+      "status": "INFO",
+      "detail": "wrist sees onset at +0 frames but top at +10; the first motion of every episode is a wrist tilt (~25 deg of wrist_flex vs <1.5 deg elsewhere), which is invisible from directly above. Both cameras agree to ~1 frame once the arm translates"
+    },
+    {
+      "section": "9 joints",
+      "check": "follower calibrated sweep",
+      "status": "INFO",
+      "detail": "shoul=215deg  shoul=208deg  elbow=193deg  wrist=206deg  wrist=360deg  gripp=127deg"
+    },
+    {
+      "section": "9 joints",
+      "check": "leader calibrated sweep",
+      "status": "INFO",
+      "detail": "shoul=236deg  shoul=210deg  elbow=193deg  wrist=205deg  wrist=360deg  gripp=105deg"
+    },
+    {
+      "section": "9 joints",
+      "check": "body joints are DEGREES-mode, not percent",
+      "status": "INFO",
+      "detail": "legitimate range per joint: shoul=+/-107.6  shoul=+/-104.2  elbow=+/-96.5  wrist=+/-102.9  wrist=+/-180.0"
+    },
+    {
+      "section": "9 joints",
+      "check": "follower stays inside its calibrated travel",
+      "status": "PASS",
+      "detail": "worst excursion 2.0 counts = 0.18 deg (elbow_flex:0.18deg)"
+    },
+    {
+      "section": "9 joints",
+      "check": "commands clamped by the servo: shoulder_lift",
+      "status": "WARN",
+      "detail": "13064 frames (34.0% of all, 17.3% of the trimmed window) commanded past the limit by median 0.75 deg, worst 1.19 deg"
+    },
+    {
+      "section": "9 joints",
+      "check": "commands clamped by the servo: elbow_flex",
+      "status": "WARN",
+      "detail": "2702 frames (7.0% of all, 3.1% of the trimmed window) commanded past the limit by median 0.13 deg, worst 0.40 deg"
+    },
+    {
+      "section": "9 joints",
+      "check": "clamping cost on shoulder_lift",
+      "status": "INFO",
+      "detail": "|state-action| median 1.01 deg where clamped vs 1.45 deg elsewhere"
+    },
+    {
+      "section": "9 joints",
+      "check": "clamping cost on elbow_flex",
+      "status": "INFO",
+      "detail": "|state-action| median 0.22 deg where clamped vs 1.36 deg elsewhere"
+    },
+    {
+      "section": "10 tracking",
+      "check": "shoulder_pan",
+      "status": "INFO",
+      "detail": "mean  0.62  p99   3.56  max   6.29  (units: degrees)"
+    },
+    {
+      "section": "10 tracking",
+      "check": "shoulder_lift",
+      "status": "INFO",
+      "detail": "mean  2.33  p99  11.38  max  16.40  (units: degrees)"
+    },
+    {
+      "section": "10 tracking",
+      "check": "elbow_flex",
+      "status": "INFO",
+      "detail": "mean  2.04  p99  11.47  max  19.74  (units: degrees)"
+    },
+    {
+      "section": "10 tracking",
+      "check": "wrist_flex",
+      "status": "INFO",
+      "detail": "mean  2.24  p99  17.93  max  29.71  (units: degrees)"
+    },
+    {
+      "section": "10 tracking",
+      "check": "wrist_roll",
+      "status": "INFO",
+      "detail": "mean  0.65  p99   5.54  max  15.82  (units: degrees)"
+    },
+    {
+      "section": "10 tracking",
+      "check": "gripper",
+      "status": "INFO",
+      "detail": "mean  1.67  p99  10.07  max  22.28  (units: percent)"
+    },
+    {
+      "section": "11 idle",
+      "check": "lead-in before first motion",
+      "status": "WARN",
+      "detail": "median 66 frames (2.20s), range 4-100; >25 frames in 49/50 episodes, >50 in 43/50  [Phase 0.5 for comparison: median 74]"
+    },
+    {
+      "section": "11 idle",
+      "check": "tail after last motion",
+      "status": "WARN",
+      "detail": "median 95 frames (3.17s), range 47-191"
+    },
+    {
+      "section": "11 idle",
+      "check": "lead-in vs a 50-step action chunk",
+      "status": "WARN",
+      "detail": "43/50 episodes idle longer than one SmolVLA/pi0.5 chunk (50 frames = 1.67s); 0/50 longer than an ACT 100-step chunk"
+    },
+    {
+      "section": "11 idle",
+      "check": "trimmed dataset size",
+      "status": "INFO",
+      "detail": "30609/38389 frames kept (79.7%); episode length 408-839 frames (all >= one 100-step chunk: True)"
+    },
+    {
+      "section": "12 structure",
+      "check": "grasp and seated moment detected",
+      "status": "PASS",
+      "detail": "50/50 episodes"
+    },
+    {
+      "section": "12 structure",
+      "check": "one grasp per episode (no regrasp)",
+      "status": "PASS",
+      "detail": "0/50 episodes re-open past 35% of the gripper's opening while carrying; worst re-open 20%, median 14%"
+    },
+    {
+      "section": "12 structure",
+      "check": "no gripper chatter while carrying",
+      "status": "PASS",
+      "detail": "gripper direction changes between grasp and seated: median 1, max 1 (episode 0)"
+    },
+    {
+      "section": "12 structure",
+      "check": "seated pose repeatable (fixture did not move)",
+      "status": "PASS",
+      "detail": "shoulder_pan std at the seated moment = 0.40 deg over 50 episodes (range 18.42..20.35); pan uniquely sets the direction to the hole, the other three joints are redundant in the vertical plane"
+    },
+    {
+      "section": "12 structure",
+      "check": "seated pose, all joints",
+      "status": "INFO",
+      "detail": "per-joint std: shoul=0.40  shoul=4.18  elbow=7.01  wrist=5.10  wrist=15.99"
+    },
+    {
+      "section": "12 structure",
+      "check": "grasp pose varies with tray spot",
+      "status": "INFO",
+      "detail": "per-joint std at grasp: shoul=5.02  shoul=8.99  elbow=14.88  wrist=6.24  wrist=22.43"
+    },
+    {
+      "section": "12 structure",
+      "check": "9 tray-spot blocks of 5 are separable",
+      "status": "WARN",
+      "detail": "shoulder_pan: within-block spread 2.92 deg vs between-centre 3.90 deg -> 1x separation, closest centres 0.04 deg apart. In 3-D (pan/lift/elbow) 1.5x, diluted by the lift-elbow redundancy"
+    },
+    {
+      "section": "12 structure",
+      "check": "episodes 45-49 are off-grid",
+      "status": "INFO",
+      "detail": "distance from each of the last 5 grasp poses to the nearest grid-block centre: 5.0, 9.3, 1.0, 5.7, 5.0 deg"
+    },
+    {
+      "section": "12 structure",
+      "check": "position is confounded with session time",
+      "status": "WARN",
+      "detail": "episodes 0-44 are 9 blocks of 5 consecutive episodes, so anything that drifted over the session varies with tray spot (same confound as Phase 0.5; see 08 task card). Also: lerobot's default 'last 5 episodes' holdout would hold out exactly the 5 off-grid episodes 45-49"
+    },
+    {
+      "section": "13 train path",
+      "check": "random-access decode through LeRobotDataset",
+      "status": "PASS",
+      "detail": "24 frames spread over the dataset, both cameras, CHW float32 in [0,1]"
+    },
+    {
+      "section": "13 train path",
+      "check": "language task string reaches the item",
+      "status": "PASS",
+      "detail": "task='Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture' (SmolVLA and pi0.5 condition on this)"
+    },
+    {
+      "section": "13 train path",
+      "check": "action chunk loads: ACT chunk_size=100",
+      "status": "PASS",
+      "detail": "action shape (100, 6), no NaN=True"
+    },
+    {
+      "section": "13 train path",
+      "check": "action chunk loads: SmolVLA / pi0.5 chunk_size=50",
+      "status": "PASS",
+      "detail": "action shape (50, 6), no NaN=True"
+    }
+  ],
+  "manifest": {
+    "episodes": 50,
+    "frames": 38389,
+    "fps": 30
+  },
+  "timing": {
+    "worst_dt_ms": 0.0033060709635421293,
+    "dropped_frames": 0
+  },
+  "tracking_p99": {
+    "shoulder_pan": 3.560439109802246,
+    "shoulder_lift": 11.384614944458008,
+    "elbow_flex": 11.472526607513428,
+    "wrist_flex": 17.934066549539565,
+    "wrist_roll": 5.538461685180664,
+    "gripper": 10.070957326889063
+  },
+  "idle": {
+    "onset_median": 66,
+    "offset_median": 95,
+    "onset_gt_50": 43,
+    "kept_frames": 30609,
+    "kept_fraction": 0.7973377790512908
+  },
+  "structure": {
+    "block_separation_ratio_3d": 1.5119866985541832,
+    "block_separation_ratio_pan": 1.3355843862376426,
+    "seated_pose_std": [
+      0.39949258222908984,
+      4.179187792431683,
+      7.014150568358439,
+      5.0963714134669615,
+      15.99268332732638
+    ],
+    "seated_pan_std": 0.39949258222908984
+  }
+}
