@@ -1263,13 +1263,15 @@ measurement.** **§13** stays below as the design to return to once a policy ear
 | 1 ✅ | **Pre-register the divergence prediction** (§12.1) | 0 | committed 2026-10-12, before collection |
 | 2 ✅ | **D1: 50 full-task episodes, continuously randomised, deliberately varied** (§12.2) | done 2026-10-13 | 50 ep / 38,389 frames · **P4 PASS** |
 | 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
-| 4 | **Processing: head-only trim, jerk + per-stage loss** (§12.4) | ~2 h | — |
-| 5 | **Retrain ACT and SmolVLA** (§12.5) | ~18 h GPU | — |
-| 6 | **π0.5 frozen-feature probe**, during training (§12.6) | ~30 min | — |
+| 3b | **D2: compositional collection, 130 stage episodes** (§12.4) | **to be timed** | — |
+| 4 | **Processing: head-only trim, jerk + per-stage loss** (§12.5) | ~2 h | — |
+| 5 | **Retrain ACT and SmolVLA** (§12.6) | ~18 h GPU | — |
+| 6 | **π0.5 frozen-feature probe**, during training (§12.7) | ~30 min | — |
 
-**Dropped from the original plan, with reasons:** separate reach-and-grasp / insertion datasets (§12.3
-explains what replaces them), and a third π0.5 training run before §12.6 answers whether more steps can
-possibly help. **Deferred:** the second location (§12.7), HG-DAgger infrastructure, and the 126-trial
+**Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
+experiment (D2) with a time-and-performance hypothesis attached, rather than as a replacement for
+§12.3's perturbed episodes — the two now test different things and both are recorded. Still dropped: a
+third π0.5 training run before §12.7 answers whether more steps can possibly help. **Deferred:** the second location (§12.8), HG-DAgger infrastructure, and the 126-trial
 success-rate pass (§13).
 
 ## 12.1 — Pre-registration: committed before D1 is recorded
@@ -1333,7 +1335,7 @@ some of the rise could be position rather than approach. Restricting both datase
 range they share (2.57–4.64°, D0 n = 24, D1 n = 31) gives **+0.113, p < 0.0001 — 72% of the
 difference survives**. The manipulation genuinely raised approach variation.
 
-**One episode's grasp is mis-detected, and the cause matters for §12.4.** `grasp_seated_index`
+**One episode's grasp is mis-detected, and the cause matters for §12.5.** `grasp_seated_index`
 assumes the approach-opening falls in the episode's first half and the release-opening in the second —
 true for all 50 D0 episodes, and for 49 of 50 D1 episodes. **D1 episode 39 breaks it**: its gripper
 trace is perfectly normal (open at f120–160 → hold on the cylinder at f200–320 → release at the
@@ -1344,7 +1346,7 @@ reports the fixture pose as the grasp pose — grasp pan and seated pan come out
 
 **This is a side effect of the longer tail**, which is otherwise the change we wanted: a 3.2 s hold
 plus the retreat pushes the release earlier in relative terms, and the halves assumption was
-calibrated when tails were 1.5 s. **It will get worse as tails grow, and §12.4's per-stage held-out
+calibrated when tails were 1.5 s. **It will get worse as tails grow, and §12.5's per-stage held-out
 loss depends on exactly this segmentation** — so the detector needs a more robust rule (find the two
 openings as contiguous runs above a level derived from the trace, then take the first and the last)
 before the per-stage work, not after.
@@ -1393,7 +1395,7 @@ string, 30 fps, same fixture and tray.
    after the fact. The nine marked spots stay, for **evaluation only**, where reproducibility matters.
 2. **Vary the approach deliberately** — see the box below.
 3. **Keep a deliberate tail.** After the cylinder is seated and released, **hold still for ~2 seconds**
-   before pressing →. D0's episodes already carry ~1.4 s of tail; the trim is what removed it (§12.4).
+   before pressing →. D0's episodes already carry ~1.4 s of tail; the trim is what removed it (§12.5).
    Making it deliberate rather than operator lag is what turns it into a usable "task complete" signal.
 
 > ### Vary the path, not the outcome
@@ -1434,8 +1436,11 @@ cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforg
 
 ## 12.3 — D1-perturb: ~30 perturbed and recovery episodes
 
-**This replaces the separate reach-and-grasp / insertion datasets**, which were dropped for two
-specific reasons:
+**This is not the stage split** — that is §12.4, now run as its own experiment. The two were originally
+alternatives; they are now complementary, because they cover different things: §12.4 adds clean
+single-stage data, while the perturbed episodes below add *in-context recovery*, which no stage clip
+contains. Two design hazards drove the original preference, and both still apply to §12.4 — recorded
+here because that is where the reasoning lives:
 
 1. **ACT is not language-conditioned.** Verified in the source — it takes images and state only, no
    `task` input. So ACT cannot tell a stage clip from the matching portion of a full episode by
@@ -1445,7 +1450,7 @@ specific reasons:
    speed*. One observation, two very different action distributions — which is precisely the failure
    §11.6 diagnosed. It would manufacture the problem.
 
-**Perturbed full episodes give the same stage coverage without the split**, and they supply the
+**Perturbed full episodes give stage coverage without the split**, and they supply the
 failure-recovery data that was otherwise deferred to R3. Run the whole task, but create the hard case
 mid-episode:
 
@@ -1469,7 +1474,117 @@ takes longer than a clean run. **Keep the ~2 s tail.** Log which perturbation ea
 column cannot be reconstructed afterwards, which is the same mistake `phase07_log.csv` already
 represents.
 
-## 12.4 — Processing: trim the head only, and add two metrics
+## 12.4 — D2: compositional collection, one dataset per stage
+
+**The hypothesis.** Splitting the task into stages and collecting each one separately **(a) takes less
+operator time than recording whole episodes, and (b) produces a better policy** — because the budget
+goes to the stages that actually fail instead of being spent uniformly on a trajectory whose middle is
+already solved. Round 1 is the motivation: 14 of 41 failures were at the grasp and 9 at the insert,
+while **no trial in 54 failed in transport**.
+
+| Stage | Episodes | What it covers |
+|---|---|---|
+| **reach** | 10 | home → gripper positioned above the cylinder in the tray |
+| **grasp** | **50** | close on the cylinder and lift clear — round 1's single biggest failure |
+| **transport** | 10 | carry from above the tray to above the fixture — already reliable |
+| **insert** | **50** | descend, seat in the top-left blue hole, release — round 1's second failure |
+| **retrieve** | 10 | return to the home pose with an empty gripper |
+| | **130** | |
+
+The 50/10 split is the whole point: five times the data on the two stages that fail, and a token amount
+on the three that do not.
+
+**The task string stays the same for every stage.** That is deliberate and it sidesteps the problem that
+sank the earlier stage-split proposal (§12.3): ACT takes no language input, so a per-stage instruction
+would have been invisible to it. With one instruction, a stage dataset is simply *more data in that part
+of the state space*, which every family can use — the policy infers the stage from what it sees, which
+is what it has to do at rollout anyway.
+
+### Record all five stages into ONE dataset — this is not optional
+
+**`lerobot-train` cannot train on several datasets at once.** `LeRobotMultiDataset` is declared but
+disabled: `train.py:269` raises `NotImplementedError("LeRobotMultiDataset is not currently
+implemented.")`, and `datasets/factory.py:124` says the same. So five separate `repo_id`s would need a
+merge step before any of them could be used together.
+
+The command below has no `--resume` and no `--dataset.no_stamp`, so **each invocation would create its
+own timestamped dataset** — five runs, five datasets, none of them trainable together. The fix is the
+pattern §12.3 already uses: let the **first** stage create the dataset, then append the other four with
+`--resume=true` and the stamped name. Stages then live at known episode-index ranges in one dataset, and
+`--dataset.episodes` selects any combination — which is also what makes the ablation possible.
+
+| Run | Stage | `NEP` | `--resume` | episodes |
+|---|---|---|---|---|
+| 1 | reach | 10 | — (creates it) | 0–9 |
+| 2 | grasp | 50 | `true` | 10–59 |
+| 3 | transport | 10 | `true` | 60–69 |
+| 4 | insert | 50 | `true` | 70–119 |
+| 5 | retrieve | 10 | `true` | 120–129 |
+
+**Write these ranges down as you go.** They are the only record of which episode is which stage — the
+same gap `phase07_log.csv` already represents, and here it would make the dataset uninterpretable.
+
+### The command
+
+Run 1 as given, which creates `so101_tray_cylinder_compositional_<stamp>`:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-record --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 --teleop.id=my_leader --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_compositional --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=10 --dataset.episode_time_s=20 --dataset.reset_time_s=5 --dataset.fps=30 --dataset.push_to_hub=false --dataset.private=true --display_data=true --dataset.streaming_encoding=true --dataset.encoder_threads=2
+```
+
+Runs 2–5 add `--resume=true` and the stamped name, changing only `NEP`:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && STAMPED=so101_tray_cylinder_compositional_CHANGEME && NEP=50 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-record --resume=true --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 --teleop.id=my_leader --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$STAMPED --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=20 --dataset.reset_time_s=5 --dataset.fps=30 --dataset.push_to_hub=false --dataset.private=true --display_data=true --dataset.streaming_encoding=true --dataset.encoder_threads=2
+```
+
+- **`--dataset.push_to_hub=false`** throughout, then one push at the end with
+  [`push_dataset.sh`](../scripts/push_dataset.sh) — which is also what creates the codebase-version tag
+  that `hf upload` alone does not (the BLOCK D1 hit).
+- **`--dataset.streaming_encoding=true --dataset.encoder_threads=2`** encodes during capture instead of
+  writing PNGs first, making `save_episode()` near-instant. That matters more here than anywhere else:
+  130 short episodes pay the per-episode cost 130 times, and the per-episode cost is exactly what the
+  time hypothesis is about.
+- **`episode_time_s=20`** is a generous ceiling for a stage — D1's *whole* episodes ran a median 25.7 s,
+  so a single stage should land in single-digit seconds. Press → as soon as the stage is done.
+- **Position: randomise continuously**, as §12.2 does, for reach / grasp / insert. Those three are the
+  stages where cylinder position matters.
+- **Keep the ~2 s tail on `insert` and `retrieve`** — those are the stages that end the task, so they
+  carry the "now hold still" signal (§12.5).
+
+### Time the collection — it is half the hypothesis
+
+**Record wall clock per stage**, not just total. The claim is that compositional collection is cheaper,
+and the baseline is D1: **50 full episodes in ~1.5–2 h recording**, 38,389 frames.
+
+A rough forward estimate, to be checked against the real numbers: at ~2 s for reach / transport /
+retrieve, ~3 s for grasp and ~4 s for insert, 130 stage episodes is **~12,000 frames — under a third of
+D1's 38,389**. So the compositional set is expected to be much cheaper *and* much smaller. That cuts
+both ways and is why the comparison needs care:
+
+> **Match on operator time, not on episodes or frames.** "130 stage episodes beat 50 full episodes" is
+> not a result if the two cost different amounts to collect. The interesting claim — and the one the
+> hypothesis actually makes — is **"the same hours of operator time produce a better policy"**. So log
+> the hours, and if D2 comes in at half of D1's time, the honest comparison either collects twice as
+> much D2 or reports the result as "half the time, equal performance", which would already be a win.
+
+### What to watch in the rollouts
+
+The known risk in a stage split is the **start-state distribution**: a stage clip begins at rest, while
+in a full episode that same state is passed through at speed. One observation, two action distributions.
+
+**This makes a specific, falsifiable prediction worth pre-registering now:** if the mismatch matters,
+the failure will be **hesitation or a stall at stage boundaries** — the arm arriving at the grasp pose
+and pausing before closing, or stopping above the fixture before descending. That is visually distinct
+from round 1's failure modes (missing the cylinder, mis-seating), so it can be scored separately in the
+round-2 log. If it does not appear, the start-state concern was unfounded and compositional collection
+is clean.
+
+**Train D2 against D1 at matched steps**, and keep D1 and D2 as separate training runs rather than
+merging them, so the comparison stays interpretable. Merging is a later question, and a good one — a
+policy trained on *both* is the obvious third arm if either alone falls short.
+
+## 12.5 — Processing: trim the head only, and add two metrics
 
 **Head-only trim.** [`make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) currently trims
 both ends. The head trim is justified — [phase06 F3](phase06_camera_ablation_training.md) showed the
@@ -1492,19 +1607,19 @@ jerk metric:** without it there is one unproven proxy and no way to tell whether
 Pre-registered prediction from §11.3: **SmolVLA 5k and 20k separate at the grasp and insert stages
 specifically**, where tolerance is tightest, even though 5k wins the pooled number.
 
-## 12.5 — Training: ACT and SmolVLA first
+## 12.6 — Training: ACT and SmolVLA first
 
 | | Steps | Why |
 |---|---|---|
 | **SmolVLA** | **longer than 20k** | the most promising policy (§11.8), and round 1 says train *longer* despite the eval curve, because 20k beat the loss-optimal 5k on the robot |
 | **ACT** | **40k** | 40k ≈ 60k was confirmed (§11.2 P1), so 60k is wasted compute — round 1's one clean win for the dial grid |
-| **π0.5** | **not yet** | §12.6 first |
+| **π0.5** | **not yet** | §12.7 first |
 
 Run both with `--dataset.episodes` covering `0–49` and `0–79` if the compute allows, so the perturbed
 episodes are ablatable rather than merely included. Keep seed 1000 and the rest of
 [training §1](phase07_training.md) fixed.
 
-## 12.6 — The π0.5 gate: can more steps possibly fix the reach?
+## 12.7 — The π0.5 gate: can more steps possibly fix the reach?
 
 π0.5 is **0/18 excluding luck**, with 11 of 18 trials failing at reach, and it costs the most compute
 and 11.55 GB per checkpoint. §11.4 gives three candidate causes; only one of them is fixed by more
@@ -1522,7 +1637,7 @@ linear regression from features to the cylinder's position (recoverable from the
 
 Either way it converts "π0.5 needs more steps" from an assumption into a decision.
 
-## 12.7 — Deferred, and why each is safe to defer
+## 12.8 — Deferred, and why each is safe to defer
 
 - **Second location.** Still the only direct test of the portability claim this whole phase is built on
   (§9 item 3), and still untested. Deferred because D1 must stay mergeable with D0 and a location
