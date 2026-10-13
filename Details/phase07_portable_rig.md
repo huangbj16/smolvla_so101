@@ -305,7 +305,7 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 |---|---|---|
 | 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
 | 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
-| 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act.ipynb) · [SmolVLA](../colab_phase07_smolvla.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
+| 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act_gpufree.ipynb) · [SmolVLA](../colab_phase07_smolvla_gpufree.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
 | 4a ✅ | **Round 1 run book**: six arms, 54 trials, two checkpoints per policy, mirrored interleave, 9 grid spots | **§10** · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
 | 4 ✅ | **Round 1 run and scored 2026-10-12** — 54 trials. SmolVLA 6/18, ACT 5/18, π0.5 2/18 (0/18 excluding the two the operator called lucky). Held-out loss ranked the families backwards, and spot difficulty turned out to be policy-specific | **§11** · [phase07_eval_log.csv](phase07_eval_log.csv) |
 | 5 ◐ | **Round 2 plan agreed 2026-10-12** — data, not more trials: a continuously-randomised varied dataset, perturbed/recovery episodes, head-only trim, ACT + SmolVLA retrained | **§12** · §13 holds the deferred success-rate design |
@@ -1795,7 +1795,7 @@ over D1.
 
 | | ACT | SmolVLA |
 |---|---|---|
-| Notebook | [colab_phase07_r2_act.ipynb](../colab_phase07_r2_act.ipynb) | [colab_phase07_r2_smolvla.ipynb](../colab_phase07_r2_smolvla.ipynb) |
+| How | **one local command** (below) — no notebook needed | [colab_phase07_r2_smolvla.ipynb](../colab_phase07_r2_smolvla.ipynb) |
 | Starts from | `act_tray_cylinder_s1000_trim` | `smolvla_tray_cylinder_s1000_trim` |
 | Batch × further steps | 8 × **40,000** | 64 × **20,000** |
 | New-data coverage | 320,000 samples · **10.6 epochs** of D1 | 1,280,000 samples · 42.5 epochs |
@@ -1826,6 +1826,20 @@ Round 1 **finished** at 2.5e-6, so handing the converged policy 1e-4 again is **
 would largely undo the warm start. The notebook therefore passes `--policy.optimizer_lr=1e-5`, dropping
 the peak 10×; the cosine still runs, pinned to the real step count, so the run anneals rather than
 sitting flat.
+
+### Notebooks: one, and it is derived from the one that actually ran
+
+**`colab_phase07_r2_smolvla.ipynb` is generated from
+[`colab_phase07_pi05_Colab.ipynb`](../colab_phase07_pi05_Colab.ipynb)** by
+[`make_r2_notebook.py`](../scripts/make_r2_notebook.py) — the only Phase 0.7 notebook that completed a
+real Colab run. The round-1 `act` / `pi05` / `smolvla` notebooks target a **rented box**, not Colab:
+they carry a `/root/gpufree-data` work-dir chooser, a PEP 668 `--break-system-packages` install path
+and a `PHASE07_WORK` override, none of which Colab needs. They are renamed **`*_gpufree.ipynb`** to
+keep that distinction visible, and the generator asserts none of their machinery survives into the
+output.
+
+**ACT gets no notebook.** It runs locally in one command, which is smoke-tested below; a Colab
+notebook for it would be an untested artefact nobody needs.
 
 ### The sample-matched pair survives, for free
 

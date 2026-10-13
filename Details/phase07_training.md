@@ -10,9 +10,9 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 
 | Policy | Notebook | Status |
 |---|---|---|
-| **ACT** | [colab_phase07_act.ipynb](../colab_phase07_act.ipynb) | ✅ **done 2026-10-05** |
-| **SmolVLA** | [colab_phase07_smolvla.ipynb](../colab_phase07_smolvla.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [Colab](../colab_phase07_pi05_Colab.ipynb) · [4090](../colab_phase07_pi05.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
+| **ACT** | [colab_phase07_act_gpufree.ipynb](../colab_phase07_act_gpufree.ipynb) | ✅ **done 2026-10-05** |
+| **SmolVLA** | [colab_phase07_smolvla_gpufree.ipynb](../colab_phase07_smolvla_gpufree.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
+| **π0.5** | [Colab](../colab_phase07_pi05_Colab.ipynb) · [4090](../colab_phase07_pi05_gpufree.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
 
 ---
 
