@@ -1264,7 +1264,7 @@ measurement.** **§13** stays below as the design to return to once a policy ear
 | 2 ✅ | **D1: 50 full-task episodes, continuously randomised, deliberately varied** (§12.2) | done 2026-10-13 | 50 ep / 38,389 frames · **P4 PASS** |
 | 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
 | 3b | **D2: compositional collection, 130 stage episodes** (§12.4) | **to be timed** | — |
-| 4 ◐ | **Processing: head trim + 2 s tail cap, jerk, per-stage loss** (§12.5) | trim ~15 min, local | **trim run 2026-10-13**; metrics pending |
+| 4 ◐ | **Processing: head trim + 2 s tail cap, jerk, per-stage loss** (§12.5) | trim ~1 h, local CPU | **trim run 2026-10-13**; metrics pending |
 | 5 | **Retrain ACT (local, ~2.2 h) and SmolVLA (Colab, ~21 h)**, both fresh on D1 (§12.6) | ~23 h GPU | notebooks drafted; **local GPU driver broken, see §12.6** |
 | 6 | **π0.5 frozen-feature probe**, during training (§12.7) | ~30 min | — |
 
@@ -1610,7 +1610,11 @@ cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforg
 **It runs locally and needs no GPU** — measured, since the question came up. `LeRobotDataset` decodes
 at **60 frame/s on CPU** here (the verification report's 9 frame/s figure is *random* access, which
 re-seeks per item; the trim reads each episode in order). Round 1 did this step on Colab; there was
-never a reason to. Push afterwards with [`push_dataset.sh`](../scripts/push_dataset.sh), which creates
+never a reason to.
+
+**Budget ~1 h, not the ~8 min the decode rate suggests.** Decoding is not the cost — every kept frame
+is also re-encoded into the destination videos, and that dominates. The run is CPU-bound and
+single-process, so it neither needs nor benefits from the GPU being up. Push afterwards with [`push_dataset.sh`](../scripts/push_dataset.sh), which creates
 the codebase-version tag that a plain `hf upload` does not.
 
 ### `eval_chunk_jerk` in wandb
