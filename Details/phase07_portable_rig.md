@@ -1703,6 +1703,28 @@ and a larger delta rejects more noise. The ladder never fires on current data �
 episodes succeeds on the first rung — and exists so that a future episode with a shallower reversal
 relaxes instead of failing.
 
+**Checked on the trimmed dataset too, which is what training actually reads.** On
+`..._trimmed` the two detectors agree on **50/50** episodes and neither flags anything — including
+episode 39, where both now return grasp/seated `(147, 277)` with a 21.10° grasp-to-seated pan
+separation. Its grasp pan is **−1.7°**, squarely mid-range in a dataset spanning −8.8…+7.3°, which
+is the final confirmation that it was never a placement outlier.
+
+**The trim incidentally masks the old bug — by luck, and by 43 frames.** Trimming changes both sides
+of the failure condition: cutting `h` frames off the head makes it *harder* to satisfy by `h`
+(release_start falls as fast as len), while cutting `t` off the tail makes it *easier* by `t`. So the
+condition becomes `len < 2·release_start − h + t`. For episode 39, h = 48 and t = 131:
+
+| | len | 2 × release_start | passes? |
+|---|---|---|---|
+| raw | 724 | 684 | ✗ — **failed by 40 frames** |
+| trimmed | 545 | 588 | ✓ — passes with **43 frames** of margin |
+
+So the tail cap rescued it, by more than the head trim cost. **That is not a reason to keep the old
+detector.** The margin is 43 frames on one episode, it depends on a tail cap chosen for unrelated
+reasons, and the raw datasets are what §11.6's divergence analysis and the verification script read.
+It does mean the bug never reached round-2 *training* data, which is worth knowing: nothing computed
+on the trimmed set needs revisiting.
+
 **Validation, and why this specific bar.** §11.6's position analysis and the verification report were
 both computed with the old detector, so a replacement that quietly moved D0 would invalidate published
 numbers:
