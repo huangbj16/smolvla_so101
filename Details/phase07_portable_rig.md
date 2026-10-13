@@ -1264,8 +1264,8 @@ measurement.** **§13** stays below as the design to return to once a policy ear
 | 2 ✅ | **D1: 50 full-task episodes, continuously randomised, deliberately varied** (§12.2) | done 2026-10-13 | 50 ep / 38,389 frames · **P4 PASS** |
 | 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
 | 3b | **D2: compositional collection, 130 stage episodes** (§12.4) | **to be timed** | — |
-| 4 | **Processing: head-only trim, jerk + per-stage loss** (§12.5) | ~2 h | — |
-| 5 | **Retrain ACT and SmolVLA** (§12.6) | ~18 h GPU | — |
+| 4 ◐ | **Processing: head trim + 2 s tail cap, jerk, per-stage loss** (§12.5) | trim ~15 min, local | **trim run 2026-10-13**; metrics pending |
+| 5 | **Retrain ACT (local, ~2.2 h) and SmolVLA (Colab, ~21 h)**, both fresh on D1 (§12.6) | ~23 h GPU | notebooks drafted; **local GPU driver broken, see §12.6** |
 | 6 | **π0.5 frozen-feature probe**, during training (§12.7) | ~30 min | — |
 
 **Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
@@ -1584,40 +1584,148 @@ is clean.
 merging them, so the comparison stays interpretable. Merging is a later question, and a good one — a
 policy trained on *both* is the obvious third arm if either alone falls short.
 
-## 12.5 — Processing: trim the head only, and add two metrics
+## 12.5 — Processing: trim the head, keep a 2 s tail, add two metrics
 
-**Head-only trim.** [`make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) currently trims
-both ends. The head trim is justified — [phase06 F3](phase06_camera_ablation_training.md) showed the
-idle lead-in is an attractor the policy cannot escape at the start. **The tail is the opposite**: it is
-the only place a policy can learn that the task is finished, and §11.5 measured the cost of removing
-it (SmolVLA moves 3.6× as much as ACT in the final second). Change the rule to head-only and keep the
-deliberate 2 s tail that §12.2 records.
+### The trim, and the one rule that changed
 
-**`eval_chunk_jerk` in wandb.** §11.3a has the patch and the reasoning: the training loop needs no
-change, because `MetricsTracker.update_metrics` auto-registers a meter for every new scalar. Use the
-eval-branch version, which works for all three families and costs one denoising loop per eval batch.
-**Pre-registered**: SmolVLA 5k should show ~2× the jerk of 20k — the same 2.0× measured on the robot,
-visible with no robot attached. If it does, the dial grid can be scored on loss **and** jerk.
+[`make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) trimmed **both** ends through round 1.
+The head trim stays — [phase06 F3](phase06_camera_ablation_training.md) showed the idle lead-in is an
+attractor the policy cannot escape at the start. **The tail is the opposite**: it is the only place a
+policy can learn that the task is finished, and §11.5 measured the cost of removing it (SmolVLA moves
+3.6× as much as ACT in the final second).
 
-**Per-stage held-out loss.** Pool the held-out frames by task stage and report loss per stage rather
-than one number. The segmentation already exists — `grasp_seated_index` in
-[`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py) is the validated detector, and it
-splits every episode into reach / carry / insert from the gripper trace. **This is what validates the
-jerk metric:** without it there is one unproven proxy and no way to tell whether it works.
-Pre-registered prediction from §11.3: **SmolVLA 5k and 20k separate at the grasp and insert stages
-specifically**, where tolerance is tightest, even though 5k wins the pooled number.
+The script now takes **`--tail-cap N`**, keeping up to N frames after the last motion. The default is
+unchanged, so D0's trimmed dataset is still reproducible from this script; round 2 passes **60** (2.0 s
+at 30 fps).
 
-## 12.6 — Training: ACT and SmolVLA first
+**Capped rather than kept whole, deliberately.** D1's recorded tails run **47–191 frames (1.6–6.4 s)**.
+Keeping all of them would teach a terminal hold that varies 4× in length — which is one more source of
+action multimodality at exactly the state where the policy should be doing one unambiguous thing.
+Capping gives every episode the *same* ~2 s of stillness, which is what makes it a learnable signal.
 
-| | Steps | Why |
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && python scripts/make_trimmed_dataset.py HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911 HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed ~/.cache/huggingface/lerobot/HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed --tail-cap 60
+```
+
+**It runs locally and needs no GPU** — measured, since the question came up. `LeRobotDataset` decodes
+at **60 frame/s on CPU** here (the verification report's 9 frame/s figure is *random* access, which
+re-seeks per item; the trim reads each episode in order). Round 1 did this step on Colab; there was
+never a reason to. Push afterwards with [`push_dataset.sh`](../scripts/push_dataset.sh), which creates
+the codebase-version tag that a plain `hf upload` does not.
+
+### `eval_chunk_jerk` in wandb
+
+§11.3a has the patch and the reasoning: the training loop needs no change, because
+`MetricsTracker.update_metrics` auto-registers a meter for every new scalar the policy returns. Use the
+eval-branch version — it works for every family and costs one denoising loop per eval batch.
+
+**Pre-registered**: SmolVLA 5k should show **~2× the jerk of 20k**, matching the 2.0× measured on the
+robot in §11.3 — *visible with no robot attached*. If it holds, the dial grid can be scored on loss
+**and** jerk, and the offline metric finally tracks the thing loss misses.
+
+### Per-stage held-out loss — and a detector fix it needs first
+
+Pool the held-out frames by task stage and report loss per stage instead of one pooled number.
+**Pre-registered prediction** from §11.3: SmolVLA 5k and 20k should separate at the **grasp and insert**
+stages specifically, where tolerance is tightest, even though 5k wins the pooled number. This is also
+what validates the jerk metric — without it there is one unproven proxy and no way to check it.
+
+> **`grasp_seated_index` must be made robust before this, not after.** The segmentation this depends on
+> is the detector in [`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py), and §12.1 found it
+> failing on D1 episode 39: it assumes the approach-opening falls in the episode's first half and the
+> release in the second, which **the longer tail breaks**. It is 1/50 on D1 and will get worse as tails
+> grow. The fix is to find the two openings as contiguous runs above a level derived from the trace and
+> take the first and the last, rather than splitting at the midpoint — and to re-validate it against all
+> 100 D0+D1 episodes, confirming it reproduces the existing D0 numbers, before anything depends on it.
+
+## 12.6 — Training: ACT locally, SmolVLA on Colab, both fresh on D1
+
+**Two runs, both fresh, both on D1 alone.** D1 is the same size as D0 (50 episodes), so this is
+**size-matched to round 1** and the single variable is the data's character — which is exactly what
+§12.1 pre-registered. Notebooks are *derived* from the round-1 ones by
+[`make_round2_notebooks.py`](../scripts/make_round2_notebooks.py) rather than rewritten, so the install,
+auth, resume and disk-watchdog machinery is identical and only the configuration differs.
+
+| | ACT | SmolVLA |
 |---|---|---|
-| **SmolVLA** | **longer than 20k** | the most promising policy (§11.8), and round 1 says train *longer* despite the eval curve, because 20k beat the loss-optimal 5k on the robot |
-| **ACT** | **40k** | 40k ≈ 60k was confirmed (§11.2 P1), so 60k is wasted compute — round 1's one clean win for the dial grid |
-| **π0.5** | **not yet** | §12.7 first |
+| Notebook | [colab_phase07_r2_act.ipynb](../colab_phase07_r2_act.ipynb) | [colab_phase07_r2_smolvla.ipynb](../colab_phase07_r2_smolvla.ipynb) |
+| From | **scratch** | **`lerobot/smolvla_base`** |
+| Batch × steps | 8 × **40,000** | 64 × **30,000** |
+| Checkpoints | every 10k → 4 | every 5k → 6 |
+| Where | **local 5080** | **Colab L4** (or A100) |
+| Peak VRAM | **3.7 GiB** of 15.5 | **16.5 GiB** of 24 |
+| Est. runtime | **~2.2 h** | **~21 h** |
+| Output | `act_tray_cylinder_s1000_d1` | `smolvla_tray_cylinder_s1000_d1` |
 
-Run both with `--dataset.episodes` covering `0–49` and `0–79` if the compute allows, so the perturbed
-episodes are ablatable rather than merely included. Keep seed 1000 and the rest of
-[training §1](phase07_training.md) fixed.
+### Why fresh, and not continued from the round-1 checkpoint
+
+Warm-starting would carry D0's low-divergence structure into the run and confound the comparison — the
+policy would already have absorbed the thing the experiment is trying to vary. It would also make
+**P3** unmeasurable: ACT's KLD collapsing or not collapsing is only interpretable from scratch.
+
+The same argument rules out a D0+D1 mixture *for this round*: §11.6 predicts the mixture would help ACT
+and hurt SmolVLA relative to D1 alone, so pooling dilutes the manipulation in opposite directions per
+family. A 100-episode mixture arm is a good **third** run once the clean test is in — it answers "does
+more data win", which is a different question from "does varied data win".
+
+### Why ACT runs locally and SmolVLA cannot
+
+**ACT is faster here than on the L4.** [phase06 §5](phase06_camera_ablation_training.md) measured this
+exact machine at **5.4 it/s** at batch 8 with two cameras, 3.7 GiB — against the L4's 4.47 it/s in
+round 1. 40,000 steps is **~2.1 h** plus ~10 min of periodic eval. Note that figure is fp32;
+`--policy.use_amp=true` is ~1.3× faster but changes the numerics of the reference recipe, so **leave it
+off** — round 1 did.
+
+**SmolVLA cannot run here at the round-1 recipe.** Batch 64 peaked at **16.5 GiB** on the L4, and the
+5080 has **15.5 GiB** usable. The obvious workaround does not exist: **lerobot has no gradient
+accumulation** — `Accelerator()` is constructed without `gradient_accumulation_steps`
+(`lerobot_train.py:257-262`) and there is no config field for it — so batch 64 cannot be simulated from
+batch 32. Dropping to batch 32 would change the recipe, and with it SmolVLA's absolute performance,
+which puts a confound straight into the pre-registered ACT−SmolVLA gap. So SmolVLA goes to Colab at
+batch 64, unchanged.
+
+### 30,000 steps gives both arms from one run
+
+Round 1 found SmolVLA's **20k** checkpoint better on the robot than its loss-optimal 5k, so round 2
+trains longer. But 20k is also the step count round 1 compared at — so **`save_freq=5000` writes the
+20k checkpoint on the way to 30k**, and one run yields both the matched comparison *and* the
+train-longer arm. ACT is the mirror: round 1 confirmed 40k ≈ 60k (P1), so 40k is both the matched
+checkpoint and the stopping point, and the final 20k of round 1's budget is simply dropped.
+
+**~21 h is past a comfortable Colab session.** Round 1's 14.2 h SmolVLA run survived; the π0.5 run did
+not and lost 17 h to a dead session. The notebook's Part C resume rebuilds from the last Hub checkpoint,
+so a disconnect costs at most `save_freq` = 5,000 steps ≈ 2.8 h. Two ways to de-risk it: take an **A100**
+if the runtime offers one (round 1 measured ~2.5–3.5× over the L4 on π0.5), or **stop at 20k** — that
+secures the matched comparison in ~14 h, and Part C resumes to 30k later with no loss.
+
+### The local ACT run, without the notebook
+
+The notebook works locally, but ACT needs none of its Colab scaffolding — this is the whole run:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && HOLDOUT="[9,19,29,39,49]" && EPISODES="[0,1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,36,37,38,40,41,42,43,44,45,46,47,48,9,19,29,39,49]" && lerobot-train --policy.type=act --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_tray_cylinder_s1000_d1 --policy.private=true --save_checkpoint_to_hub=true --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed --dataset.episodes="$EPISODES" --dataset.eval_split=0.1 --eval_steps=5000 --batch_size=8 --steps=40000 --num_workers=8 --seed=1000 --save_freq=10000 --log_freq=200 --output_dir=outputs/train/act_tray_cylinder_s1000_d1 --job_name=act_tray_cylinder_s1000_d1 --wandb.enable=true --wandb.project=phase07-policy-transfer
+```
+
+The episode list is the holdout reordered into the tail, exactly as round 1 did it — see the note in
+the notebook's config cell for why the *rationale* changed even though the mechanism did not.
+
+> ### ⚠ The local GPU is currently unusable — fix this before the ACT run
+>
+> `nvidia-smi` fails with *"couldn't communicate with the NVIDIA driver"*. The cause is a kernel
+> upgrade that the NVIDIA kernel-module package did not follow: the machine is running
+> **7.0.0-38-generic**, but `linux-modules-nvidia-595-open-generic-hwe-24.04` is still pinned at
+> **7.0.0-31**. `/lib/modules/7.0.0-31-generic` has the full set (`nvidia.ko`, `nvidia-drm.ko`,
+> `nvidia-modeset.ko`, `nvidia-uvm.ko`, `nvidia-peermem.ko`); `/lib/modules/7.0.0-38-generic` has only
+> the in-tree `nvidiafb` and `nvidia-wmi-ec-backlight`, which are not the driver. `dkms` is not
+> installed, so nothing rebuilds it automatically.
+>
+> ```bash
+> sudo apt install --reinstall linux-modules-nvidia-595-open-generic-hwe-24.04 && sudo reboot
+> ```
+>
+> The candidate version is already 7.0.0-38.38~24.04.4+1, so this is an upgrade rather than a new
+> install. **Booting 7.0.0-31 from GRUB's advanced menu is the zero-risk fallback** — that kernel still
+> has working modules. Nothing in §12.5 is blocked either way: the trim is CPU-only.
 
 ## 12.7 — The π0.5 gate: can more steps possibly fix the reach?
 
