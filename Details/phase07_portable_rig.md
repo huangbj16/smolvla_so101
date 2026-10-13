@@ -1265,7 +1265,7 @@ measurement.** **§13** stays below as the design to return to once a policy ear
 | 3 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | ~1.5 h | — |
 | 3b | **D2: compositional collection, 130 stage episodes** (§12.4) | **to be timed** | — |
 | 4 ◐ | **Processing: head trim + 2 s tail cap, jerk, per-stage loss** (§12.5) | trim **35.7 min**, local CPU | **trim done** (33,337 frames, 87%) · detector fixed · jerk + per-stage loss pending |
-| 5 | **Retrain ACT (local, ~2.2 h) and SmolVLA (Colab, ~21 h)**, both fresh on D1 (§12.6) | ~23 h GPU | notebooks drafted; **local GPU driver broken, see §12.6** |
+| 5 ◐ | **Continue ACT (local, ~1.1 h) and SmolVLA (Colab, ~7 h) from the round-1 checkpoints on D1** (§12.6) | ~8 h GPU | notebooks ready · ACT warm start **smoke-tested** · driver repaired |
 | 6 | **π0.5 frozen-feature probe**, during training (§12.7) | ~30 min | — |
 
 **Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
@@ -1347,7 +1347,10 @@ difference being episode 39 itself.
 The numbers above are computed with the fixed detector. For the record, the mis-detection made P4
 slightly *weaker*, not stronger: it was +0.156 unmatched / +0.113 matched before the fix.
 
-**P1–P3 are therefore live.** Measure them after round-2 training and rollouts.
+**P1–P3 are therefore live** as a test of the *data* — but note that §12.6 later chose to **continue
+from the round-1 checkpoints rather than train fresh**, which weakens P1/P2 and makes P3 unmeasurable.
+The predictions stand as written; what changed is that round 2 no longer isolates them. A fresh arm
+would recover the test.
 
 > **A trap when re-running the verifier on a second dataset.** `verify_phase07_dataset.py` writes its
 > figures to `Details/figs/phase07_idle.png` and `phase07_tray_spots.png` under **fixed names**, even
@@ -1740,94 +1743,77 @@ the fixture. Re-running the round-1 analyses after the swap reproduces every num
 (Kendall's W 0.192, ACT↔SmolVLA ρ = −0.645, same best and worst position per family), and P4 moves
 slightly in the *right* direction (+0.156 → +0.161 unmatched, +0.113 → +0.120 matched).
 
-## 12.6 — Training: ACT locally, SmolVLA on Colab, both fresh on D1
+## 12.6 — Training: continue round 1's policies on D1
 
-**Two runs, both fresh, both on D1 alone.** D1 is the same size as D0 (50 episodes), so this is
-**size-matched to round 1** and the single variable is the data's character — which is exactly what
-§12.1 pre-registered. Notebooks are *derived* from the round-1 ones by
-[`make_round2_notebooks.py`](../scripts/make_round2_notebooks.py) rather than rewritten, so the install,
-auth, resume and disk-watchdog machinery is identical and only the configuration differs.
+**Round 2 continues from the round-1 checkpoints rather than retraining from scratch** — decided
+2026-10-13, reversing the earlier plan. Both runs start from round 1's finished policy and carry on
+over D1.
 
 | | ACT | SmolVLA |
 |---|---|---|
 | Notebook | [colab_phase07_r2_act.ipynb](../colab_phase07_r2_act.ipynb) | [colab_phase07_r2_smolvla.ipynb](../colab_phase07_r2_smolvla.ipynb) |
-| From | **scratch** | **`lerobot/smolvla_base`** |
-| Batch × steps | 8 × **40,000** | 64 × **30,000** |
-| Checkpoints | every 10k → 4 | every 5k → 6 |
-| Where | **local 5080** | **Colab L4** (or A100) |
-| Peak VRAM | **3.7 GiB** of 15.5 | **16.5 GiB** of 24 |
-| Est. runtime | **~2.2 h** | **~21 h** |
+| Starts from | `act_tray_cylinder_s1000_trim` | `smolvla_tray_cylinder_s1000_trim` |
+| Batch × further steps | 8 × **20,000** | 64 × **10,000** |
+| New-data coverage | ~5.3 epochs of D1 | ~21 epochs of D1 |
+| Learning rate | **1e-5, unchanged** | **1e-5 — lowered 10×** (see below) |
+| Checkpoints | every 5k → 4 | every 2.5k → 4 |
+| Where | **local 5080** | **Colab L4** |
+| Measured | **5.4 it/s, 3.73 GiB** | 2.00 s/step, 16.5 GiB (round 1) |
+| Runtime | **~1.1 h** | **~7 h** |
 | Output | `act_tray_cylinder_s1000_d1` | `smolvla_tray_cylinder_s1000_d1` |
 
-### Why fresh, and not continued from the round-1 checkpoint
+> **What the warm start costs.** §12.1 pre-registered P1–P3 against *fresh* training on D1. Continuing
+> instead means the round-2 policy has seen D0 **and** D1, so a change in the ACT−SmolVLA gap can no
+> longer be attributed to D1's character alone — **P1 and P2 are weakened, and P3 is not measurable at
+> all**, because ACT's KLD already collapsed in round 1 and a continuation inherits that latent (the
+> smoke test below shows `kld_loss` starting at 0.001 and going to 0.000). The trade is deliberate:
+> this is the faster route to a usable policy, which §11.8 argued is what round 2 actually needs. The
+> fresh arm can be run later to recover the test.
 
-Warm-starting would carry D0's low-divergence structure into the run and confound the comparison — the
-policy would already have absorbed the thing the experiment is trying to vary. It would also make
-**P3** unmeasurable: ACT's KLD collapsing or not collapsing is only interpretable from scratch.
+### The learning rate is the thing that makes or breaks a warm start — and it differs per policy
 
-The same argument rules out a D0+D1 mixture *for this round*: §11.6 predicts the mixture would help ACT
-and hurt SmolVLA relative to D1 alone, so pooling dilutes the manipulation in opposite directions per
-family. A 100-episode mixture arm is a good **third** run once the clean test is in — it answers "does
-more data win", which is a different question from "does varied data win".
+**ACT needs no change.** Its preset returns `get_scheduler_preset() -> None` — there is **no schedule at
+all**, just a constant `optimizer_lr = 1e-5`. The continuation therefore picks up at exactly the rate
+round 1 ended on. Confirmed in the smoke test: `lr:1.0e-05` at every logged step.
 
-### Why ACT runs locally and SmolVLA cannot
+**SmolVLA needs it badly.** Its preset is a cosine from peak **1e-4** down to `decay_lr` **2.5e-6** over
+`scheduler_decay_steps`, after 1,000 warmup steps — and a *new run restarts that schedule from the top*.
+Round 1 **finished** at 2.5e-6, so handing the converged policy 1e-4 again is **40× its final rate** and
+would largely undo the warm start. The notebook therefore passes `--policy.optimizer_lr=1e-5`, dropping
+the peak 10×; the cosine still runs, pinned to the real step count, so the run anneals rather than
+sitting flat.
 
-**ACT is faster here than on the L4.** [phase06 §5](phase06_camera_ablation_training.md) measured this
-exact machine at **5.4 it/s** at batch 8 with two cameras, 3.7 GiB — against the L4's 4.47 it/s in
-round 1. 40,000 steps is **~2.1 h** plus ~10 min of periodic eval. Note that figure is fp32;
-`--policy.use_amp=true` is ~1.3× faster but changes the numerics of the reference recipe, so **leave it
-off** — round 1 did.
-
-**SmolVLA cannot run here at the round-1 recipe.** Batch 64 peaked at **16.5 GiB** on the L4, and the
-5080 has **15.5 GiB** usable. The obvious workaround does not exist: **lerobot has no gradient
-accumulation** — `Accelerator()` is constructed without `gradient_accumulation_steps`
-(`lerobot_train.py:257-262`) and there is no config field for it — so batch 64 cannot be simulated from
-batch 32. Dropping to batch 32 would change the recipe, and with it SmolVLA's absolute performance,
-which puts a confound straight into the pre-registered ACT−SmolVLA gap. So SmolVLA goes to Colab at
-batch 64, unchanged.
-
-### 30,000 steps gives both arms from one run
-
-Round 1 found SmolVLA's **20k** checkpoint better on the robot than its loss-optimal 5k, so round 2
-trains longer. But 20k is also the step count round 1 compared at — so **`save_freq=5000` writes the
-20k checkpoint on the way to 30k**, and one run yields both the matched comparison *and* the
-train-longer arm. ACT is the mirror: round 1 confirmed 40k ≈ 60k (P1), so 40k is both the matched
-checkpoint and the stopping point, and the final 20k of round 1's budget is simply dropped.
-
-**~21 h is past a comfortable Colab session.** Round 1's 14.2 h SmolVLA run survived; the π0.5 run did
-not and lost 17 h to a dead session. The notebook's Part C resume rebuilds from the last Hub checkpoint,
-so a disconnect costs at most `save_freq` = 5,000 steps ≈ 2.8 h. Two ways to de-risk it: take an **A100**
-if the runtime offers one (round 1 measured ~2.5–3.5× over the L4 on π0.5), or **stop at 20k** — that
-secures the matched comparison in ~14 h, and Part C resumes to 30k later with no loss.
-
-### The local ACT run, without the notebook
-
-The notebook works locally, but ACT needs none of its Colab scaffolding — this is the whole run:
+### ACT: the local command
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && HOLDOUT="[9,19,29,39,49]" && EPISODES="[0,1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,36,37,38,40,41,42,43,44,45,46,47,48,9,19,29,39,49]" && lerobot-train --policy.type=act --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_tray_cylinder_s1000_d1 --policy.private=true --save_checkpoint_to_hub=true --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed --dataset.episodes="$EPISODES" --dataset.eval_split=0.1 --eval_steps=5000 --batch_size=8 --steps=40000 --num_workers=8 --seed=1000 --save_freq=10000 --log_freq=200 --output_dir=outputs/train/act_tray_cylinder_s1000_d1 --job_name=act_tray_cylinder_s1000_d1 --wandb.enable=true --wandb.project=phase07-policy-transfer
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && EPISODES="[0,1,2,3,4,5,6,7,8,10,11,12,13,14,15,16,17,18,20,21,22,23,24,25,26,27,28,30,31,32,33,34,35,36,37,38,40,41,42,43,44,45,46,47,48,9,19,29,39,49]" && lerobot-train --policy.path=HALDijkstraaa/act_tray_cylinder_s1000_trim --policy.device=cuda --policy.push_to_hub=true --policy.repo_id=HALDijkstraaa/act_tray_cylinder_s1000_d1 --policy.private=true --save_checkpoint_to_hub=true --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed --dataset.episodes="$EPISODES" --dataset.eval_split=0.1 --eval_steps=5000 --batch_size=8 --steps=20000 --num_workers=8 --seed=1000 --save_freq=5000 --log_freq=200 --output_dir=outputs/train/act_tray_cylinder_s1000_d1 --job_name=act_tray_cylinder_s1000_d1 --wandb.enable=true --wandb.project=phase07-policy-transfer
 ```
 
-The episode list is the holdout reordered into the tail, exactly as round 1 did it — see the note in
-the notebook's config cell for why the *rationale* changed even though the mechanism did not.
+**`--policy.path` is what makes it a continuation**, replacing round 1's `--policy.type=act`. The
+distinction that matters: `--policy.path` loads *weights* into a new run with a fresh optimizer and
+step counter, which is fine-tuning; **`--resume=true` is a different thing** — it restores optimizer
+state and the step counter to continue an *interrupted* run, and is not what is wanted here. Loading
+from one Hub repo and pushing to another is fine; they do not collide.
 
-> ### ⚠ The local GPU is currently unusable — fix this before the ACT run
->
-> `nvidia-smi` fails with *"couldn't communicate with the NVIDIA driver"*. The cause is a kernel
-> upgrade that the NVIDIA kernel-module package did not follow: the machine is running
-> **7.0.0-38-generic**, but `linux-modules-nvidia-595-open-generic-hwe-24.04` is still pinned at
-> **7.0.0-31**. `/lib/modules/7.0.0-31-generic` has the full set (`nvidia.ko`, `nvidia-drm.ko`,
-> `nvidia-modeset.ko`, `nvidia-uvm.ko`, `nvidia-peermem.ko`); `/lib/modules/7.0.0-38-generic` has only
-> the in-tree `nvidiafb` and `nvidia-wmi-ec-backlight`, which are not the driver. `dkms` is not
-> installed, so nothing rebuilds it automatically.
->
-> ```bash
-> sudo apt install --reinstall linux-modules-nvidia-595-open-generic-hwe-24.04 && sudo reboot
-> ```
->
-> The candidate version is already 7.0.0-38.38~24.04.4+1, so this is an upgrade rather than a new
-> install. **Booting 7.0.0-31 from GRUB's advanced menu is the zero-risk fallback** — that kernel still
-> has working modules. Nothing in §12.5 is blocked either way: the trim is CPU-only.
+### Smoke-tested 2026-10-13 — the warm start verifiably loads
+
+60 steps on D1 from the round-1 ACT weights:
+
+| | round 1, from scratch | this continuation |
+|---|---|---|
+| Train loss at the start | **6.815** | **0.271** (l1 0.266) |
+| `kld_loss` | 0.629 → 0.0002 | **0.001 → 0.000**, inherited |
+| Learning rate | 1e-5 constant | **1.0e-05**, confirmed constant |
+| Throughput | 4.47 it/s (L4) | **5.4 it/s**, 3.73 GiB |
+
+A from-scratch run starts near 6.8; starting at 0.27 is the proof the weights loaded. Throughput
+matches [phase06 §5](phase06_camera_ablation_training.md)'s 5.4 it/s exactly, so **20,000 steps is
+~62 min** plus eval — call it **~1.1 h**.
+
+> The local GPU driver was repaired 2026-10-13 (now 595.99.02) by installing the kernel-module package
+> that the 7.0.0-38 upgrade had outrun. Recorded because the failure mode recurs on every kernel bump:
+> `linux-modules-nvidia-595-open-generic-hwe-24.04` must be upgraded alongside the kernel, and `dkms`
+> is not installed to do it automatically.
 
 ## 12.7 — The π0.5 gate: can more steps possibly fix the reach?
 
