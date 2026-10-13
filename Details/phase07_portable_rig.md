@@ -1333,6 +1333,28 @@ some of the rise could be position rather than approach. Restricting both datase
 range they share (2.57–4.64°, D0 n = 24, D1 n = 31) gives **+0.113, p < 0.0001 — 72% of the
 difference survives**. The manipulation genuinely raised approach variation.
 
+**One episode's grasp is mis-detected, and the cause matters for §12.4.** `grasp_seated_index`
+assumes the approach-opening falls in the episode's first half and the release-opening in the second —
+true for all 50 D0 episodes, and for 49 of 50 D1 episodes. **D1 episode 39 breaks it**: its gripper
+trace is perfectly normal (open at f120–160 → hold on the cylinder at f200–320 → release at the
+fixture at f360–510 → rest), but the *release* begins at f342, just before the 724-frame episode's
+midpoint at f362. Both of the detector's "peaks" then land inside the same release opening, and it
+reports the fixture pose as the grasp pose — grasp pan and seated pan come out bit-identical at
++19.38°, with a grasp→seated span of 22 frames against a median of 24% of the episode.
+
+**This is a side effect of the longer tail**, which is otherwise the change we wanted: a 3.2 s hold
+plus the retreat pushes the release earlier in relative terms, and the halves assumption was
+calibrated when tails were 1.5 s. **It will get worse as tails grow, and §12.4's per-stage held-out
+loss depends on exactly this segmentation** — so the detector needs a more robust rule (find the two
+openings as contiguous runs above a level derived from the trace, then take the first and the last)
+before the per-stage work, not after.
+
+P4 is not affected: dropping episode 39 moves the result from **+0.156 to +0.166** (p < 0.0001;
+matched on position spread, +0.113 → +0.122). It also removes an apparent placement outlier that was
+never real — with episode 39 excluded, D1's grasp-pan range is **−8.8…+7.3°** against D0's
+−11.0…+7.4°, i.e. very slightly *narrower*, which is the expected result when the extra divergence
+came from how the operator approached rather than from where the cylinder was put.
+
 **P1–P3 are therefore live.** Measure them after round-2 training and rollouts.
 
 > **A trap when re-running the verifier on a second dataset.** `verify_phase07_dataset.py` writes its

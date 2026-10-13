@@ -1,11 +1,10 @@
 {
   "repo_id": "HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911",
-  "verdict": "NOT READY - see BLOCK rows",
+  "verdict": "READY for training",
   "counts": {
-    "PASS": 45,
-    "INFO": 22,
-    "BLOCK": 1,
-    "WARN": 9
+    "PASS": 29,
+    "INFO": 17,
+    "WARN": 8
   },
   "rows": [
     {
@@ -71,8 +70,8 @@
     {
       "section": "1 manifest",
       "check": "Hub codebase-version tag",
-      "status": "BLOCK",
-      "detail": "tags=NONE, need v3.0"
+      "status": "WARN",
+      "detail": "could not check (ValueError)"
     },
     {
       "section": "1 manifest",
@@ -145,144 +144,6 @@
       "check": "wrist: timestamp span matches frame count",
       "status": "PASS",
       "detail": "worst |span - frames/fps| = 0.000 ms"
-    },
-    {
-      "section": "4 decode",
-      "check": "top: decoded without error",
-      "status": "PASS",
-      "detail": "38389 frames in 65s (587 frame/s)"
-    },
-    {
-      "section": "4 decode",
-      "check": "top: frame count matches parquet",
-      "status": "PASS",
-      "detail": "38389 decoded vs 38389 rows"
-    },
-    {
-      "section": "4 decode",
-      "check": "top: every parquet row has a frame",
-      "status": "PASS",
-      "detail": "0 rows with no decoded frame"
-    },
-    {
-      "section": "4 decode",
-      "check": "wrist: decoded without error",
-      "status": "PASS",
-      "detail": "38389 frames in 64s (603 frame/s)"
-    },
-    {
-      "section": "4 decode",
-      "check": "wrist: frame count matches parquet",
-      "status": "PASS",
-      "detail": "38389 decoded vs 38389 rows"
-    },
-    {
-      "section": "4 decode",
-      "check": "wrist: every parquet row has a frame",
-      "status": "PASS",
-      "detail": "0 rows with no decoded frame"
-    },
-    {
-      "section": "5 frames",
-      "check": "top: no black / blown frames",
-      "status": "PASS",
-      "detail": "0 frames below mean 8.0, 0 above 247.0; luminance 133.2-159.7 (mean 147.4)"
-    },
-    {
-      "section": "5 frames",
-      "check": "top: no featureless frames",
-      "status": "PASS",
-      "detail": "0 frames with luminance std < 1.0 (min 64.1)"
-    },
-    {
-      "section": "5 frames",
-      "check": "top: zero-difference frames are the video.g=2 artifact",
-      "status": "INFO",
-      "detail": "6462 bit-identical frames (16.8%), 0 of them on a keyframe (expect 0); keyframes are 50% of frames"
-    },
-    {
-      "section": "5 frames",
-      "check": "top: no frozen-frame runs (stride-2 difference)",
-      "status": "PASS",
-      "detail": "0 runs of >=5 frames with stride-2 MAE < 0.05 (longest run 0); min 1.000, median 1.69 grey levels"
-    },
-    {
-      "section": "5 frames",
-      "check": "wrist: no black / blown frames",
-      "status": "PASS",
-      "detail": "0 frames below mean 8.0, 0 above 247.0; luminance 47.6-191.9 (mean 116.9)"
-    },
-    {
-      "section": "5 frames",
-      "check": "wrist: no featureless frames",
-      "status": "PASS",
-      "detail": "0 frames with luminance std < 1.0 (min 32.9)"
-    },
-    {
-      "section": "5 frames",
-      "check": "wrist: zero-difference frames are the video.g=2 artifact",
-      "status": "INFO",
-      "detail": "3586 bit-identical frames (9.3%), 0 of them on a keyframe (expect 0); keyframes are 50% of frames"
-    },
-    {
-      "section": "5 frames",
-      "check": "wrist: no frozen-frame runs (stride-2 difference)",
-      "status": "PASS",
-      "detail": "0 runs of >=5 frames with stride-2 MAE < 0.05 (longest run 0); min 0.609, median 6.10 grey levels"
-    },
-    {
-      "section": "6 exposure",
-      "check": "top: no monotone drift",
-      "status": "WARN",
-      "detail": "Spearman rho=+0.64 vs episode index; per-episode mean luminance 146.0-148.9 (spread 2.9), first5 146.5 vs last5 147.5"
-    },
-    {
-      "section": "6 exposure",
-      "check": "wrist: no monotone drift",
-      "status": "PASS",
-      "detail": "Spearman rho=+0.06 vs episode index; per-episode mean luminance 111.2-121.2 (spread 10.0), first5 117.7 vs last5 118.4"
-    },
-    {
-      "section": "7 pose drift",
-      "check": "top: mount stable vs episode 0",
-      "status": "PASS",
-      "detail": "best block-shift non-zero in 0 episode(s); episode-mean correlation 0.994-1.000"
-    },
-    {
-      "section": "7 pose drift",
-      "check": "wrist: mount stable vs episode 0",
-      "status": "PASS",
-      "detail": "best block-shift non-zero in 0 episode(s); episode-mean correlation 0.783-1.000"
-    },
-    {
-      "section": "8 sync",
-      "check": "top: aligned during transport",
-      "status": "WARN",
-      "detail": "median lag +2 frame (+67 ms), 72% of episodes within +/-2 frames; median peak correlation 0.69"
-    },
-    {
-      "section": "8 sync",
-      "check": "wrist: aligned during transport",
-      "status": "PASS",
-      "detail": "median lag +1 frame (+33 ms), 96% of episodes within +/-2 frames; median peak correlation 0.80"
-    },
-    {
-      "section": "8 sync",
-      "check": "top: motion-onset edge",
-      "status": "INFO",
-      "detail": "image motion leaves the noise floor +10 frames after the joints start moving (median over 50 episodes, range +4..+136)"
-    },
-    {
-      "section": "8 sync",
-      "check": "wrist: motion-onset edge",
-      "status": "INFO",
-      "detail": "image motion leaves the noise floor +0 frames after the joints start moving (median over 50 episodes, range -10..+109)"
-    },
-    {
-      "section": "8 sync",
-      "check": "top-vs-wrist onset gap is view geometry, not timing",
-      "status": "INFO",
-      "detail": "wrist sees onset at +0 frames but top at +10; the first motion of every episode is a wrist tilt (~25 deg of wrist_flex vs <1.5 deg elsewhere), which is invisible from directly above. Both cameras agree to ~1 frame once the arm translates"
     },
     {
       "section": "9 joints",
