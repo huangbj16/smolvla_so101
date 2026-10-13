@@ -195,25 +195,81 @@ def trajectory_metrics(ds: pathlib.Path, train_std: np.ndarray) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def grasp_seated_index(grip: np.ndarray) -> tuple[int, int]:
-    """Grasp and seated frame indices from the gripper trace.
+# Replaced 2026-10-13. The previous version located the two gripper openings as argmax of
+# the episode's first and second half, which assumed the release always falls after the
+# midpoint - an assumption the deliberate 2 s tail breaks (D1 ep 39). Validated by
+# scripts/fix_grasp_detector.py: identical to the old detector on 50/50 D0 episodes, so the
+# verification report and section 11.6 are unaffected, and on 49/50 D1 episodes, the one
+# difference being ep 39 itself.
+def turning_points(x: np.ndarray, delta: float) -> list[tuple[int, str]]:
+    """Significant alternating extrema: the classic zigzag filter.
 
-    Ported verbatim from `verify_phase07_dataset.py:check_structure`, which is the validated
-    detector behind the verification report's 27x block separation. A naive "last closing
-    transition" rule disagrees with it badly: the gripper creeps tighter while the cylinder is
-    pressed into the hole, so a global minimum lands during insertion and reports the fixture
-    pose as the grasp pose.
+    Walks the signal tracking a running extremum and emits it once the signal reverses by more than
+    `delta`. Noise below `delta` is ignored, so this finds the real opens and closes without any
+    level threshold - which is what the gripper trace needs, because neither the hold level nor the
+    two opening heights are predictable across episodes.
+    """
+    pts: list[tuple[int, str]] = []
+    mn = mx = float(x[0])
+    mni = mxi = 0
+    rising: bool | None = None
+    for i, raw in enumerate(x):
+        v = float(raw)
+        if v > mx:
+            mx, mxi = v, i
+        if v < mn:
+            mn, mni = v, i
+        if rising is not False and v < mx - delta:
+            pts.append((mxi, "max")); mn, mni, rising = v, i, False
+        elif rising is not True and v > mn + delta:
+            pts.append((mni, "min")); mx, mxi, rising = v, i, True
+    return pts
+
+
+def grasp_seated_index(grip: np.ndarray) -> tuple[int, int]:
+    """Grasp and seated frame indices, with no reference to the episode midpoint or to a fixed level.
+
+    A clean episode's gripper trace is: closed at rest -> OPEN to approach -> closed on the cylinder
+    (the "hold" plateau, set by its diameter) -> OPEN to release -> closed at rest. The job is to
+    find the two openings. Neither a midpoint split nor a global threshold can do it:
+
+      * the midpoint fails when a long idle tail pushes the release before it (D1 ep 39);
+      * a global threshold fails in two opposite ways - the release opening can be twice the width
+        of the approach, putting the approach peak below the threshold (D1 ep 16), and the hold
+        plateau can sit above it, merging the two openings into one run (D0 ep 5, 18, D1 ep 48).
+
+    Turning points avoid both: they are defined by how far the signal REVERSES, which is a property
+    of the transitions themselves rather than of any absolute level or position in the episode.
     """
     n = len(grip)
-    p1 = int(np.argmax(grip[: n // 2]))                      # approach-open
-    p2 = n // 2 + int(np.argmax(grip[n // 2:]))              # release-open
-    if p2 <= p1:
+    if n < 10:
         return -1, -1
-    hold = float(grip[p1:p2].min())                          # the plateau while carrying
-    band_g = hold + 0.15 * max(float(grip[p1]) - hold, 1e-6)
-    gi = p1 + int(np.where(grip[p1:p2] <= band_g)[0][0])     # END of the closing transition
-    band = hold + 0.20 * max(float(grip[p2]) - hold, 1e-6)
-    at_hold = np.where(grip[gi:p2 + 1] <= band)[0]
+    span = float(grip.max()) - float(np.percentile(grip, 5))
+    if span <= 1e-6:
+        return -1, -1
+    # Delta ladder, strict first. Across D0 and D1 the smallest real approach-peak -> hold
+    # reversal measured is 0.19 of span, so 0.18 is the largest delta that still catches every
+    # opening in hand - and a larger delta rejects more noise. The ladder exists for data not yet
+    # recorded: if a future episode's reversal is shallower, it relaxes until the structure is
+    # found instead of failing. On all 100 D0+D1 episodes the first rung already succeeds.
+    maxima: list[int] = []
+    for delta_frac in (0.18, 0.15, 0.12, 0.08):
+        pts = turning_points(grip, delta_frac * span)
+        maxima = [i for i, kind in pts if kind == "max"]
+        if len(maxima) >= 2:
+            break
+    if len(maxima) < 2:
+        return -1, -1
+    a_peak, r_peak = maxima[0], maxima[-1]        # first and last opening
+    if r_peak <= a_peak:
+        return -1, -1
+
+    # From here the logic is the original's, unchanged - only the two peaks it works from differ.
+    hold = float(grip[a_peak:r_peak].min())
+    band_g = hold + 0.15 * max(float(grip[a_peak]) - hold, 1e-6)
+    gi = a_peak + int(np.where(grip[a_peak:r_peak] <= band_g)[0][0])
+    band_r = hold + 0.20 * max(float(grip[r_peak]) - hold, 1e-6)
+    at_hold = np.where(grip[gi:r_peak + 1] <= band_r)[0]
     ri = gi + int(at_hold[-1]) if len(at_hold) else -1
     return gi, ri
 

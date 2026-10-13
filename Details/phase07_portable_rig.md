@@ -1324,38 +1324,28 @@ the wrong reason. So divergence is measured within **k = 5 nearest neighbours in
 |---|---|---|
 | D0, native 9 blocks of 5 | 0.239–0.389 (mean **0.317**) | 2.78° |
 | D0, same kNN metric | 0.231–0.406 (mean **0.322**) | 2.50° |
-| **D1, kNN** | 0.344–0.683 (mean **0.478**) | 4.27° |
+| **D1, kNN** | 0.344–0.663 (mean **0.483**) | 4.37° |
 
 The kNN mean reproduces the block mean on D0 to **1.4%**, so the two datasets are on one scale.
-**D1 − D0 = +0.156, permutation p < 0.0001**, and D1's *minimum* neighbourhood (0.344) sits near D0's
+**D1 − D0 = +0.161, permutation p < 0.0001**, and D1's *minimum* neighbourhood (0.344) sits near D0's
 *maximum* (0.406).
 
 **The one real threat was tested, not caveated.** D1's neighbourhoods span 1.71× wider positions, so
 some of the rise could be position rather than approach. Restricting both datasets to the pose-spread
-range they share (2.57–4.64°, D0 n = 24, D1 n = 31) gives **+0.113, p < 0.0001 — 72% of the
+range they share (2.57–4.64°, D0 n = 24, D1 n = 29) gives **+0.120, p < 0.0001 — 75% of the
 difference survives**. The manipulation genuinely raised approach variation.
 
-**One episode's grasp is mis-detected, and the cause matters for §12.5.** `grasp_seated_index`
-assumes the approach-opening falls in the episode's first half and the release-opening in the second —
-true for all 50 D0 episodes, and for 49 of 50 D1 episodes. **D1 episode 39 breaks it**: its gripper
-trace is perfectly normal (open at f120–160 → hold on the cylinder at f200–320 → release at the
-fixture at f360–510 → rest), but the *release* begins at f342, just before the 724-frame episode's
-midpoint at f362. Both of the detector's "peaks" then land inside the same release opening, and it
-reports the fixture pose as the grasp pose — grasp pan and seated pan come out bit-identical at
-+19.38°, with a grasp→seated span of 22 frames against a median of 24% of the episode.
+**One episode's grasp was mis-detected; the detector is now fixed.** `grasp_seated_index` located the
+two gripper openings as `argmax` of the episode's first half and `argmax` of its second — which assumes
+the release-opening always falls *after* the midpoint. **The deliberate 2 s tail breaks that
+assumption**, and D1 episode 39 is where it broke. Full account, including the two further failure
+modes found while fixing it, in §12.5. Replaced 2026-10-13 and validated at
+[`fix_grasp_detector.py`](../scripts/fix_grasp_detector.py): **identical to the old detector on 50/50
+D0 episodes**, so the verification report and §11.6 are untouched, and on 49/50 D1 episodes — the one
+difference being episode 39 itself.
 
-**This is a side effect of the longer tail**, which is otherwise the change we wanted: a 3.2 s hold
-plus the retreat pushes the release earlier in relative terms, and the halves assumption was
-calibrated when tails were 1.5 s. **It will get worse as tails grow, and §12.5's per-stage held-out
-loss depends on exactly this segmentation** — so the detector needs a more robust rule (find the two
-openings as contiguous runs above a level derived from the trace, then take the first and the last)
-before the per-stage work, not after.
-
-P4 is not affected: dropping episode 39 moves the result from **+0.156 to +0.166** (p < 0.0001;
-matched on position spread, +0.113 → +0.122). It also removes an apparent placement outlier that was
-never real — with episode 39 excluded, D1's grasp-pan range is **−8.8…+7.3°** against D0's
-−11.0…+7.4°, i.e. very slightly *narrower*, which is the expected result when the extra divergence
-came from how the operator approached rather than from where the cylinder was put.
+The numbers above are computed with the fixed detector. For the record, the mis-detection made P4
+slightly *weaker*, not stronger: it was +0.156 unmatched / +0.113 matched before the fix.
 
 **P1–P3 are therefore live.** Measure them after round-2 training and rollouts.
 
@@ -1634,13 +1624,79 @@ Pool the held-out frames by task stage and report loss per stage instead of one 
 stages specifically, where tolerance is tightest, even though 5k wins the pooled number. This is also
 what validates the jerk metric — without it there is one unproven proxy and no way to check it.
 
-> **`grasp_seated_index` must be made robust before this, not after.** The segmentation this depends on
-> is the detector in [`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py), and §12.1 found it
-> failing on D1 episode 39: it assumes the approach-opening falls in the episode's first half and the
-> release in the second, which **the longer tail breaks**. It is 1/50 on D1 and will get worse as tails
-> grow. The fix is to find the two openings as contiguous runs above a level derived from the trace and
-> take the first and the last, rather than splitting at the midpoint — and to re-validate it against all
-> 100 D0+D1 episodes, confirming it reproduces the existing D0 numbers, before anything depends on it.
+### The grasp detector, rewritten — what broke and why the obvious fixes do not work
+
+The per-stage loss depends on segmenting each episode into reach / carry / insert, and that
+segmentation is `grasp_seated_index`. It was wrong on D1 episode 39, and fixing it turned up two more
+failure modes that were latent in D0 all along. Replaced 2026-10-13; validation in
+[`fix_grasp_detector.py`](../scripts/fix_grasp_detector.py).
+
+**The structure being detected.** A clean episode's gripper trace has three levels: closed at rest →
+**open** to approach → closed on the cylinder (the *hold* plateau, whose level is set by the cylinder's
+diameter) → **open** to release → closed at rest. The grasp is the end of the first closing transition;
+the seated moment is the last frame at the hold level before the final opening. Finding those two
+openings is the whole problem.
+
+**Failure 1 — the midpoint assumption, which the tail broke.** The old detector took the approach-open
+as `argmax` of the first half and the release-open as `argmax` of the second. That is a claim about
+*relative* timing, and it holds only while the post-release part of the episode is shorter than the
+pre-release part. The failure condition is exactly:
+
+```
+len(episode)  >  2 × release_start
+```
+
+A longer idle tail inflates `len` while the release happens at the same absolute moment, so the release
+migrates toward the first half. **D1 episode 39 is 724 frames with its release beginning at frame 342**,
+so it needed `len < 684` and missed by 40 frames. Both "peaks" then landed inside the *same* release
+opening, `hold` was computed over that opening instead of the carry plateau, and the detector returned
+grasp = 342 and seated = 364 — 22 frames apart, both inside the insertion. The reported grasp pose was
+the fixture pose, which is why grasp pan and seated pan came out bit-identical at +19.38°.
+
+**Failure 2 — a global level threshold cannot replace it.** The obvious fix is to find the openings as
+contiguous runs above some level. Measured across all 100 D0+D1 episodes, that cannot work, in two
+opposite directions at once:
+
+| Measured over 100 episodes | min | median | max |
+|---|---|---|---|
+| hold level above rest, as a fraction of span | **0.23** | 0.38 | **0.57** |
+| approach-peak → hold reversal, fraction of span | **0.19** | 0.33 | 0.61 |
+| release-peak → hold reversal | 0.35 | 0.62 | 0.77 |
+
+The hold plateau sits **up to 57% of the way** from rest to the widest opening, so a threshold low
+enough to separate it from the openings in one episode merges them in another (D0 eps 5, 18 and D1 ep
+48 came out as a *single* run above threshold). And because the release opening can be twice the width
+of the approach, a threshold set as a fraction of the global maximum can sit *above the approach peak
+entirely* (D1 ep 16: approach 21.9, threshold 22.4). A first attempt using `rest + 0.5 × span` failed
+outright on 6 of 100 episodes for these two reasons.
+
+**The fix: turning points.** Find the openings by how far the signal *reverses*, which is a property of
+the transitions themselves rather than of any absolute level or any position in the episode. A zigzag
+filter walks the trace tracking a running extremum and emits it once the signal reverses by more than
+`delta`; the first and last maxima are the two openings. Everything downstream — the hold level, the
+15% and 20% bands, the grasp and seated indices — is unchanged from the original.
+
+`delta` is **0.18 × span, with a relaxation ladder** down through 0.15, 0.12 and 0.08 if fewer than two
+maxima are found. 0.18 is not tuned: the smallest *real* approach-peak → hold reversal measured
+anywhere in D0 or D1 is 0.19, so 0.18 is the largest value that still catches every genuine opening,
+and a larger delta rejects more noise. The ladder never fires on current data — every one of the 100
+episodes succeeds on the first rung — and exists so that a future episode with a shallower reversal
+relaxes instead of failing.
+
+**Validation, and why this specific bar.** §11.6's position analysis and the verification report were
+both computed with the old detector, so a replacement that quietly moved D0 would invalidate published
+numbers:
+
+| | identical to old | failed outright |
+|---|---|---|
+| **D0** | **50 / 50** | none |
+| **D1** | 49 / 50 | none |
+
+The single D1 difference is episode 39: grasp/seated moves from `(342, 364)` to `(195, 325)`, and
+|grasp pan − seated pan| goes from **0.00° to 21.10°** — the grasp is now at the cylinder rather than at
+the fixture. Re-running the round-1 analyses after the swap reproduces every number bit-identically
+(Kendall's W 0.192, ACT↔SmolVLA ρ = −0.645, same best and worst position per family), and P4 moves
+slightly in the *right* direction (+0.156 → +0.161 unmatched, +0.113 → +0.120 matched).
 
 ## 12.6 — Training: ACT locally, SmolVLA on Colab, both fresh on D1
 
