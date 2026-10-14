@@ -1814,6 +1814,33 @@ over D1.
 > this is the faster route to a usable policy, which §11.8 argued is what round 2 actually needs. The
 > fresh arm can be run later to recover the test.
 
+### In progress — the Colab run died at ~13,400 of 20,000 (2026-10-13)
+
+Checkpoints **005000** and **010000** are on the Hub; the session dropped before 015000, so resuming
+costs the ~3,400 steps past 10k. Resumed locally — see the command below.
+
+**Two things the partial run already settles.**
+
+**SmolVLA fits a 16 GB card after all.** The run logged `mem_gb: 14.68` peak at batch 64, against the
+**16.5 GiB** this doc previously quoted from round 1. The earlier figure is what blocked SmolVLA from
+running locally and sent it to Colab; it was wrong for this configuration. 14.68 GiB of the 5080's
+15.92 GiB is **~1.2 GiB of headroom** — real, but thin enough that fragmentation matters, so the local
+command sets `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` and the GPU must be otherwise idle.
+
+**The held-out loss is flat where round 1's rose steeply:**
+
+| step | D0, round 1 (fresh, lr 1e-4) | **D1, round 2 (warm, lr 1e-5)** |
+|---|---|---|
+| 5,000 | 0.1258 | 0.1358 |
+| 10,000 | 0.1695 | **0.1367** |
+| change | **+34.7%** | **+0.7%** |
+
+That is a near-total suppression of the overfitting that defined round 1's SmolVLA — and it is
+**confounded two ways**, so it is not yet evidence for the data. The warm start and the 10× lower peak
+LR each independently reduce overfitting, and both changed at the same time as the dataset. What would
+separate them is the fresh-on-D1 arm §12.1 originally specified. Worth watching to 20k regardless: if
+the curve is still flat there, SmolVLA's best checkpoint may be its last for the first time.
+
 ### The learning rate is the thing that makes or breaks a warm start — and it differs per policy
 
 **ACT needs no change.** Its preset returns `get_scheduler_preset() -> None` — there is **no schedule at
@@ -1858,6 +1885,22 @@ to ACT's entire 40,000-step run.** So one pair of runs yields both:
 
 This is the same coincidence round 1 had — 8× the batch, ⅛ the steps — and §11 relied on it there too.
 **Report P1 from the matched pair, not from the final checkpoints.**
+
+### SmolVLA: resuming locally from the Hub checkpoint
+
+`--resume=true` restores the **step counter, optimizer state, LR-schedule position, episode order,
+holdout and seed** from the checkpoint; only `--steps` is read from the CLI, and it is the *total*,
+not an increment. This is the same path that rescued the π0.5 run in
+[training §4](phase07_training.md). `--output_dir` gets a `_resumed` suffix because the original
+output directory lived on the Colab VM and does not exist here.
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True lerobot-train --config_path=HALDijkstraaa/smolvla_tray_cylinder_s1000_d1 --resume=true --steps=20000 --output_dir=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed
+```
+
+**The two runs cannot share the GPU.** SmolVLA needs 14.68 GiB and ACT 3.73 GiB, which is 18.4 GiB
+against 15.92 available — run them **sequentially**, and keep the GPU free of anything else
+(a browser with hardware acceleration is enough to tip it over).
 
 ### ACT: the local command
 
