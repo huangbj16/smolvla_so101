@@ -1895,8 +1895,41 @@ not an increment. This is the same path that rescued the π0.5 run in
 output directory lived on the Colab VM and does not exist here.
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True lerobot-train --config_path=HALDijkstraaa/smolvla_tray_cylinder_s1000_d1 --resume=true --steps=20000 --output_dir=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && env -u ALL_PROXY -u all_proxy PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True lerobot-train --config_path=HALDijkstraaa/smolvla_tray_cylinder_s1000_d1 --resume=true --steps=20000 --output_dir=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed
 ```
+
+**Verified end to end on 2026-10-14**, ~200 steps before being stopped. lerobot's
+`TrainPipelineConfig.from_pretrained` has an explicit fallback for exactly this case — a repo whose
+root has no `train_config.json` because the run never finished — and it resolves the latest Hub
+checkpoint instead (`configs/train.py:341-352`), so `--config_path=<repo_id>` is correct even though
+the root holds nothing but `.gitattributes`. Observed:
+
+| | |
+|---|---|
+| Resolved | `checkpoints/010000` downloaded from the Hub, `resume: True` |
+| Data order | `Resuming data order at epoch 21, sample 6976` |
+| First log line | `step:10K smpl:653K ep:976 epch:21.69 lr:6.2e-06` — **identical to the Colab log at the same step** |
+| Throughput | **1.83 s/step** against the L4's 2.00 — the 5080 is ~9% faster |
+| Peak memory | **14.32 GiB** of 15.92 |
+| ETA | **~5.0 h** for the remaining 10,000 steps |
+
+It also resumes into the **same wandb run** (`n20v7gxh`), so the curve stays continuous across the
+machine change. The checkpoint is now cached locally, so a restart costs no re-download.
+
+> **`ALL_PROXY=socks://...` breaks every Hub call — unset it.** GNOME's network proxy is set to
+> *manual* with a SOCKS host at `127.0.0.1:7897`, and the desktop exports that into the session as
+> `ALL_PROXY=socks://127.0.0.1:7897/`. `huggingface_hub >= 1.0` talks through **httpx**, which accepts
+> `http://`, `https://` and `socks5://` but **not** bare `socks://`, so every download dies with
+> `ValueError: Unknown scheme for proxy URL`. It is the same trap
+> [`push_dataset.sh`](../scripts/push_dataset.sh) already works around inline.
+>
+> `HTTP_PROXY` and `HTTPS_PROXY` are already correct (`http://127.0.0.1:7897`) and cover everything
+> the Hub needs, so the fix is simply to drop the SOCKS one — `env -u ALL_PROXY -u all_proxy` prefixes
+> the commands below. For a permanent fix, rewrite it in `~/.bashrc`:
+>
+> ```bash
+> for v in ALL_PROXY all_proxy; do [[ ${!v:-} == socks://* ]] && export "$v=http://${!v#socks://}"; done
+> ```
 
 **The two runs cannot share the GPU.** SmolVLA needs 14.68 GiB and ACT 3.73 GiB, which is 18.4 GiB
 against 15.92 available — run them **sequentially**, and keep the GPU free of anything else
