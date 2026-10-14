@@ -742,7 +742,8 @@ where tolerance is tightest, even though 5k wins pooled.
 
 ## 11.3a — Measuring chunk smoothness offline
 
-Two places this can be measured, and only one of them is safe.
+**Status: not implemented.** Finding 2 of the four, and step 5 of §12 — unblocked, cheap, and still
+outstanding. Two places it can be measured, and only one of them is safe.
 
 **(a) Train-time, for ACT — free, one line.** ACT's `forward` already has the predicted chunk in hand,
 and `MetricsTracker.update_metrics` (`logging_utils.py:163`) *auto-registers an `AverageMeter` for
@@ -975,10 +976,27 @@ not on measurement.**
 | 2 | **D1: 50 full-task episodes, continuously randomised** (§12.2) | ✅ 2026-10-13 · 50 ep / 38,389 fr · **P4 PASS** |
 | 3 | **Processing: head trim + 2 s tail cap** (§12.5) | ✅ 33,337 fr (87%), 35.7 min · detector rewritten |
 | 4 | **Continue ACT and SmolVLA from the round-1 checkpoints** (§12.6) | ◐ **ACT done 10-14** · SmolVLA at ~10.3k of 20k |
-| 5 | **π0.5 frozen-feature probe** (§12.7) | — ~30 min, no training |
-| 6 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | — ~1.5 h |
-| 7 | **D2: compositional collection, 130 stage episodes** (§12.4) | — to be timed |
-| 8 | **Round-2 rollouts**, scored per position and per family | — |
+| 5 | **Two offline metrics: chunk jerk and per-stage held-out loss** (§11.3a, §12.5) | — **not started**, both unblocked · see below |
+| 6 | **π0.5 frozen-feature probe** (§12.7) | — ~30 min, no training |
+| 7 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | — ~1.5 h |
+| 8 | **D2: compositional collection, 130 stage episodes** (§12.4) | — to be timed |
+| 9 | **Round-2 rollouts**, scored per position and per family | — |
+
+> **Step 5 is the one that can run today.** Both metrics are now post-hoc passes over *saved*
+> checkpoints (§11.3a), and the checkpoints their pre-registered predictions are about are round 1's,
+> already in `outputs/hub/`. So neither waits on SmolVLA's training to finish, neither competes for the
+> GPU in any meaningful way, and the detector they both depended on was fixed on 2026-10-13. They are
+> also each other's check: per-stage loss is what tells you whether the jerk number means anything.
+> Both are modifications of
+> [`eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py), which already finds the
+> checkpoints, builds the holdout loader, runs the eval loop with fixed seeds and repeats, and writes
+> JSON plus a `recheck/` wandb namespace — so what is missing in each case is the inner measurement,
+> not the scaffolding:
+>
+> | Metric | What to change in `eval_once` | Pre-registered prediction |
+> |---|---|---|
+> | **chunk jerk** | swap `policy.forward`'s loss for `predict_action_chunk`, take the second difference over the chunk axis, normalise per joint by the training-set σ | SmolVLA 5k shows **~2× the jerk of 20k**, matching the 2.0× measured on the robot (§11.3) |
+> | **per-stage loss** | keep `policy.forward`, but bucket the per-frame losses by stage — `grasp_seated_index` segments each held-out episode — instead of averaging over all of them | SmolVLA 5k and 20k **separate at grasp and insert** specifically, where tolerance is tightest, even though 5k wins pooled |
 
 **Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
 experiment with a time-and-performance hypothesis attached rather than as a replacement for §12.3's
@@ -1280,10 +1298,14 @@ cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforg
 
 ### Per-stage held-out loss, and the detector it needs
 
+**Status: not implemented**, and no longer blocked — the segmentation it depends on was fixed on
+2026-10-13 (below). Step 5 of §12.
+
 Pool the held-out frames by task stage and report loss per stage instead of one pooled number.
 **Pre-registered prediction** from §11.3: SmolVLA 5k and 20k should separate at the **grasp and insert**
-stages specifically, even though 5k wins pooled. This is also what validates the jerk metric of §11.3a —
-without it there is one unproven proxy and no way to check it.
+stages specifically, where tolerance is tightest, even though 5k wins pooled. This is also what
+validates the jerk metric of §11.3a — without it there is one unproven proxy and no way to check it,
+which is why the two are one step rather than two.
 
 ### The grasp detector, rewritten
 
