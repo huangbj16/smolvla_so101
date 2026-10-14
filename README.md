@@ -87,7 +87,9 @@ call it.
   `patch_act_camera_embed.py`, `make_r2_notebook.py`, `eval_checkpoints_heldout.py`
 - **Robot eval:** `make_eval_schedule.py` (0.6), `make_phase07_eval_schedule.py`,
   `joint_offset_check.py`, `bench_rollout_latency.py`, `analyze_phase07_eval.py`,
-  `analyze_phase07_positions.py` (the `make_phase07_*_figs.py` files are imported by the two analyzers)
+  `analyze_phase07_positions.py` (`make_phase07_eval_figs.py` and `make_phase07_position_figs.py` are
+  imported by those two analyzers; `make_phase07_doc_figs.py` is run on its own and draws the
+  explanatory figures in the Phase 0.7 run book)
 
 ## Setup
 
