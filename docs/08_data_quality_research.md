@@ -20,8 +20,8 @@ The rest now lives in [09](09_home_deployment_and_hardware.md):
 
 | ID | Question | When |
 |---|---|---|
-| **C1** Second camera | Does adding the gripper camera raise visual state diversity and lower action divergence? | Week 1 — [done, passed](Details/phase05_camera_test_results.md) |
-| **C1b** Camera ablation | Does the wrist camera actually raise ACT success rate, and does divergence predict it? | Week 2 — [done, partly](Details/phase06_camera_ablation_training.md) |
+| **C1** Second camera | Does adding the gripper camera raise visual state diversity and lower action divergence? | Week 1 — [done, passed](details/phase05_camera_test_results.md) |
+| **C1b** Camera ablation | Does the wrist camera actually raise ACT success rate, and does divergence predict it? | Week 2 — [done, partly](details/phase06_camera_ablation_training.md) |
 | **Q0** Defects | Which data defects (jerky, hesitant, fumbled, inconsistent) hurt closed-loop success, and by how much? | Sim wk 3–5 · real wk 6–7 |
 | **Q1** Ranking | Does training on the top-N episodes by metric M beat random-N and bottom-N? | Sim wk 3–5 · real wk 6–7 |
 | **Q2** Policy transfer | Do Q0/Q1 hold across ACT, SmolVLA and π0.5? | Sim wk 3–5 · real wk 6–7 |
@@ -164,7 +164,7 @@ robomimic is open source (MIT code and data on Hugging Face), and its 300-demo m
 with worse/okay/better labels built in. Plan: in week 2, score those demos with our metrics and check
 whether any metric separates better from worse operators more reliably than trajectory length alone.
 Optionally, test Q1 on this naturally varying data with robomimic's own policies in simulation. Details
-and caveats: [Details/robomimic_dataset.md](Details/robomimic_dataset.md).
+and caveats: [details/robomimic_dataset.md](details/robomimic_dataset.md).
 
 ## A.3 — Metrics (frozen end of week 2)
 
@@ -184,7 +184,7 @@ and caveats: [Details/robomimic_dataset.md](Details/robomimic_dataset.md).
 Pick up the white cylinder from the table and place it upright in the top-left hole of the fixed black
 fixture. Success means it is fully seated and released within 30 s. Only the cylinder's position varies,
 over 10 taped positions. Full card (success stages, fixed factors, episode protocol, log format):
-[Details/toolkit_task_card.md](Details/toolkit_task_card.md).
+[details/toolkit_task_card.md](details/toolkit_task_card.md).
 
 ### Phase 0.5 — Second-camera test (week 1, 4 h)
 
@@ -224,7 +224,7 @@ different actions, the cause is mostly what the camera can't see, not inconsiste
    camera moves with the arm, so its whole image changes; the top view is mostly a static scene. Treat
    this as descriptive only: raw cosine distances aren't on the same scale across two cameras.
 
-**Analysis (notebook [phase05_second_camera.ipynb](phase05_second_camera.ipynb)).** Paired: the same
+**Analysis (notebook [phase05_second_camera.ipynb](../notebooks/phase05_second_camera.ipynb)).** Paired: the same
 frames are embedded as top, wrist, top + wrist and controls, with DINOv2, L2-normalized, then concatenated.
 Divergence is reported at k = 5, 10, 20, by episode phase, with bootstrap intervals over episodes.
 Changes from the 07 notebook:
@@ -249,7 +249,7 @@ phase picture reverses once divergence is normalized *within* each phase (top wi
 wins grasp/insert), that a short frame history is the single biggest gain, and that in the fine phases no
 observation beats chance — which sets a data-collection guideline: spend episodes and discipline on grasp
 and insert. Full numbers, verdicts and reasoning:
-[Details/phase05_camera_test_results.md](Details/phase05_camera_test_results.md).
+[details/phase05_camera_test_results.md](details/phase05_camera_test_results.md).
 
 **Recording (lerobot 0.6.1)**, as run. First load the camera presets and check the images
 ([01](01_setup_robot.md) Step 6). Keys: **→** ends the episode early, **←** re-records it, **Esc** stops.
@@ -316,9 +316,9 @@ it tags, so the optimiser effectively declined the camera-identity signal: arbit
 echo of the compounding effect. Both go to the robot next.
 
 Full run book — held-fixed table, step-by-step training scripts, eval protocol, pre-registered
-predictions: [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
-Scripts: [`scripts/train_camera_ablation.sh`](scripts/train_camera_ablation.sh),
-[`scripts/make_eval_schedule.py`](scripts/make_eval_schedule.py).
+predictions: [details/phase06_camera_ablation_training.md](details/phase06_camera_ablation_training.md).
+Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.sh),
+[`scripts/make_eval_schedule.py`](../scripts/make_eval_schedule.py).
 
 ### Phase 0.7 — Portable rig and a new dataset (2026-10-03)
 
@@ -332,8 +332,8 @@ shares neither an action frame nor an observation space with Phase 0.5/0.6 and m
 Collecting 50 clean episodes of the restated task — `Pick up the white cylinder from the green tray and
 place it in the top left blue hole of the black fixture` — with shuffled tray positions, then re-running
 the divergence analysis and the camera ablation on them. Rig spec, task-card delta, preflight, recording
-command and schedule: [Details/phase07_portable_rig.md](Details/phase07_portable_rig.md). Calibration
-frames and restore procedure: [Details/calibration/README.md](Details/calibration/README.md).
+command and schedule: [details/phase07_portable_rig.md](details/phase07_portable_rig.md). Calibration
+frames and restore procedure: [details/calibration/README.md](details/calibration/README.md).
 
 ### Dials: sim and real data with known defects
 
@@ -466,7 +466,7 @@ frames and restore procedure: [Details/calibration/README.md](Details/calibratio
 
 **Settled:**
 - **Operator:** you (data collection).
-- **Real task:** toolkit assembly: white cylinder into the fixture's top-left hole ([task card](Details/toolkit_task_card.md)).
+- **Real task:** toolkit assembly: white cylinder into the fixture's top-left hole ([task card](details/toolkit_task_card.md)).
 - **π0.5:** sim + real on the 5080.
 - **Cloud:** 4090 + A100.
 - **Rater:** available.
@@ -522,12 +522,12 @@ memory sources, GPU pricing, laptop vs. desktop, and SO-101 repeatability.
 ## Immediately next (week 1)
 
 1. **Infrastructure** (8 h): Ubuntu dual-boot, LeRobot, envs, lighting control. Step-by-step:
-   [Details/ubuntu_env_setup.md](Details/ubuntu_env_setup.md).
-2. **Toolkit-assembly task card** (2 h). Done: [Details/toolkit_task_card.md](Details/toolkit_task_card.md).
+   [details/ubuntu_env_setup.md](details/ubuntu_env_setup.md).
+2. **Toolkit-assembly task card** (2 h). Done: [details/toolkit_task_card.md](details/toolkit_task_card.md).
 3. **Phase 0.5 camera test** (4 h, §A.4). Teleop with both cameras: [01](01_setup_robot.md) Step 6 (follower `/dev/ttyACM0`, leader `/dev/ttyACM1`).
 4. **Read RINSE + PSD, then CUPID** (§A.2), plus a summary.
 5. **Phase 0.6 camera ablation** (week 2, §A.4). Train three ACT policies overnight, then evaluate:
-   [Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md).
+   [details/phase06_camera_ablation_training.md](details/phase06_camera_ablation_training.md).
 6. **Phase 0.7 portable rig + new dataset** (§A.4). Bird's-eye top camera on an acrylic board, both arms
    recalibrated 2026-10-03, 50 clean episodes of the tray task:
-   [Details/phase07_portable_rig.md](Details/phase07_portable_rig.md).
+   [details/phase07_portable_rig.md](details/phase07_portable_rig.md).

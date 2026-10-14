@@ -86,7 +86,7 @@ rig, which is smaller than the old taped table.
 
 The `shoulder_pan` mounting screws worked loose, letting the joint sit a couple of degrees off. Tightened
 mechanically; the residual offset was then measured with
-[`scripts/joint_offset_check.py`](../../scripts/joint_offset_check.py) against a training-frame landmark:
+[`scripts/joint_offset_check.py`](../../../scripts/joint_offset_check.py) against a training-frame landmark:
 
 | joint | delta | applied |
 |---|---|---|

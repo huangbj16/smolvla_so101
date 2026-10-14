@@ -1,7 +1,7 @@
 # Phase 0.5 — second-camera test (C1): findings
 
 Dataset `HALDijkstraaa/so101_toolkit_cylinder_20260917_165544` (50 clean episodes, both cameras, 4000
-sampled frames). Notebook: [phase05_second_camera.ipynb](../phase05_second_camera.ipynb) · Plan:
+sampled frames). Notebook: [phase05_second_camera.ipynb](../../notebooks/phase05_second_camera.ipynb) · Plan:
 [08 §A.4](../08_data_quality_research.md) · Task: [toolkit_task_card.md](toolkit_task_card.md).
 Baseline run 2026-09-19, follow-ups 2026-09-20.
 

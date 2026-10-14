@@ -3,7 +3,7 @@
 Goal: a working teleoperation loop — you move the **leader**, the **follower** mirrors, and a
 camera streams. Everything downstream (data collection, deployment) depends on this.
 
-> **Ubuntu 24.04 (RTX 5080 laptop), lerobot 0.6.1.** Env install: [Details/ubuntu_env_setup.md](Details/ubuntu_env_setup.md).
+> **Ubuntu 24.04 (RTX 5080 laptop), lerobot 0.6.1.** Env install: [details/ubuntu_env_setup.md](details/ubuntu_env_setup.md).
 > Run `conda activate lerobot` first. Your user must be in `dialout` (check with `groups`).
 > Every command has a `--help`; when an arg here differs from 0.6.1, trust `--help` and the
 > official guide: https://huggingface.co/docs/lerobot/en/so101
@@ -30,7 +30,7 @@ ls -l /dev/ttyACM* /dev/serial/by-id/
 ```
 `lerobot-find-port` asks you to unplug the arm and reports which port disappeared. Done: follower
 `/dev/ttyACM0`, leader `/dev/ttyACM1`. If the port vanishes right after plugging in, or the first
-command times out, see the `brltty` / ModemManager fixes in [ubuntu_env_setup §8](Details/ubuntu_env_setup.md).
+command times out, see the `brltty` / ModemManager fixes in [ubuntu_env_setup §8](details/ubuntu_env_setup.md).
 
 ## Step 2 — set up the motors (assign IDs)  [needed once per arm, if not already done]
 
@@ -56,7 +56,7 @@ the `/dev/v4l/by-id/...-video-index0` paths, which don't change with plug order.
 | Wrist (C922) | `/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0` (now `video4`) |
 
 Always use `index0`; `index1` is the metadata node and won't stream. Camera settings (focus, exposure)
-come from Cameractrls presets, loaded in Step 6. Setup details: [ubuntu_env_setup §10](Details/ubuntu_env_setup.md).
+come from Cameractrls presets, loaded in Step 6. Setup details: [ubuntu_env_setup §10](details/ubuntu_env_setup.md).
 
 ## Step 4 — calibrate both arms
 
@@ -74,7 +74,7 @@ lerobot-calibrate --teleop.type=so101_leader  --teleop.port=/dev/ttyACM1 --teleo
 > calibration defines, and the dataset's normalization statistics were computed in it. The homing step
 > is hand-positioned and one encoder count is 0.088°, so a re-run writes a few degrees of fresh bias
 > into every joint. Backup + the restore procedure:
-> [Details/calibration/](Details/calibration/README.md).
+> [details/calibration/](details/calibration/README.md).
 
 ### Is it the hardware? Replay a recorded episode
 
@@ -90,8 +90,8 @@ lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=
 Set the scene exactly as that episode had it, and start from the home pose. A miss under replay means
 the arm, the base, or the fixture moved; a clean replay clears the hardware and points at perception or
 the policy. Worked example, including how to turn the miss into a calibration correction:
-[Details/phase06_camera_ablation_training.md](Details/phase06_camera_ablation_training.md) §8, and
-[`scripts/joint_offset_check.py`](scripts/joint_offset_check.py).
+[details/phase06_camera_ablation_training.md](details/phase06_camera_ablation_training.md) §8, and
+[`scripts/joint_offset_check.py`](../scripts/joint_offset_check.py).
 
 ## Step 5 — test teleoperation (no camera yet)
 

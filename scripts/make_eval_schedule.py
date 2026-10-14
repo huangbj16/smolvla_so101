@@ -12,7 +12,7 @@ Each condition therefore gets the same positions at the same point in the sessio
 session (lighting, fixture nudges, your own reset habits) hits all three roughly equally instead of
 landing on whoever ran last.
 
-    python scripts/make_eval_schedule.py --seed 0 > Details/phase06_eval_log.csv
+    python scripts/make_eval_schedule.py --seed 0 > docs/details/phase06_eval_log.csv
 """
 import argparse, csv, random, sys
 

@@ -6,7 +6,7 @@ If one chunk takes longer than that to compute, the control loop cannot keep up:
 `SyncInferenceEngine` runs inference inline (`rollout/inference/sync.py`), so a slow chunk is a
 visible stall in the arm's motion, not a dropped frame. Whether that happens depends on the card,
 and the Phase 0.7 policies were trained on A100/L4 class hardware — nothing in
-[phase07_training.md](../Details/phase07_training.md) says what they cost on the 5080 laptop that
+[phase07_training.md](../docs/details/phase07_training.md) says what they cost on the 5080 laptop that
 has to run the rollouts.
 
 This answers it before any robot time is spent, with no robot attached: synthetic observations of

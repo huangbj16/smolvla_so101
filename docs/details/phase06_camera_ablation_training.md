@@ -11,8 +11,8 @@ seeds and a statistical success comparison only if pass 1 looks promising (§4b)
 
 Plan: [08 §A.4](../08_data_quality_research.md) · Task: [toolkit_task_card.md](toolkit_task_card.md) ·
 Dataset: `HALDijkstraaa/so101_toolkit_cylinder_20260917_165544` (50 episodes, 37,690 frames, 30 fps).
-Scripts: [`scripts/train_camera_ablation.sh`](../scripts/train_camera_ablation.sh) ·
-[`scripts/make_eval_schedule.py`](../scripts/make_eval_schedule.py). Written 2026-09-20.
+Scripts: [`scripts/train_camera_ablation.sh`](../../scripts/train_camera_ablation.sh) ·
+[`scripts/make_eval_schedule.py`](../../scripts/make_eval_schedule.py). Written 2026-09-20.
 
 > **Calibration frame (added 2026-10-03).** Every policy in this phase was trained in the
 > **2026-09-16 recording-day frame**, archived at
@@ -346,7 +346,7 @@ three, so no condition gets a cherry-picked checkpoint).
 ### Step 1 — generate the schedule (already done)
 
 ```bash
-python scripts/make_eval_schedule.py --seed 0 > Details/phase06_eval_log.csv
+python scripts/make_eval_schedule.py --seed 0 > docs/details/phase06_eval_log.csv
 ```
 
 `lerobot-rollout` records N episodes of one policy in a row, so a fully interleaved trial order would mean
@@ -482,7 +482,7 @@ waiting". Only temporal context can, and ACT has none.
 - Use **←** only for a *rig* problem (cylinder knocked over during reset, wrong position placed). Do
   **not** re-record because the policy failed — the failures are the data.
 - Between episodes, move the cylinder to the next position in that block's list.
-- Jot `success` and `fail_stage` in `Details/phase06_eval_log.csv` as you go, or leave it and score from
+- Jot `success` and `fail_stage` in `docs/details/phase06_eval_log.csv` as you go, or leave it and score from
   video afterwards. Either way, **`fail_stage` is the column that matters** — it is the direct test of the
   Phase 0.5 predictions in §6.
 
@@ -828,7 +828,7 @@ The change is small: a learnable `nn.Embedding(n_cameras, dim_model)` added to e
 is appended in `modeling_act.py`, **zero-initialised** so step 0 is exactly upstream ACT. Cost: 2 × 512 =
 1024 parameters. Then retrain `both` at the same 60k and rerun the F1 retest.
 
-Patch script: [`scripts/patch_act_camera_embed.py`](../scripts/patch_act_camera_embed.py) — idempotent,
+Patch script: [`scripts/patch_act_camera_embed.py`](../../scripts/patch_act_camera_embed.py) — idempotent,
 asserts both anchors match exactly once. Verified locally: parameters land at 51,597,190 + 1,024, the
 embedding starts at zero, and a forward pass runs.
 
@@ -882,7 +882,7 @@ Retrain all three at 60k on the trimmed set, then rerun a reduced rollout pass w
 `n_action_steps`. This is the follow-up that makes *future* ablations better rather than answering the
 current one.
 
-Trim script: [`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) — pass `--push` so
+Trim script: [`scripts/make_trimmed_dataset.py`](../../scripts/make_trimmed_dataset.py) — pass `--push` so
 it uploads through `LeRobotDataset.push_to_hub()`. **A plain `hf upload` is not enough**: lerobot resolves
 a dataset at the revision named by its `codebase_version`, so the repo needs a matching git tag, and only
 `push_to_hub()` creates it. Without it the dataset downloads fine and then fails minutes into training
@@ -1085,7 +1085,7 @@ upper arm that is not gearbox backlash. Compensating in software for a horn that
 buys a few days.
 
 **2. Measure the offset against a landmark that exists in the training data.**
-[`scripts/joint_offset_check.py`](../scripts/joint_offset_check.py) disables torque, prints live joint
+[`scripts/joint_offset_check.py`](../../scripts/joint_offset_check.py) disables torque, prints live joint
 readings, and diffs them against a chosen training frame:
 
 ```bash
@@ -1164,7 +1164,7 @@ Only if something needs to survive review:
 
 ## Running F2 and F3 on Colab
 
-[`colab_phase06_f2_f3.ipynb`](../colab_phase06_f2_f3.ipynb), in four parts:
+[`colab_phase06_f2_f3.ipynb`](../../notebooks/colab_phase06_f2_f3.ipynb), in four parts:
 
 - **A — Setup.** Runtime check, lerobot v0.6.1 from source (F2 edits `modeling_act.py`, so a wheel will
   not do), HF and wandb auth, shared config.

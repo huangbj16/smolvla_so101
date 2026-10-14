@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Resume a finished Phase 0.6 run to a higher step count.
-# Docs: Details/phase06_camera_ablation_training.md section 8 (follow-ups).
+# Docs: docs/details/phase06_camera_ablation_training.md section 8 (follow-ups).
 #
 #   ./scripts/resume_training.sh both 100000     # 60k -> 100k, ~2.2 h
 #   ./scripts/resume_training.sh top  100000

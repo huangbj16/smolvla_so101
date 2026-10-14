@@ -7,7 +7,7 @@ frames of margin on each side.
     python scripts/make_trimmed_dataset.py <src_repo> <dst_repo> <local_root> [--push] [--tail-cap N]
 
 **--tail-cap changes what happens at the END of the episode, and Phase 0.7 round 2 needs it.** The
-head trim is justified by [phase06 F3](../Details/phase06_camera_ablation_training.md): the idle
+head trim is justified by [phase06 F3](../docs/details/phase06_camera_ablation_training.md): the idle
 lead-in is an attractor the policy cannot escape at the start. The tail is the opposite - it is the
 only place a policy can learn "the task is finished, hold still", and round 1 measured the cost of
 removing it (SmolVLA moved 3.6x as much as ACT in the final second). So D1 onward keeps a tail.

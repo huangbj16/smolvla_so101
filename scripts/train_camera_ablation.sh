@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 0.6 — camera ablation for ACT: train top-only, wrist-only and top+wrist.
 # Everything except the camera set is identical across the three runs.
-# Docs: Details/phase06_camera_ablation_training.md
+# Docs: docs/details/phase06_camera_ablation_training.md
 #
 #   SMOKE:  STEPS=500 SAVE_FREQ=500 EVAL_STEPS=250 OUT=outputs/smoke ./scripts/train_camera_ablation.sh
 #   FINAL:  ./scripts/train_camera_ablation.sh                        # 60k steps, ~6.5 h

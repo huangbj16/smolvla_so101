@@ -20,7 +20,7 @@ Two properties come out of the mirror, and they are the whole point of it:
 Each arm sees each of the nine spots exactly once, so tray spot is a within-arm constant and
 cannot confound any arm against another.
 
-    python scripts/make_phase07_eval_schedule.py --seed 0 > Details/phase07_eval_log.csv
+    python scripts/make_phase07_eval_schedule.py --seed 0 > docs/details/phase07_eval_log.csv
 """
 import argparse
 import csv
@@ -28,7 +28,7 @@ import random
 import sys
 
 # (arm, policy, checkpoint) — the six arms of round 1. Order here is the half-A order; half B is
-# this list reversed. See Details/phase07_portable_rig.md section 10.
+# this list reversed. See docs/details/phase07_portable_rig.md section 10.
 ARMS = [
     ("act40k", "act", "040000"),
     ("act60k", "act", "060000"),
@@ -52,7 +52,7 @@ cut = (a.spots + 1) // 2
 halves = {"A": sorted(spots[:cut], key=key), "B": sorted(spots[cut:], key=key)}
 
 # lineterminator is explicit: csv.writer defaults to "\r\n", and a CRLF file here is what the
-# repo's .gitattributes renormalization had to clean up out of Details/phase06_eval_log.csv.
+# repo's .gitattributes renormalization had to clean up out of docs/details/phase06_eval_log.csv.
 w = csv.writer(sys.stdout, lineterminator="\n")
 w.writerow(["block", "arm", "policy", "checkpoint", "half", "episode_in_block", "tray_spot",
             "episode_index", "duration_s", "success", "fail_stage", "notes"])

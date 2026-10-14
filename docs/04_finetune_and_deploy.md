@@ -1,6 +1,6 @@
 # 04 — Fine-tune SmolVLA and deploy (if time)
 
-> Reality check (repeat from README): fine-tuning a 450M VLA on **6 GB** is *tight*. Community
+> Reality check (written for the old 6 GB RTX 3060 laptop): fine-tuning a 450M VLA on **6 GB** is *tight*. Community
 > configs assume 16–24 GB. Below are the 6 GB-survival settings; expect to fight OOM, and treat this
 > as a proof-of-concept, not a full training run. If it won't fit, fine-tune in the cloud
 > (Colab/A100, ~4 h for 20k steps) and copy the checkpoint back — deployment/inference *does* fit on 6 GB.
@@ -60,7 +60,7 @@ go cloud for training.
 
 ## Actual Colab run — commands used (for record)
 
-Copied verbatim from `colab_finetune_smolvla_updated.ipynb` (the run that produced the fine-tuned model:
+Copied verbatim from [`colab_finetune_smolvla_updated.ipynb`](../notebooks/colab_finetune_smolvla_updated.ipynb) (the run that produced the fine-tuned model:
 lerobot 0.6.0, Colab A100, batch 64, 20k steps).
 
 **Install:**
@@ -171,9 +171,9 @@ print(f"Uploaded -> https://huggingface.co/{MODEL_REPO_ID}")
 
 ### Run screenshots (record)
 
-![Colab A100 running lerobot-train at batch 64 (GPU RAM ~10.4 / 40 GB).](results/Screenshot%202026-07-22%20125919.png)
+![Colab A100 running lerobot-train at batch 64 (GPU RAM ~10.4 / 40 GB).](../results/Screenshot%202026-07-22%20125919.png)
 
-![W&B dashboard (project smolvla_so101_pcb_v2): train/loss and component losses trend down over ~20k steps; lr shows cosine warmup→decay; samples-seen grows linearly.](results/Screenshot%202026-07-22%20144412.png)
+![W&B dashboard (project smolvla_so101_pcb_v2): train/loss and component losses trend down over ~20k steps; lr shows cosine warmup→decay; samples-seen grows linearly.](../results/Screenshot%202026-07-22%20144412.png)
 
 ## Monitor
 - Loss should trend down (it's the flow-matching MSE from your W3/W4 — won't hit zero; it has the

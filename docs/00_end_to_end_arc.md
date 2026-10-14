@@ -32,7 +32,7 @@ this"). Below is the **locked v1 spec** for this project.
 ### v1 SPEC — LOCKED (2026-07-21)
 
 ![v1 task setup: SO-101 gripper (left); the blue PCB with USB connectors sitting on a white plate (right);
-the black 3D-printed fixture with a white-marked pocket = the drop target (top).](results/pick_and_place_pcb.jpg)
+the black 3D-printed fixture with a white-marked pocket = the drop target (top).](../results/pick_and_place_pcb.jpg)
 
 **Task:** pick a blue PCB (fixed orientation) off a white plate and place it into the white concave pocket
 of a **fixed** black 3D-printed fixture; poke to seat it if the first drop doesn't land.

@@ -6,8 +6,8 @@ Stage 1 of the multi-policy comparison (ACT / SmolVLA / π0.5). Verifies the 50 
 
 Dataset: [`HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912)
 (private, `v3.0`, 50 episodes / 35,141 frames / 839 MB) · Script:
-[`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) · Raw output:
-[`results/phase07_verification/`](../results/phase07_verification/) · Rig: [phase07_portable_rig.md](phase07_portable_rig.md)
+[`scripts/verify_phase07_dataset.py`](../../scripts/verify_phase07_dataset.py) · Raw output:
+[`results/phase07_verification/`](../../results/phase07_verification/) · Rig: [phase07_portable_rig.md](phase07_portable_rig.md)
 
 ```bash
 python scripts/verify_phase07_dataset.py
@@ -103,7 +103,7 @@ that *begins with "stay still"*, executes it, re-observes an unchanged scene, an
 Only 3/50 episodes exceed an ACT 100-step chunk, so ACT would again mostly survive — but training the
 three policies on different data would defeat the point of the comparison.
 
-**Trimming** with the `dev > 2.0°` rule already in [`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py)
+**Trimming** with the `dev > 2.0°` rule already in [`scripts/make_trimmed_dataset.py`](../../scripts/make_trimmed_dataset.py)
 keeps **29,462 / 35,141 frames (83.8%)**, leaving episodes of 485–743 frames — every one still longer than
 an ACT 100-step chunk. (Phase 0.5's trimmed copy kept 84.8%, so this is the same operation at the same
 scale.)
@@ -111,7 +111,7 @@ scale.)
 > **Done 2026-10-05.** The trimmed dataset is
 > [`so101_tray_cylinder_portable_20261003_211912_trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed)
 > — 50 episodes, 29,462 frames, exactly the prediction above. Built by
-> [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb); post-upload check: every parquet
+> [colab_phase07_prep_trim.ipynb](../../notebooks/colab_phase07_prep_trim.ipynb); post-upload check: every parquet
 > readable, `v3.0` tag present, encoder settings identical to the source, post-trim lead-in ≤ the
 > 5-frame pad. **This is the dataset all three Stage 3 runs read.**
 

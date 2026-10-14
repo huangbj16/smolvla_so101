@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """P4: did D1's deliberate variation actually raise reach-phase divergence above D0's?
 
-This is the pre-registered gate in [§12.1](../Details/phase07_portable_rig.md): if the manipulation
+This is the pre-registered gate in [§12.1](../docs/details/phase07_portable_rig.md): if the manipulation
 did not take, P1-P3 are not tested and round 2 is a data-volume experiment rather than a mechanism
 test. So it is checked before anything else is done with D1.
 

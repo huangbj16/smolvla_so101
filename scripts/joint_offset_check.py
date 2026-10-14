@@ -4,7 +4,7 @@ edit in the calibration file to put them back.
 
 Why this exists: `lerobot-replay` plays recorded actions open-loop. If replay misses a target the
 policies used to hit, the physical<->encoder mapping has moved, and the fix is to restore the mapping
-rather than retrain. See Details/phase06_camera_ablation_training.md.
+rather than retrain. See docs/details/phase06_camera_ablation_training.md.
 
 Usage — park the arm by hand at a physical landmark that also appears in the training data (e.g. the
 gripper holding a cylinder in the fixture hole), then:
@@ -78,7 +78,7 @@ def main() -> None:
         for n, dv in zip(names, d, strict=True):
             print(f"  {n:<16s} delta {dv:+7.2f} deg   ->  range_min/max {dv * COUNTS_PER_DEG:+8.0f} counts")
         print("\nOnly correct a joint whose delta you trust: hand-positioning is worth ~1 deg, so")
-        print("anything under ~1.5 deg is noise. BACK UP the json first (Details/calibration/).")
+        print("anything under ~1.5 deg is noise. BACK UP the json first (docs/details/calibration/).")
 
 
 if __name__ == "__main__":

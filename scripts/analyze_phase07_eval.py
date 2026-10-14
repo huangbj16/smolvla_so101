@@ -3,7 +3,7 @@
 
 Two jobs, in order.
 
-**Fill.** `Details/phase07_eval_log.csv` is scored by hand into `success` / `fail_stage` /
+**Fill.** `docs/details/phase07_eval_log.csv` is scored by hand into `success` / `fail_stage` /
 `notes`; `episode_index` and `duration_s` are recoverable from the recorded rollout datasets
 and are filled in here rather than typed. Episode n of a block is `episode_index` n-1 in that
 block's dataset (lerobot writes them in order, and a re-recorded episode is discarded rather
@@ -35,8 +35,8 @@ import numpy as np
 import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-LOG = REPO / "Details/phase07_eval_log.csv"
-FIGS = REPO / "Details/figs"
+LOG = REPO / "docs/details/phase07_eval_log.csv"
+FIGS = REPO / "docs/details/figs"
 OUT = REPO / "results/phase07_eval"
 CACHE = pathlib.Path.home() / ".cache/huggingface/lerobot/HALDijkstraaa"
 TRAIN_DS = CACHE / "so101_tray_cylinder_portable_20261003_211912"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Integrity verification for the Phase 0.7 portable-rig dataset.
 
-Implements the **Integrity** row of [08 §A.3](../08_data_quality_research.md) — the checks that
+Implements the **Integrity** row of [08 §A.3](../docs/08_data_quality_research.md) — the checks that
 filter rather than rank: frame drops, camera-action sync, frozen frames, exposure drift,
 camera-pose drift, joint-limit saturation, leader-follower error. Plus the two Phase 0.7
 specifics: the idle head/tail that broke the Phase 0.6 rollouts, and whether the recorded
@@ -34,7 +34,7 @@ import numpy as np
 import pandas as pd
 
 REPO_DEFAULT = "HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912"
-CAL_DEFAULT = Path(__file__).resolve().parent.parent / "Details" / "calibration" / "current"
+CAL_DEFAULT = Path(__file__).resolve().parent.parent / "docs" / "details" / "calibration" / "current"
 OUT_DEFAULT = Path(__file__).resolve().parent.parent / "results" / "phase07_verification"
 
 # sts3215 has 4096 encoder counts over 360 deg; lerobot uses resolution-1 as the divisor.
@@ -1049,7 +1049,7 @@ def main() -> int:
              length=np.array([(ep == e).sum() for e in range(n_ep)]))
     print(f"\nwrote {args.out / 'verification.json'}")
     try:
-        figs = Path(__file__).resolve().parent.parent / "Details" / "figs"
+        figs = Path(__file__).resolve().parent.parent / "docs" / "details" / "figs"
         print("wrote figures:", ", ".join(make_figures(args.out, figs, fps)))
     except Exception as e:  # a missing matplotlib must not fail the verification
         print(f"figures skipped ({type(e).__name__}: {e})")

@@ -5,7 +5,7 @@ Why this exists. `lerobot-train` logs one `eval_loss` per `eval_steps`, and that
 of a stochastic quantity for the flow-matching policies: SmolVLA and pi0.5 draw a random flow timestep
 and a random noise vector on every forward, so two evaluations of the same weights on the same data
 disagree. Reading an eval curve — which is how the SmolVLA overfitting result in
-[phase07_training.md](../Details/phase07_training.md) was found — needs to know how much of its wiggle
+[phase07_training.md](../docs/details/phase07_training.md) was found — needs to know how much of its wiggle
 is noise. This runs each checkpoint several times with fixed seeds and reports mean +/- std.
 
 The eval loop is copied from `lerobot/scripts/lerobot_train.py` (the `is_eval_step` branch) so the

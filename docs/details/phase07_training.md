@@ -10,9 +10,9 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 
 | Policy | Notebook | Status |
 |---|---|---|
-| **ACT** | [colab_phase07_act_gpufree.ipynb](../colab_phase07_act_gpufree.ipynb) | ✅ **done 2026-10-05** |
-| **SmolVLA** | [colab_phase07_smolvla_gpufree.ipynb](../colab_phase07_smolvla_gpufree.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [Colab](../colab_phase07_pi05_Colab.ipynb) · [4090](../colab_phase07_pi05_gpufree.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
+| **ACT** | [colab_phase07_act_gpufree.ipynb](../../notebooks/colab_phase07_act_gpufree.ipynb) | ✅ **done 2026-10-05** |
+| **SmolVLA** | [colab_phase07_smolvla_gpufree.ipynb](../../notebooks/colab_phase07_smolvla_gpufree.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
+| **π0.5** | [Colab](../../notebooks/colab_phase07_pi05_Colab.ipynb) · [4090](../../notebooks/colab_phase07_pi05_gpufree.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
 
 ---
 
@@ -299,14 +299,14 @@ Two consequences:
   normalisation correction, unavailable against ACT, and in no case a statement about task success.
 
 The Hub stores weights, optimizer state and configuration — **not metrics** — which is why this needed
-wandb at all, and why [`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py) exists as
+wandb at all, and why [`eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py) exists as
 the credential-free alternative.
 
 Two ways to fill it in, answering slightly different questions:
 
 1. **Read the four `eval_loss` points off wandb.** What the run itself measured, directly comparable to
    §3's SmolVLA table, and free.
-2. **Re-measure with [`scripts/eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py).**
+2. **Re-measure with [`scripts/eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py).**
    All four checkpoints are on the Hub, so this runs anywhere with a GPU and does not need the Colab
    session back. It repeats each checkpoint under three seeds, which π0.5 specifically needs: the
    flow-matching loss draws a random timestep and a random noise sample per forward pass, so a single
@@ -473,7 +473,7 @@ smoke test measures it exactly in ~15 min.
 
 ## A second, smaller run on a Colab L4 — became the A100 run
 
-[colab_phase07_pi05_Colab.ipynb](../colab_phase07_pi05_Colab.ipynb) — and **this is the configuration
+[colab_phase07_pi05_Colab.ipynb](../../notebooks/colab_phase07_pi05_Colab.ipynb) — and **this is the configuration
 that actually ran**, on an A100 rather than the L4 it was sized for. Everything
 from the runtime check onward is **copied verbatim** from the 4090 notebook — verified byte-identical for
 the preflight, smoke, Part C and auth cells — so the two are comparable at matched steps. Only Part A

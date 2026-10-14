@@ -2,7 +2,7 @@
 
 This turns the theory from *Data Quality in Imitation Learning* (Belkhale et al.) into numbers you
 run on your own LeRobot parquet files. The companion notebook is
-[measure_data_quality.ipynb](measure_data_quality.ipynb).
+[measure_data_quality.ipynb](../notebooks/measure_data_quality.ipynb).
 
 > **Dataset:** `HALDijkstraaa/so101_pick_place_pcb_20260721_183543` (v3.0, **161 episodes /
 > 111,776 frames**, verified consistent across info/data/meta). 6-DoF SO-101, one `front` camera.

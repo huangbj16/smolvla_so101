@@ -10,7 +10,7 @@ that is known good, and confines the diff to the policy.
 
     python scripts/make_r2_notebook.py
 
-Writes colab_phase07_r2_smolvla.ipynb.
+Writes notebooks/colab_phase07_r2_smolvla.ipynb.
 """
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ import pathlib
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-TEMPLATE = REPO / "colab_phase07_pi05_Colab.ipynb"
-OUT = REPO / "colab_phase07_r2_smolvla.ipynb"
+TEMPLATE = REPO / "notebooks" / "colab_phase07_pi05_Colab.ipynb"
+OUT = REPO / "notebooks" / "colab_phase07_r2_smolvla.ipynb"
 
 D1 = "so101_tray_cylinder_varied_20261013_082911_trimmed"
 START_FROM = "smolvla_tray_cylinder_s1000_trim"     # round 1's finished policy
@@ -30,7 +30,7 @@ TITLE = r"""# Phase 0.7 round 2 — continue SmolVLA on D1
 
 **This continues round 1's SmolVLA on the new data.** It does not train from scratch and it does not
 start from `smolvla_base`: the starting weights are `HALDijkstraaa/smolvla_tray_cylinder_s1000_trim`,
-the policy that scored 6/18 in [round 1](Details/phase07_portable_rig.md).
+the policy that scored 6/18 in [round 1](../docs/details/phase07_portable_rig.md).
 
 | | |
 |---|---|
@@ -60,7 +60,7 @@ sample-matched to ACT and is where the clean comparison is read; 10k/15k/20k are
 
 ### What this costs the pre-registration
 
-[§12.1](Details/phase07_portable_rig.md) pre-registered P1–P3 against *fresh* training on D1.
+[§12.1](../docs/details/phase07_portable_rig.md) pre-registered P1–P3 against *fresh* training on D1.
 Continuing instead means this policy has seen D0 **and** D1, so a change in the ACT−SmolVLA gap can no
 longer be attributed to D1's character alone — P1 and P2 are weakened, and **P3 is not measurable at
 all**. The trade is deliberate: this is the faster route to a usable policy.

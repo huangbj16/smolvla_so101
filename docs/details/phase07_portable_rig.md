@@ -250,7 +250,7 @@ their divergence numbers are compared. Extend toward the N = 100 per-condition f
 | **D1 raw** (2026-10-13) | [`so101_tray_cylinder_varied_20261013_082911`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911) | 50 | **38,389** | §12.2 — continuously randomised, deliberately varied |
 
 Both private, `v3.0`, 30 fps, `top` + `wrist` at 480×640 AV1. The trimmed copy was built 2026-10-05 by
-[colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) with the `dev > 2.0°` / 5-frame-pad
+[colab_phase07_prep_trim.ipynb](../../notebooks/colab_phase07_prep_trim.ipynb) with the `dev > 2.0°` / 5-frame-pad
 rule; episodes are 485–743 frames, every one longer than an ACT 100-step chunk. Verified after upload:
 all parquet readable, codebase-version tag present, same encoder settings as the source.
 
@@ -274,7 +274,7 @@ round**, repeating until 50 episodes are done.
 **Start moving the instant the episode starts.** A static lead-in becomes an idle attractor the policy
 cannot escape; Phase 0.5 measured a median 74 idle frames, and the F3 follow-up found that training on
 idle-trimmed data flipped the camera ranking. Trim anyway before training
-([`scripts/make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py)).
+([`scripts/make_trimmed_dataset.py`](../../scripts/make_trimmed_dataset.py)).
 
 > **Not done either**, and this one is the reason the trimmed copy is mandatory rather than optional:
 > the measured lead-in is a **median 71 frames (2.38 s)**, essentially unchanged from Phase 0.5's 74,
@@ -303,10 +303,10 @@ dataset is now wanted for the policy-transfer question (Q2) instead. What runs n
 
 | Stage | What | Where |
 |---|---|---|
-| 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../scripts/verify_phase07_dataset.py) |
-| 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../colab_phase07_prep_trim.ipynb) |
-| 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../colab_phase07_act_gpufree.ipynb) · [SmolVLA](../colab_phase07_smolvla_gpufree.ipynb) · [π0.5](../colab_phase07_pi05_Colab.ipynb) |
-| 4a ✅ | **Round 1 run book**: six arms, 54 trials, two checkpoints per policy, mirrored interleave, 9 grid spots | **§10** · [`make_phase07_eval_schedule.py`](../scripts/make_phase07_eval_schedule.py) |
+| 1 ✅ | **Verify the dataset.** 48 PASS / 7 WARN / 0 BLOCK — clean recording, but the idle lead-in survived, so training needs a trimmed copy | [phase07_data_verification.md](phase07_data_verification.md) · [`scripts/verify_phase07_dataset.py`](../../scripts/verify_phase07_dataset.py) |
+| 2 ✅ | **Trimmed dataset built and pushed** 2026-10-05 — [`..._trimmed`](https://huggingface.co/datasets/HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912_trimmed), 50 ep / 29,462 frames (§8) | [colab_phase07_prep_trim.ipynb](../../notebooks/colab_phase07_prep_trim.ipynb) |
+| 3 ✅ | **All three trained**, everything but the policy held constant. **ACT** 60k steps / 3.85 h on an L4, eval_loss 0.1792 min; **SmolVLA** 20k / 14.2 h on an L4 — and it **overfits**, eval_loss +61% from its 5k minimum; **π0.5** 10k / 5.7 h on a Colab A100, eval curve not read | [phase07_training.md](phase07_training.md) · [ACT](../../notebooks/colab_phase07_act_gpufree.ipynb) · [SmolVLA](../../notebooks/colab_phase07_smolvla_gpufree.ipynb) · [π0.5](../../notebooks/colab_phase07_pi05_Colab.ipynb) |
+| 4a ✅ | **Round 1 run book**: six arms, 54 trials, two checkpoints per policy, mirrored interleave, 9 grid spots | **§10** · [`make_phase07_eval_schedule.py`](../../scripts/make_phase07_eval_schedule.py) |
 | 4 ✅ | **Round 1 run and scored 2026-10-12** — 54 trials. SmolVLA 6/18, ACT 5/18, π0.5 2/18 (0/18 excluding the two the operator called lucky). Held-out loss ranked the families backwards, and spot difficulty turned out to be policy-specific | **§11** · [phase07_eval_log.csv](phase07_eval_log.csv) |
 | 5 ◐ | **Round 2 plan agreed 2026-10-12** — data, not more trials: a continuously-randomised varied dataset, perturbed/recovery episodes, head-only trim, ACT + SmolVLA retrained | **§12** · §13 holds the deferred success-rate design |
 
@@ -317,7 +317,7 @@ report §5.
 
 **Still open, in no particular order:**
 1. Re-run the Phase 0.5 divergence analysis on this dataset
-   ([phase05_second_camera.ipynb](../phase05_second_camera.ipynb)) and put the numbers beside the old
+   ([phase05_second_camera.ipynb](../../notebooks/phase05_second_camera.ipynb)) and put the numbers beside the old
    ones. Confounded, so read it as a sanity check: does the top view stop being the aliased one?
    (Verification §4b already found one piece of the answer for free: the bird's-eye view is blind to the
    wrist tilt every episode opens with.)
@@ -353,7 +353,7 @@ checkpoints become three.
 > **π0.5's checkpoint is decided here rather than from wandb, deliberately.** Reading the curve would
 > cost nothing, but it would only rank the checkpoints by a quantity already known to correlate weakly
 > with task success — and for a flow-matching policy a single `eval_loss` sample cannot be told apart
-> from its own sampling noise ([`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py)
+> from its own sampling noise ([`eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py)
 > exists for exactly that reason). Reading it afterwards is still worth doing, as a check on whether
 > loss predicted the rollout ordering; that is in §10.7.
 
@@ -398,9 +398,9 @@ cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforg
 **All six load and run inside the control-loop budget on the 5080.** This was the open hardware risk:
 the policies were trained on A100/L4 class cards and π0.5 is 4.14 B parameters, so whether it runs at all
 on a 16 GB laptop was unknown. Measured with
-[`scripts/bench_rollout_latency.py`](../scripts/bench_rollout_latency.py), which feeds synthetic
+[`scripts/bench_rollout_latency.py`](../../scripts/bench_rollout_latency.py), which feeds synthetic
 observations of the right shape through the real preprocessor and the real policy — no robot needed.
-Full output: [`results/phase07_eval/bench_rollout_latency_5080.txt`](../results/phase07_eval/bench_rollout_latency_5080.txt).
+Full output: [`results/phase07_eval/bench_rollout_latency_5080.txt`](../../results/phase07_eval/bench_rollout_latency_5080.txt).
 
 | Arm | Params | Peak VRAM | Chunk latency (median / worst) | Headroom at `n_action_steps=25` |
 |---|---|---|---|---|
@@ -554,7 +554,7 @@ The schedule is pre-generated into
 [phase07_eval_log.csv](phase07_eval_log.csv) — 54 rows, outcome columns blank:
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && python3 scripts/make_phase07_eval_schedule.py --seed 0 > Details/phase07_eval_log.csv
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && python3 scripts/make_phase07_eval_schedule.py --seed 0 > docs/details/phase07_eval_log.csv
 ```
 
 `lerobot-rollout` records N episodes of one checkpoint in a row, so a fully interleaved trial order
@@ -725,7 +725,7 @@ shows the layout), fixture on its outline. Then watch the two moments that matte
   the arm already mid-reach and snap it there from home. The raw copy is also the archival record of
   what the session actually did.
 - **A clean replay clears the arm, the base, the fixture and the calibration frame in one go.** A miss
-  means something physical moved, and [`scripts/joint_offset_check.py`](../scripts/joint_offset_check.py)
+  means something physical moved, and [`scripts/joint_offset_check.py`](../../scripts/joint_offset_check.py)
   plus [phase06 §8](phase06_camera_ablation_training.md) turn the miss into a correction.
 - Nothing needs restoring first: the live calibration pair is byte-identical to
   [`calibration/current/`](calibration/current/), verified 2026-10-12.
@@ -835,7 +835,7 @@ prediction 5 rests on it. Checked in the source and in the dataset's own statist
 L1 between the predicted action chunk and the ground truth on the held-out episodes, **un-normalised,
 in degrees**. That is the same quantity for every policy family, it is directly interpretable, and
 every piece needed already exists in
-[`eval_checkpoints_heldout.py`](../scripts/eval_checkpoints_heldout.py) — it would take swapping
+[`eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py) — it would take swapping
 `policy.forward`'s loss for `predict_action_chunk` plus an inverse-normalisation step. Worth doing
 **after** the rollouts, so the loss-vs-success comparison is not read before the robot has spoken.
 
@@ -845,9 +845,9 @@ every piece needed already exists in
 
 54 trials, 12 blocks, as §10 specifies. Scored blind from video into
 [phase07_eval_log.csv](phase07_eval_log.csv); `episode_index` and `duration_s` recovered from the
-recordings by [`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py), which also produces
+recordings by [`analyze_phase07_eval.py`](../../scripts/analyze_phase07_eval.py), which also produces
 every number and figure below. Summary tables:
-[`results/phase07_eval/`](../results/phase07_eval/).
+[`results/phase07_eval/`](../../results/phase07_eval/).
 
 ## The four findings to carry forward
 
@@ -1015,7 +1015,7 @@ compounding-error gap, and it has a specific shape here:
 **What would show it directly, and it is cheap:** the per-stage / per-phase held-out loss both the
 session notes and §10.7a asked for. Pool the held-out frames by task stage (reach / grasp / transport /
 insert, segmentable by the gripper trace with the detector already in
-[`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py)) and report loss per stage instead of
+[`analyze_phase07_eval.py`](../../scripts/analyze_phase07_eval.py)) and report loss per stage instead of
 one pooled number. The prediction this makes is testable: **5k and 20k should separate at the grasp and
 insert stages specifically**, where tolerance is tightest, even though 5k wins pooled. Adding a
 smoothness term — the jerk of the *predicted chunk*, which needs no robot — would make the offline
@@ -1063,7 +1063,7 @@ wandb_logger.log_dict({"eval_loss": eval_loss, "eval_chunk_jerk": jerk}, step=st
 **Why (b) is the right one.** It measures the jerk of *the chunk the policy would actually execute*,
 on held-out observations, for every family on one scale — which is precisely the quantity §11.3 found
 tracks rollout behaviour where loss does not. Normalise per joint by the training-set σ (as
-[`analyze_phase07_eval.py`](../scripts/analyze_phase07_eval.py) does) so the number is comparable
+[`analyze_phase07_eval.py`](../../scripts/analyze_phase07_eval.py) does) so the number is comparable
 across policies, and it becomes a second eval curve to read beside the loss.
 
 **Cost.** One denoising loop per eval batch. π0.5's eval pass is ~5 held-out episodes; at the measured
@@ -1139,8 +1139,8 @@ screenshots (episode 1 → position 1, episode 9 → position 2) and the grid ge
 3×3 row-major, the grasp bearing moves **+4.1…+5.8°** along every row and **−3.5…−5.6°** down every
 column — a regular raster, which is only true if the labelling is right.
 
-Analysis: [`analyze_phase07_positions.py`](../scripts/analyze_phase07_positions.py) ·
-[`per_position_joined.csv`](../results/phase07_eval/per_position_joined.csv).
+Analysis: [`analyze_phase07_positions.py`](../../scripts/analyze_phase07_positions.py) ·
+[`per_position_joined.csv`](../../results/phase07_eval/per_position_joined.csv).
 
 ![per-position grid](figs/phase07_position_grid.png)
 
@@ -1341,7 +1341,7 @@ the mechanism.
 | **P1** | **The ACT−SmolVLA progress gap moves negative.** Round 1 pooled: ACT 2.22 − SmolVLA 2.17 = **+0.06**. Predict **< −0.3** after D1 | round-2 rollouts, same progress scale |
 | **P2** | SmolVLA's absolute progress improves more than ACT's | round-2 vs round-1 per-family progress |
 | **P3** | **ACT's KLD does *not* collapse to ~0.0002 this time.** If D1 is genuinely more multimodal the latent has something to encode | free, read off the training log |
-| **P4** | Measured `div_reach` on D1 exceeds D0's range (0.24–0.39) | [`analyze_phase07_positions.py`](../scripts/analyze_phase07_positions.py) on D1 |
+| **P4** | Measured `div_reach` on D1 exceeds D0's range (0.24–0.39) | [`analyze_phase07_positions.py`](../../scripts/analyze_phase07_positions.py) on D1 |
 
 **If P4 fails, P1–P3 are not tested** — the manipulation did not take, and the round is a data-volume
 experiment rather than a mechanism test. Check P4 first, immediately after collection.
@@ -1354,7 +1354,7 @@ nine-point coincidence.
 
 D1 recorded as `so101_tray_cylinder_varied_20261013_082911`: 50 episodes, 38,389 frames, median
 episode 25.7 s (D0: 23.5 s). Checked with
-[`check_d1_divergence.py`](../scripts/check_d1_divergence.py) before anything else was done with the
+[`check_d1_divergence.py`](../../scripts/check_d1_divergence.py) before anything else was done with the
 data, as this section requires.
 
 **The measurement had to be position-controlled or it would have been meaningless.** In D0 the five
@@ -1384,7 +1384,7 @@ two gripper openings as `argmax` of the episode's first half and `argmax` of its
 the release-opening always falls *after* the midpoint. **The deliberate 2 s tail breaks that
 assumption**, and D1 episode 39 is where it broke. Full account, including the two further failure
 modes found while fixing it, in §12.5. Replaced 2026-10-13 and validated at
-[`fix_grasp_detector.py`](../scripts/fix_grasp_detector.py): **identical to the old detector on 50/50
+[`fix_grasp_detector.py`](../../scripts/fix_grasp_detector.py): **identical to the old detector on 50/50
 D0 episodes**, so the verification report and §11.6 are untouched, and on 49/50 D1 episodes — the one
 difference being episode 39 itself.
 
@@ -1397,7 +1397,7 @@ The predictions stand as written; what changed is that round 2 no longer isolate
 would recover the test.
 
 > **A trap when re-running the verifier on a second dataset.** `verify_phase07_dataset.py` writes its
-> figures to `Details/figs/phase07_idle.png` and `phase07_tray_spots.png` under **fixed names**, even
+> figures to `docs/details/figs/phase07_idle.png` and `phase07_tray_spots.png` under **fixed names**, even
 > when `--out` points elsewhere — so running it on D1 silently overwrites D0's, which
 > [phase07_data_verification.md](phase07_data_verification.md) embeds. D1's copies are kept as
 > `phase07_d1_*.png`; restore D0's from git if the verifier is re-run.
@@ -1576,7 +1576,7 @@ cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforg
 ```
 
 - **`--dataset.push_to_hub=false`** throughout, then one push at the end with
-  [`push_dataset.sh`](../scripts/push_dataset.sh) — which is also what creates the codebase-version tag
+  [`push_dataset.sh`](../../scripts/push_dataset.sh) — which is also what creates the codebase-version tag
   that `hf upload` alone does not (the BLOCK D1 hit).
 - **`--dataset.streaming_encoding=true --dataset.encoder_threads=2`** encodes during capture instead of
   writing PNGs first, making `save_episode()` near-instant. That matters more here than anywhere else:
@@ -1625,7 +1625,7 @@ policy trained on *both* is the obvious third arm if either alone falls short.
 
 ### The trim, and the one rule that changed
 
-[`make_trimmed_dataset.py`](../scripts/make_trimmed_dataset.py) trimmed **both** ends through round 1.
+[`make_trimmed_dataset.py`](../../scripts/make_trimmed_dataset.py) trimmed **both** ends through round 1.
 The head trim stays — [phase06 F3](phase06_camera_ablation_training.md) showed the idle lead-in is an
 attractor the policy cannot escape at the start. **The tail is the opposite**: it is the only place a
 policy can learn that the task is finished, and §11.5 measured the cost of removing it (SmolVLA moves
@@ -1667,11 +1667,11 @@ ACT 100-step chunk.
 
 The tail is preserved rather than removed — the point of the change — and its spread is cut from 170
 frames to 72, which is the consistency argument above. Push with
-[`push_dataset.sh`](../scripts/push_dataset.sh), which also writes the codebase-version tag:
+[`push_dataset.sh`](../../scripts/push_dataset.sh), which also writes the codebase-version tag:
 
 ```bash
 cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && ./scripts/push_dataset.sh ~/.cache/huggingface/lerobot/HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed "D1 trimmed: head cut, 2 s tail kept (--tail-cap 60)"
-``` Push afterwards with [`push_dataset.sh`](../scripts/push_dataset.sh), which creates
+``` Push afterwards with [`push_dataset.sh`](../../scripts/push_dataset.sh), which creates
 the codebase-version tag that a plain `hf upload` does not.
 
 ### `eval_chunk_jerk` in wandb
@@ -1696,7 +1696,7 @@ what validates the jerk metric — without it there is one unproven proxy and no
 The per-stage loss depends on segmenting each episode into reach / carry / insert, and that
 segmentation is `grasp_seated_index`. It was wrong on D1 episode 39, and fixing it turned up two more
 failure modes that were latent in D0 all along. Replaced 2026-10-13; validation in
-[`fix_grasp_detector.py`](../scripts/fix_grasp_detector.py).
+[`fix_grasp_detector.py`](../../scripts/fix_grasp_detector.py).
 
 **The structure being detected.** A clean episode's gripper trace has three levels: closed at rest →
 **open** to approach → closed on the cylinder (the *hold* plateau, whose level is set by the cylinder's
@@ -1795,7 +1795,7 @@ over D1.
 
 | | ACT | SmolVLA |
 |---|---|---|
-| How | **one local command** (below) — no notebook needed | [colab_phase07_r2_smolvla.ipynb](../colab_phase07_r2_smolvla.ipynb) |
+| How | **one local command** (below) — no notebook needed | [colab_phase07_r2_smolvla.ipynb](../../notebooks/colab_phase07_r2_smolvla.ipynb) |
 | Starts from | `act_tray_cylinder_s1000_trim` | `smolvla_tray_cylinder_s1000_trim` |
 | Batch × further steps | 8 × **40,000** | 64 × **20,000** |
 | New-data coverage | 320,000 samples · **10.6 epochs** of D1 | 1,280,000 samples · 42.5 epochs |
@@ -1857,8 +1857,8 @@ sitting flat.
 ### Notebooks: one, and it is derived from the one that actually ran
 
 **`colab_phase07_r2_smolvla.ipynb` is generated from
-[`colab_phase07_pi05_Colab.ipynb`](../colab_phase07_pi05_Colab.ipynb)** by
-[`make_r2_notebook.py`](../scripts/make_r2_notebook.py) — the only Phase 0.7 notebook that completed a
+[`colab_phase07_pi05_Colab.ipynb`](../../notebooks/colab_phase07_pi05_Colab.ipynb)** by
+[`make_r2_notebook.py`](../../scripts/make_r2_notebook.py) — the only Phase 0.7 notebook that completed a
 real Colab run. The round-1 `act` / `pi05` / `smolvla` notebooks target a **rented box**, not Colab:
 they carry a `/root/gpufree-data` work-dir chooser, a PEP 668 `--break-system-packages` install path
 and a `PHASE07_WORK` override, none of which Colab needs. They are renamed **`*_gpufree.ipynb`** to
@@ -1983,7 +1983,7 @@ machine change. The checkpoint is now cached locally, so a restart costs no re-d
 > `ALL_PROXY=socks://127.0.0.1:7897/`. `huggingface_hub >= 1.0` talks through **httpx**, which accepts
 > `http://`, `https://` and `socks5://` but **not** bare `socks://`, so every download dies with
 > `ValueError: Unknown scheme for proxy URL`. It is the same trap
-> [`push_dataset.sh`](../scripts/push_dataset.sh) already works around inline.
+> [`push_dataset.sh`](../../scripts/push_dataset.sh) already works around inline.
 >
 > `HTTP_PROXY` and `HTTPS_PROXY` are already correct (`http://127.0.0.1:7897`) and cover everything
 > the Hub needs, so the fix is simply to drop the SOCKS one — `env -u ALL_PROXY -u all_proxy` prefixes
