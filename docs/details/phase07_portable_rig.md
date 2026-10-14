@@ -595,8 +595,9 @@ number and figure below. Summary tables: [`results/phase07_eval/`](../../results
    backwards.** The cause is compounding error: loss is a *per-frame, teacher-forced* quantity scored
    from states the demonstrator reached, while a rollout is scored from states the policy reached.
    §11.3.
-2. **A smoothness metric computed from the predicted chunk would close most of that gap**, and it can
-   be measured offline with no robot. §11.3a.
+2. **A smoothness metric computed from the predicted chunk closes most of that gap** — measured
+   2026-10-14 and it holds: chunk jerk reproduces the rollout jerk ordering exactly across five arms,
+   with no robot. Splitting the loss by task stage, the other candidate, does not. §11.3a.
 3. **Keep the tail idle frames.** Trim the head — the F3 idle attractor is real — but the tail is the
    only place a policy can learn "the task is done, hold still", and its absence is measurable:
    SmolVLA moves 3.6× as much as ACT in the final second. §11.5.
@@ -740,10 +741,9 @@ compounds. That is the classic covariate-shift gap, with a specific shape here:
 prediction is testable: **5k and 20k should separate at the grasp and insert stages specifically**,
 where tolerance is tightest, even though 5k wins pooled.
 
-## 11.3a — Measuring chunk smoothness offline
+## 11.3a — Measuring chunk smoothness offline — **measured 2026-10-14**
 
-**Status: not implemented.** Finding 2 of the four, and step 5 of §12 — unblocked, cheap, and still
-outstanding. Two places it can be measured, and only one of them is safe.
+Finding 2 of the four. Two places it can be measured, and only one of them is safe.
 
 **(a) Train-time, for ACT — free, one line.** ACT's `forward` already has the predicted chunk in hand,
 and `MetricsTracker.update_metrics` (`logging_utils.py:163`) *auto-registers an `AverageMeter` for
@@ -775,6 +775,50 @@ across policies.
 **Pre-registered prediction:** evaluate SmolVLA's 5k and 20k checkpoints and **5k should show ~2× the
 jerk of 20k**, matching the 2.0× measured on the robot — *visible without a robot*. If it holds, the
 dial grid can be scored on loss **and** jerk.
+
+### Result — the jerk prediction holds, the per-stage one does not
+
+[`eval_checkpoint_metrics.py`](../../scripts/eval_checkpoint_metrics.py) over the round-1 checkpoints,
+3 repeats with fixed seeds on the same held-out episodes the training curve used. **5 of the 6 arms:**
+π0.5 10k is unmeasured, because π0.5 costs 67 min an arm against SmolVLA's 11 and ACT's 3, and the run
+was stopped after π0.5 5k.
+
+![offline metrics against the robot](figs/phase07_offline_metrics.png)
+
+| arm | chunk jerk | rollout jerk (§11.1) | pooled loss | grasp | insert |
+|---|---|---|---|---|---|
+| ACT 40k | 17.34 ± 0.00 | 24.96 | 0.1836 | 0.1515 | 0.1814 |
+| ACT 60k | **15.03** ± 0.00 | 22.04 | 0.1847 | 0.1482 | 0.1884 |
+| SmolVLA 5k | **67.08** ± 0.07 | 63.45 | **0.1247** | 0.0656 | 0.1464 |
+| SmolVLA 20k | 28.04 ± 0.04 | 32.35 | 0.2270 | 0.0974 | 0.2669 |
+| π0.5 5k | 25.53 ± 0.09 | 31.77 | **0.0520** | 0.0310 | 0.0656 |
+
+**The pre-registered test passes: 2.39× offline against 1.96× on the robot**, predicted ~2×. And the
+agreement is not confined to that pair — **offline jerk reproduces the rollout jerk ordering exactly**,
+same ranks on all five arms. The level is not identical (offline/rollout runs 0.68 for the ACT arms
+against 0.80–1.06 for the VLAs) and the split falls on family lines, which is what the chunk-length
+difference predicts: ACT's chunk is 100 steps and both VLAs' are 50, so ACT's std spans more of the
+task. **Read the ratio within a family, not the level across families.**
+
+**Three checks that the loop is measuring what it claims.** The pooled losses reproduce numbers
+obtained three different ways: ACT lands at 0.1836/0.1847 inside its known 0.179–0.192 band, SmolVLA 5k
+at 0.1247 against the 0.1258 on its training curve, and π0.5 5k at 0.0520 against the ≈0.052 §10.7a
+read off wandb. **ACT is deterministic at eval** (± 0.00 over 3 repeats); the VLAs' sampling noise is
+small enough to ignore — ±0.1% on jerk, ±1–3% on loss.
+
+**The per-stage prediction fails, and fails usefully.** §11.3 predicted 5k and 20k would separate at
+grasp and insert specifically. They do not: **5k has the lower loss at every stage** — reach 2.03×,
+grasp 1.48×, transport 1.62×, insert 1.82× — so the split reproduces the same wrong answer four times
+rather than localising it. The gap is in fact *smallest* at grasp, the opposite of the prediction. So
+of the two explanations §11.3 offered for the inversion, this **eliminates "the loss is right but
+pooled over the wrong frames" and leaves "the loss is the wrong derivative"**. Jerk is what loss
+misses; *where* the loss lands is not.
+
+**What it does not do is rank families.** π0.5 5k has the lowest loss of all five arms *and* a jerk
+below both SmolVLA arms — and it scored 0/9 excluding luck. Neither offline metric sees that, which is
+consistent with §11.4: π0.5 fails at **reach**, a representation problem rather than a smoothness one.
+§12.7's frozen-feature probe is the test for it. **Jerk is a within-family checkpoint selector, not a
+cross-family one.**
 
 > **Literature hook.** [08 §A.1](../08_data_quality_research.md) records RINSE (Kulkarni, Dhar & Cui,
 > 2026) scoring *demonstrations* by smoothness — spectral arc length plus a trajectory-envelope
@@ -976,27 +1020,24 @@ not on measurement.**
 | 2 | **D1: 50 full-task episodes, continuously randomised** (§12.2) | ✅ 2026-10-13 · 50 ep / 38,389 fr · **P4 PASS** |
 | 3 | **Processing: head trim + 2 s tail cap** (§12.5) | ✅ 33,337 fr (87%), 35.7 min · detector rewritten |
 | 4 | **Continue ACT and SmolVLA from the round-1 checkpoints** (§12.6) | ◐ **ACT done 10-14** · SmolVLA at ~10.3k of 20k |
-| 5 | **Two offline metrics: chunk jerk and per-stage held-out loss** (§11.3a, §12.5) | — **not started**, both unblocked · see below |
+| 5 | **Two offline metrics: chunk jerk and per-stage held-out loss** (§11.3a, §12.5) | ✅ 2026-10-14, 5 of 6 arms · **jerk 2.39× confirmed · per-stage prediction wrong** |
 | 6 | **π0.5 frozen-feature probe** (§12.7) | — ~30 min, no training |
 | 7 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | — ~1.5 h |
 | 8 | **D2: compositional collection, 130 stage episodes** (§12.4) | — to be timed |
 | 9 | **Round-2 rollouts**, scored per position and per family | — |
 
-> **Step 5 is the one that can run today.** Both metrics are now post-hoc passes over *saved*
-> checkpoints (§11.3a), and the checkpoints their pre-registered predictions are about are round 1's,
-> already in `outputs/hub/`. So neither waits on SmolVLA's training to finish, neither competes for the
-> GPU in any meaningful way, and the detector they both depended on was fixed on 2026-10-13. They are
-> also each other's check: per-stage loss is what tells you whether the jerk number means anything.
-> Both are modifications of
-> [`eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py), which already finds the
-> checkpoints, builds the holdout loader, runs the eval loop with fixed seeds and repeats, and writes
-> JSON plus a `recheck/` wandb namespace — so what is missing in each case is the inner measurement,
-> not the scaffolding:
+> **Step 5's outcome, in one line each.** **Jerk works**: 2.39× between SmolVLA's two checkpoints
+> against the robot's 1.96×, and the rollout jerk ordering reproduced exactly on all five measured
+> arms. **Per-stage loss does not**: 5k is better at every stage, so the split does not localise the
+> failure. Both ran post-hoc over saved checkpoints via
+> [`eval_checkpoint_metrics.py`](../../scripts/eval_checkpoint_metrics.py), which reuses the
+> checkpoint-finding and held-out loader of
+> [`eval_checkpoints_heldout.py`](../../scripts/eval_checkpoints_heldout.py). Numbers and figure:
+> [§11.3a](#113a--measuring-chunk-smoothness-offline--measured-2026-10-14).
 >
-> | Metric | What to change in `eval_once` | Pre-registered prediction |
-> |---|---|---|
-> | **chunk jerk** | swap `policy.forward`'s loss for `predict_action_chunk`, take the second difference over the chunk axis, normalise per joint by the training-set σ | SmolVLA 5k shows **~2× the jerk of 20k**, matching the 2.0× measured on the robot (§11.3) |
-> | **per-stage loss** | keep `policy.forward`, but bucket the per-frame losses by stage — `grasp_seated_index` segments each held-out episode — instead of averaging over all of them | SmolVLA 5k and 20k **separate at grasp and insert** specifically, where tolerance is tightest, even though 5k wins pooled |
+> **π0.5 10k is the one arm left**, at ~67 min against SmolVLA's 11 and ACT's 3 — worth finishing when
+> the GPU is idle, but it changes no conclusion: π0.5's problem is reach (§11.4), which neither metric
+> is sensitive to.
 
 **Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
 experiment with a time-and-performance hypothesis attached rather than as a replacement for §12.3's
@@ -1296,16 +1337,18 @@ tag that a plain `hf upload` does not:
 cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && ./scripts/push_dataset.sh ~/.cache/huggingface/lerobot/HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed "D1 trimmed: head cut, 2 s tail kept (--tail-cap 60)"
 ```
 
-### Per-stage held-out loss, and the detector it needs
+### Per-stage held-out loss — **measured 2026-10-14, prediction wrong**
 
-**Status: not implemented**, and no longer blocked — the segmentation it depends on was fixed on
-2026-10-13 (below). Step 5 of §12.
+Pool the held-out frames by task stage and report loss per stage instead of one pooled number. The
+stages come from the gripper trace: the detector's two openings plus the grasp and seated frames give
+reach / grasp / transport / insert, and they segmented all 5 held-out episodes (748 / 487 / 733 / 773
+frames).
 
-Pool the held-out frames by task stage and report loss per stage instead of one pooled number.
-**Pre-registered prediction** from §11.3: SmolVLA 5k and 20k should separate at the **grasp and insert**
-stages specifically, where tolerance is tightest, even though 5k wins pooled. This is also what
-validates the jerk metric of §11.3a — without it there is one unproven proxy and no way to check it,
-which is why the two are one step rather than two.
+**§11.3's prediction was that SmolVLA 5k and 20k separate at grasp and insert specifically. They do
+not** — 5k has the lower loss at every stage, with the *smallest* gap at grasp. Full numbers and what
+it rules out: [§11.3a](#113a--measuring-chunk-smoothness-offline--measured-2026-10-14). The metric is
+still worth having — it is how the jerk result was checked rather than taken on faith — but it does not
+explain the inversion, and the dial grid should be scored on loss and **jerk**, not loss by stage.
 
 ### The grasp detector, rewritten
 

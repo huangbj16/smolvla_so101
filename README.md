@@ -87,9 +87,11 @@ call it.
   `patch_act_camera_embed.py`, `make_r2_notebook.py`, `eval_checkpoints_heldout.py`
 - **Robot eval:** `make_eval_schedule.py` (0.6), `make_phase07_eval_schedule.py`,
   `joint_offset_check.py`, `bench_rollout_latency.py`, `analyze_phase07_eval.py`,
-  `analyze_phase07_positions.py` (`make_phase07_eval_figs.py` and `make_phase07_position_figs.py` are
-  imported by those two analyzers; `make_phase07_doc_figs.py` is run on its own and draws the
-  explanatory figures in the Phase 0.7 run book)
+  `analyze_phase07_positions.py`, `eval_checkpoint_metrics.py` (chunk jerk + per-stage held-out loss,
+  post-hoc on saved checkpoints)
+- **Figures:** `make_phase07_eval_figs.py` and `make_phase07_position_figs.py` are imported by the two
+  analyzers; `make_phase07_doc_figs.py` (run book explainers) and `make_phase07_metric_figs.py`
+  (offline-metric results) are run on their own
 
 ## Setup
 
