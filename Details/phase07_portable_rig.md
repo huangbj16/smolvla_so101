@@ -502,9 +502,9 @@ record that you did, since it makes these bench numbers non-comparable:
 sudo nvidia-smi -pl 175    # may be refused: on many laptops the TGP is OEM-locked
 ```
 
-**Where the 80 W cap does cost you is training, not this eval.** Any future local run on the 5080 — the
-dial grid's ACT column, say — is a sustained 100%-duty-cycle load, and there the clock difference is the
-whole wall clock.
+**Where the 80 W cap does cost you is training, not this eval** — and §12.6a has the measurement that
+confirms it. Any sustained 100%-duty-cycle run on this card is clock-limited by the cap, and there the
+difference is the whole wall clock.
 
 ## 10.2 — Every arm re-observes at the same rate: `n_action_steps=25`
 
@@ -1885,6 +1885,68 @@ to ACT's entire 40,000-step run.** So one pair of runs yields both:
 
 This is the same coincidence round 1 had — 8× the batch, ⅛ the steps — and §11 relied on it there too.
 **Report P1 from the matched pair, not from the final checkpoints.**
+
+### 12.6a — The 80 W cap, measured under training this time
+
+[§10.1a](#101a--gpu-power-leave-it-alone-and-above-all-do-not-change-it-mid-session) concluded the cap
+was irrelevant **for rollouts**, and that still holds: a rollout runs a 33% duty cycle, so the card is
+idle most of the time. **Training is the opposite**, and the SmolVLA run makes it plain:
+
+| under sustained training | |
+|---|---|
+| Power | **79.9 W of 80 W** — pinned |
+| `SW Power Cap` | **Active** |
+| `HW Thermal Slowdown` | **Not Active**, 56 °C |
+| SM clock | **1,215 MHz of 3,090** — **39% of ceiling** |
+| Utilisation | 100% |
+
+The card is running at well under half its clock purely because of the power limit, with ~30 °C of
+thermal headroom unused. Nothing is thermally constrained; it is budget-constrained.
+
+**The OS side is already maxed** — `powerprofilesctl` is on `performance`, and this machine exposes no
+ACPI `platform_profile` and no `hp-wmi` thermal-profile knob, so there is no laptop performance mode
+left to switch.
+
+**Dynamic Boost is installed but not running.** `/usr/bin/nvidia-powerd` ships in
+`nvidia-kernel-common-595`, and its systemd unit ships **only as documentation** at
+`/usr/share/doc/nvidia-kernel-common-595/nvidia-powerd.service` — it was never installed into
+`/etc/systemd/system`, so the service is `not-found` and inactive. Dynamic Boost is the mechanism that
+lets a laptop GPU draw above its base TGP by taking budget from the CPU; without the daemon the card
+sits at base, which is exactly the 80 W observed. Whether this laptop supports it is answered by
+running the daemon in the foreground, which prints its verdict:
+
+```bash
+sudo nvidia-powerd -f
+```
+
+If it reports support, install the shipped unit:
+
+```bash
+sudo cp /usr/share/doc/nvidia-kernel-common-595/nvidia-powerd.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now nvidia-powerd
+```
+
+**The blunt alternative** is to raise the limit directly. The driver reports `Default Power Limit
+80 W` against `Max Power Limit 175 W`, and the two differing is a good sign — on fully OEM-locked
+laptops they are equal:
+
+```bash
+sudo nvidia-smi -pl 120
+```
+
+Step up rather than jumping to 175: watch temperature and `HW Thermal Slowdown` for a few minutes at
+each level. The GPU protects itself with HW Power Brake and thermal slowdown regardless, so the risk
+is noise and heat, not damage.
+
+**How much is it worth?** Power scales roughly with the square-to-cube of clock, so 80 → 120 W might
+buy ~20–25% and 80 → 150 W perhaps 30–40% — but the card being at 39% of its clock ceiling suggests
+more headroom than that model assumes. **Measure instead of estimating**: the training log prints
+`updt_s` every 200 steps (~6 min at this rate), so the next line after a change tells you directly.
+Baseline to beat is **`updt_s: 1.82`**.
+
+**Timing: do it between runs, not mid-run, unless you accept the risk.** Both changes apply live and
+neither should disturb a running job, but a driver hiccup would cost everything since the last
+checkpoint. With `save_freq=5000` that can be ~2.5 h of work. The free moment is just after a
+checkpoint lands, or between the SmolVLA and ACT runs.
 
 ### SmolVLA: resuming locally from the Hub checkpoint
 
