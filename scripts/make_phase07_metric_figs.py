@@ -179,62 +179,53 @@ def fig_metrics(m, roll, path: pathlib.Path) -> None:
 
 
 def _divergence_panel(ax, rows, fam, title, subtitle, assert_loss_rises):
-    """One family's D1 checkpoints: jerk on the left axis, held-out loss on the right."""
+    """One family's D1 checkpoints, both metrics INDEXED to the first checkpoint.
+
+    Indexed rather than drawn on twin y-axes. A dual-axis chart lets the author slide two
+    unrelated scales until the lines cross wherever they like, so the reader cannot tell whether
+    a crossing means anything - it is the single most misleading chart form. Percent change from
+    a common base puts both on one axis, where "jerk falls while loss rises" is the literal shape
+    of the two lines and the magnitudes are comparable.
+    """
     steps = [s for s, _ in rows]
     jerk = np.array([v["jerk"]["mean"] for _, v in rows])
     jerr = np.array([v["jerk"]["std"] for _, v in rows])
     loss = np.array([v["loss_pooled"]["mean"] for _, v in rows])
     lerr = np.array([v["loss_pooled"]["std"] for _, v in rows])
 
-    # The claim the panel makes. Jerk falling is the selection rule's premise for both families;
-    # loss rising is SmolVLA's alone, so it is only asserted where it is being claimed.
     assert all(a > b for a, b in zip(jerk, jerk[1:])), f"{fam} jerk no longer falls: {jerk}"
     if assert_loss_rises:
         assert all(a < b for a, b in zip(loss, loss[1:])), f"{fam} loss no longer rises: {loss}"
 
     ks = np.array(steps) / 1000.0
-    ax.errorbar(ks, jerk, yerr=jerr, color=C[fam], lw=2.4, marker="o", markersize=8,
-                markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4)
-    ax.set_xlabel("training step  (thousands)", color=INK2, fontsize=9)
-    ax.set_ylabel("chunk jerk  (D1 units · s⁻²)", color=C[fam], fontsize=9)
-    ax.tick_params(axis="y", colors=C[fam])
+    pj, pl = 100 * (jerk / jerk[0] - 1), 100 * (loss / loss[0] - 1)
+    ej, el = 100 * jerr / jerk[0], 100 * lerr / loss[0]
+
+    ax.axhline(0, color=GRID, lw=1.2, zorder=1)
+    ax.errorbar(ks, pj, yerr=ej, color=C[fam], lw=2.2, marker="o", markersize=8,
+                markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4,
+                label="chunk jerk")
+    ax.errorbar(ks, pl, yerr=el, color=INK3, lw=2.2, ls="--", marker="s", markersize=7,
+                markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4,
+                label="held-out loss")
+    # Direct labels on the final point: identity is never carried by colour alone.
+    for y, lbl, col in ((pj[-1], "jerk", C[fam]), (pl[-1], "loss", INK3)):
+        ax.annotate(f"{lbl}  {y:+.0f}%", (ks[-1], y), textcoords="offset points", xytext=(17, 0),
+                    va="center", fontsize=9, color=col, fontweight="700")
     ax.set_xticks(ks)
     ax.set_xticklabels([f"{int(k)}k" for k in ks])
+    ax.set_xlabel("training step", color=INK2, fontsize=9)
+    ax.set_ylabel(f"% change from {steps[0] // 1000}k", color=INK2, fontsize=9)
+    ax.set_xlim(ks[0] - 0.45 * (ks[1] - ks[0]), ks[-1] + 1.15 * (ks[-1] - ks[-2]))
     _style(ax)
 
-    ax2 = ax.twinx()
-    ax2.errorbar(ks, loss, yerr=lerr, color=INK3, lw=2.4, ls="--", marker="s", markersize=7,
-                 markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4)
-    ax2.set_ylabel("pooled held-out loss", color=INK3, fontsize=9)
-    ax2.tick_params(axis="y", colors=INK3, labelsize=9, length=0)
-    for sp in ("top", "left", "bottom"):
-        ax2.spines[sp].set_visible(False)
-    ax2.spines["right"].set_color(GRID)
-    ax2.set_facecolor("none")
-
-    pad_j = max((jerk.max() - jerk.min()) * 0.42, 0.4)
-    pad_l = max((loss.max() - loss.min()) * 0.42, 1e-4)
-    ax.set_ylim(jerk.min() - pad_j, jerk.max() + pad_j)
-    ax2.set_ylim(loss.min() - pad_l, loss.max() + pad_l)
-
-    # Selected = lowest jerk. Mark what the loss curve would have picked only when it differs.
     sel = int(np.argmin(jerk))
-    # Offset away from the nearer edge: the selected point is usually the last one, where a
-    # centred label overruns the right spine.
-    dx = -34 if sel == len(jerk) - 1 else (34 if sel == 0 else 0)
-    ax.scatter([ks[sel]], [jerk[sel]], s=320, facecolor="none", edgecolor=GOOD, linewidth=2.2,
+    ax.scatter([ks[sel]], [pj[sel]], s=300, facecolor="none", edgecolor=GOOD, linewidth=2.2,
                zorder=6)
-    ax.annotate(f"selected\n{steps[sel] // 1000}k", (ks[sel], jerk[sel]),
-                textcoords="offset points", xytext=(dx, 20), ha="center", fontsize=9,
-                color=GOOD, fontweight="700", linespacing=1.4)
     lpick = int(np.argmin(loss))
     if lpick != sel:
-        ax2.scatter([ks[lpick]], [loss[lpick]], s=320, facecolor="none", edgecolor=CRITICAL,
-                    linewidth=2.2, zorder=6)
-        ax2.annotate(f"the loss curve\nwould pick {steps[lpick] // 1000}k",
-                     (ks[lpick], loss[lpick]), textcoords="offset points", xytext=(16, 20),
-                     ha="left", va="center", fontsize=9, color=CRITICAL, fontweight="700",
-                     linespacing=1.4)
+        ax.scatter([ks[lpick]], [pl[lpick]], s=300, facecolor="none", edgecolor=CRITICAL,
+                   linewidth=2.2, zorder=6)
     _title(ax, title, subtitle)
     return jerk, jerr, loss, lerr
 
@@ -262,6 +253,9 @@ def fig_d1_selection(path: pathlib.Path) -> None:
     # The contrast is the point: for ACT the loss MINIMUM lands on the same checkpoint, so jerk
     # overrules nothing there. Say so, rather than letting two similar-looking panels imply the
     # inversion is general.
+    fig.text(0.40, -0.015,
+             "green ring = selected (lowest jerk)        red ring = what the loss curve would pick",
+             ha="center", va="top", fontsize=9, color=INK2, fontweight="600")
     same = int(np.argmin(l_ac)) == int(np.argmin(j_ac))
     fig.text(0.40, -0.09, "No inversion for ACT: its loss minimum is the same checkpoint, so jerk "
              "breaks a tie rather than overruling one.\nThe §11.3a inversion is so far a SmolVLA "

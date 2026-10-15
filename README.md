@@ -93,11 +93,15 @@ call it.
   `make_phase07_r2_eval_schedule.py` (round-2: two D1 arms, two passes; also emits the rollout
   commands so the doc cannot drift from the schedule),
   `joint_offset_check.py`, `bench_rollout_latency.py`, `analyze_phase07_eval.py`,
+  `analyze_phase07_r2_eval.py` (round 2: scoring, stuck/jitter vs the demo baseline, brightness),
+  `probe_camera_sensitivity.py` (how much each policy's output depends on each camera),
+  `probe_embedding_shift.py` (are the eval images in the training distribution),
   `analyze_phase07_positions.py`, `eval_checkpoint_metrics.py` (chunk jerk + per-stage held-out loss,
   post-hoc on saved checkpoints)
 - **Figures:** `make_phase07_eval_figs.py` and `make_phase07_position_figs.py` are imported by the two
   analyzers; `make_phase07_doc_figs.py` (run book explainers) and `make_phase07_metric_figs.py`
-  (offline-metric results, round 1 and the round-2 checkpoint selection) are run on their own
+  (offline-metric results, round 1 and the round-2 checkpoint selection) and
+  `make_phase07_r2_figs.py` (round-2 results and diagnosis) are run on their own
 
 ## Setup
 

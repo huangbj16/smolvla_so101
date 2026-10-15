@@ -19,8 +19,10 @@ steps and SmolVLA at 20,000, both pushed (§12.6). The two offline metrics are m
 reproduces the robot's ordering, per-stage loss does not** (§11.3a). SmolVLA's D1 checkpoint is
 selected: **20,000 by jerk, against the loss curve, and the inversion is monotonic over all four**
 (§12.6). §12.7's gate is **cleared** — frozen SigLIP predicts cylinder position at R² 0.83, so π0.5 is
-undertrained rather than blind, and its 80,000-step run is sized and sequenced. **Next: the round-2
-rollouts.** D1-perturb (§12.3) and D2 (§12.4) are not started.
+undertrained rather than blind, and its 80,000-step run is sized and sequenced. **Round 2 is run
+and analysed (§12.9): twice the data moved the success rate not at all — ACT 5/18, SmolVLA 6/18
+against round 1's 3/9 — and the reason is that SmolVLA is largely running open-loop on its
+cameras.** D1-perturb (§12.3) and D2 (§12.4) are not started.
 
 ---
 
@@ -91,7 +93,7 @@ clean test would mount the third-person camera on the same board and record both
 
 > **Never filled in.** The table below is still blank, and that is a real gap: it is the only thing
 > that would let the rig be rebuilt after it is knocked over, and it is a prerequisite for the
-> second-location test (§12.9) that the whole portability claim rests on. Fill it before moving the
+> second-location test (§12.10) that the whole portability claim rests on. Fill it before moving the
 > board.
 
 | Item | Value |
@@ -1034,7 +1036,7 @@ not on measurement.**
 | 6 | **π0.5 frozen-feature probe** (§12.7) | ✅ 2026-10-15 · **gate cleared** — R² 0.83 vs 0.36 pixel control |
 | 7 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | — ~1.5 h |
 | 8 | **D2: compositional collection, 130 stage episodes** (§12.4) | — to be timed |
-| 9 | **Round-2 rollouts**, scored per position and per family | — **next** · ACT 40k + SmolVLA 20k |
+| 9 | **Round-2 rollouts**, scored per position and per family | ✅ 2026-10-15 · 36 trials · **no change in success (p = 1.000)** · §12.9 |
 
 > **Step 5's outcome, in one line each.** **Jerk works**: 2.39× between SmolVLA's two checkpoints
 > against the robot's 1.96×, and the rollout jerk ordering reproduced exactly on all five measured
@@ -2059,7 +2061,132 @@ standard error, but the stage an arm fails at is a per-trial observation: round 
 - **Did D1 help?** Only if the effect is large; see the power table.
 - **It does not settle π0.5**, which remains training-bound (§12.7).
 
-## 12.9 — Deferred, and why each is safe to defer
+## 12.9 — Round 2 results — run and scored 2026-10-15
+
+**Twice the data moved nothing measurable, and the behaviour changed completely.**
+
+![round-2 results](figs/phase07_r2_results.png)
+
+| | round 1 (D0) | round 2 (D1, 2× data) | Fisher |
+|---|---|---|---|
+| ACT | 3/9 · 33% | **5/18 · 28%** | p = 1.000 |
+| SmolVLA | 3/9 · 33% | **6/18 · 33%** | p = 1.000 |
+
+ACT vs SmolVLA within round 2 is also p = 1.000. Not "worse" — **indistinguishable**, and §12.8's
+power table said in advance that only a jump to ~78% would have registered. The session was
+powered to rank, and it ranks them equal.
+
+### What did change: two opposite pathologies
+
+Percentages are meaningless without the demonstrations, so every measure is against them. Stuck =
+2 s moving but netting nothing; jitter = 1 s moving but not straight; both floors are the 1st
+percentile of what a human demonstrator does.
+
+| | **demos** | ACT | SmolVLA |
+|---|---|---|---|
+| **stuck** | 1.0% | **10.1%** · longest trap 14.8 s | 0.2% |
+| **jitter** | 0.5% | 6.7% | **94.9%** |
+| **pause** | 21.8% | 3.2% | **0.0%** |
+| speed while moving | 2.24 | 1.70 | 3.62 |
+| chunk jerk | — | 21.3 | 43.3 |
+
+**ACT freezes; SmolVLA never stops.** ACT gets stuck at 10× the human rate. SmolVLA is *below* the
+human stuck rate but in permanent tremor, moves 1.6× demo speed, and **never pauses once** where a
+demonstrator pauses a fifth of the time.
+
+### Why
+
+![round-2 diagnosis](figs/phase07_r2_diagnosis.png)
+
+**SmolVLA is largely running open-loop — this is the finding that explains the rest.** Destroy
+*both* its cameras and its predicted action moves **0.23σ**; ACT's moves **0.96σ**, and ACT has no
+sampling noise at all. Worse, SmolVLA's own sample-to-sample spread on *identical* input is
+**0.078σ**, which is **more than the effect of over-exposing its top camera (0.042σ)**. Its tremor,
+its refusal to pause and its unpredictability are what a policy looks like when the noise it
+samples outweighs the image it conditions on.
+
+> **This is the answer to "why did more data not help".** More varied images cannot help a policy
+> that is barely reading images. It also means **no SmolVLA checkpoint will fix it** — the §12.8
+> selection question is downstream of a conditioning problem, not the cause of one.
+
+**The grasp fails on a different axis for each**, which reconciles two measurements that first
+looked contradictory:
+
+| | bearing — repeatability over the 2 tries at a spot | height — error vs the demos | cleared grasp |
+|---|---|---|---|
+| ACT | 7.82° | **0.49 sd** | **11/16 · 69%** |
+| SmolVLA | **1.89°** | 1.02 sd | 10/18 · 56% |
+
+SmolVLA goes to the right *place* at the wrong *height* — the gripper tip meets the cap. ACT gets
+the height right in roughly the wrong place. The session notes separate on exactly these words:
+*"tip hit the cap"* appears **3 times for SmolVLA and 0 for ACT**; *"stuck"* **3 times for ACT and
+0 for SmolVLA**.
+
+> Bearing is compared as *repeatability* and height as *absolute error* deliberately. The cylinder
+> moves between trials so there is no fixed correct bearing — round 1 failed to recover the
+> T-label → spot mapping at all (§11.6) — but it always sits at the same **height**, so the demos
+> are a valid reference there and not for bearing.
+
+### Lighting: the block-6 theory is wrong, the bright-light effect is real
+
+**Block 6 is not brighter.** All eight blocks span **136.9–138.9** mean top luminance — a 1.5%
+range — with block 6 at 138.2 and the D1 training data at 138.4. Its 3/5 is p = 0.099 against ACT's
+other trials: noise in five trials.
+
+**Nor is there a distribution shift**, measured in ACT's own backbone against a control of held-out
+training frames:
+
+| | centroid shift | outside the training manifold |
+|---|---|---|
+| D1 held-out (control) | 0.089 | **6%** ← the floor |
+| round-2 rollouts | 0.397 | **7%** |
+| bright-lighting runs | 0.382 | **42%** |
+
+The eval images are **inside** what ACT was trained on. The bright-lighting runs are the positive
+control that proves the method can see a shift when there is one.
+
+**But over-exposure really does unfreeze ACT**: stuck **10.1% → 0.8%**, below the human baseline,
+and speed-while-moving returns to **2.25** against the demonstrations' 2.24. SmolVLA is untouched.
+
+> **The mechanism is probably not "ACT ignores the top camera".** ACT depends on its two cameras
+> almost equally (0.24 vs 0.23), and over-exposing the top perturbs its output **4× less** than
+> removing it (0.057 vs 0.240). So a *small* input change is undoing the freezes — the signature of
+> a **feedback deadlock**: the policy emits near-zero motion, the observation therefore does not
+> change, and it emits the same thing again. Any perturbation that moves the input off the fixed
+> point breaks the loop, and brightness is merely a convenient one. **Testable in round 3 for
+> nothing**: add mild dither to the images at inference and the freezes should fall just as far.
+
+### The seven session observations, scored
+
+| # | Observation | Verdict |
+|---|---|---|
+| 1 | SmolVLA no better, jerkier, unexplainable behaviour; "weighted average?" | **Confirmed, mechanism found.** Jerkier is unverifiable across rounds (below), but SmolVLA is 2× ACT within the session, and the cause is that it is largely open-loop |
+| 2 | ACT similar rate, much better grasp accuracy | **Confirmed on outcome and height** (69% vs 56%, 0.49 vs 1.02 sd); **reversed on bearing**, where SmolVLA is 4× more repeatable |
+| 3a | Block 6 was brighter | **Refuted** — 1.5% session range, b6 mid-range |
+| 3b | Embedding shift D1 → eval | **Refuted** — 7% outside vs a 6% control |
+| 3c | ACT relies on the wrist; top camera interferes | **Half right.** The bright-light gain is real and large, but ACT uses both cameras equally; deadlock-breaking fits better than top-camera blindness |
+| 4 | Correction behaviours learned from D1 | **Not measured.** Note the hypothesis it raises: a slow alignment that *fails to terminate* is exactly what the stuck detector flags, so correction and deadlock may be one behaviour with and without an exit |
+| 5 | Movement slower, from D1's varied speed | **Half confirmed.** ACT 21.5 → 24.1 s, SmolVLA unchanged. ACT is slower *while moving* (1.70 vs demos' 2.24) and pauses **less** than a human, so it is not hesitation. D1's speed CV is 1.9× D0's |
+| 6 | More stuck moments, especially ACT | **Confirmed** — 10× the human rate, 0% for SmolVLA |
+| 7 | Maybe the wrong checkpoint | **Reframed.** For SmolVLA the conditioning problem sits upstream of checkpoint choice. Offline metrics have now failed to predict success twice; only robot trials on a second checkpoint can settle it |
+
+> **A limitation that cost a result.** The round-1 rollout recordings no longer exist — §10.4 ran
+> with `--dataset.push_to_hub=false` and the local cache is gone — so observation 1's cross-round
+> jerk comparison **cannot be made at all**. Only the derived summary survives, and its trajectory
+> measures used D0's normaliser where everything here uses D1's. **Keep the round-3 recordings.**
+
+### What round 3 should do differently
+
+1. **Fix SmolVLA's conditioning before spending another session on it.** Check whether the vision
+   encoder is frozen and whether the action expert can see enough of it; 0.23σ for both cameras is
+   the number to move. More data is not the lever.
+2. **Test the deadlock hypothesis on ACT** — inference-time image dither, no retraining, no robot
+   time beyond one block.
+3. **Keep every rollout recording.**
+4. **Collect at consistent speed** (observation 5's own suggestion) — D1's 1.9× speed spread buys
+   variation the policies did not convert into robustness.
+
+## 12.10 — Deferred, and why each is safe to defer
 
 - **Second location.** Still the only direct test of the portability claim this whole phase is built on
   (§9 item 3), and still untested. Deferred because D1 must stay mergeable with D0 and a location change

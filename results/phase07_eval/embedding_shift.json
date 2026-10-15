@@ -1,0 +1,25 @@
+{
+  "reference": "D1 training episodes (ACT ResNet backbone, pooled)",
+  "n_train": 400,
+  "feature_dim": 512,
+  "sets": {
+    "D1 held-out (control)": {
+      "n": 200,
+      "centroid_shift_sd": 0.08890482881085768,
+      "outside_rate": 0.065,
+      "nn_threshold": 2.113096237182617
+    },
+    "r2 rollouts (normal)": {
+      "n": 400,
+      "centroid_shift_sd": 0.39651401039269124,
+      "outside_rate": 0.07,
+      "nn_threshold": 2.113096237182617
+    },
+    "r2 rollouts (bright)": {
+      "n": 400,
+      "centroid_shift_sd": 0.3817763786526257,
+      "outside_rate": 0.4175,
+      "nn_threshold": 2.113096237182617
+    }
+  }
+}

@@ -200,6 +200,30 @@ def _longest_run(mask: np.ndarray) -> int:
     return best
 
 
+def grasp_pose(ds: pathlib.Path, delta: float = 3.0) -> dict[int, np.ndarray]:
+    """Arm pose at the FIRST gripper close after the approach-open, per episode.
+
+    Looser than `grasp_seated_index`, which needs the full close->release cycle and so discards
+    every trial that grasped but failed to insert - exactly the trials "was the grasp accurate"
+    is about.
+    """
+    from analyze_phase07_eval import turning_points
+    fr = frames(ds)
+    st = np.stack(fr["observation.state"].to_numpy()).astype(float)
+    ep = fr["episode_index"].to_numpy()
+    out = {}
+    for e in np.unique(ep):
+        s = st[ep == e]
+        pts = turning_points(s[:, 5], delta)
+        mx = next((i for i, (_, k) in enumerate(pts) if k == "max"), None)
+        if mx is None:
+            continue
+        nxt = next((pts[j][0] for j in range(mx + 1, len(pts)) if pts[j][1] == "min"), None)
+        if nxt is not None:
+            out[int(e)] = s[nxt, :5]
+    return out
+
+
 # ------------------------------------------------------------------ brightness
 
 def brightness(ds: pathlib.Path, n: int = 16) -> dict:
@@ -374,7 +398,60 @@ def main() -> int:
         pd.concat(brt, ignore_index=True).to_csv(OUT / "r2_brightlighting_trajectory.csv",
                                                  index=False)
 
+    # ---- grasp decomposed by axis ----------------------------------------------------------
+    # The two axes answer different questions and disagree, which is the point: bearing is
+    # position-dependent so only REPEATABILITY across the two attempts at a spot is meaningful,
+    # while height is position-INdependent (the cylinder sits at a fixed height) so the demos
+    # are a valid absolute reference for it.
+    print("\n" + "=" * 86)
+    print("  GRASP, DECOMPOSED BY AXIS")
+    print("=" * 86)
+    demo_pose = np.array([v for v in grasp_pose(D1_TRAIN).values()])
+    grasp = {"demo_n": len(demo_pose),
+             "demo_mean": demo_pose.mean(axis=0).tolist(),
+             "demo_sd": demo_pose.std(axis=0).tolist(), "arms": {}}
+    rec = {}
+    for (arm, p_, half), g in df.groupby(["arm", "pass", "half"], sort=False):
+        ds = block_dataset(arm, p_, half)
+        if not ds.is_dir():
+            continue
+        gp = grasp_pose(ds)
+        for _, r in g.iterrows():
+            if r.fail_stage == "reach":      # never got near the cylinder; not a grasp attempt
+                continue
+            v = gp.get(int(r.episode_index))
+            if v is not None:
+                rec.setdefault(arm, []).append((r.tray_spot, v))
+    for arm in ARMS:
+        items = rec.get(arm, [])
+        if not items:
+            continue
+        pans = {}
+        for spot, v in items:
+            pans.setdefault(spot, []).append(v[0])
+        rep = [abs(v[0] - v[1]) for v in pans.values() if len(v) == 2]
+        H = [1, 2, 3]                         # shoulder_lift, elbow_flex, wrist_flex
+        hz = float(np.median([np.median([abs((v[i] - demo_pose[:, i].mean())
+                                             / demo_pose[:, i].std()) for _, v in items])
+                              for i in H]))
+        reached = df[(df.arm == arm) & (df.fail_stage != "reach")]
+        cleared = int((reached.success | (reached.fail_stage != "grasp")).sum())
+        grasp["arms"][arm] = {
+            "n_grasps": len(items), "bearing_repeat_median_deg": float(np.median(rep)),
+            "bearing_repeat_max_deg": float(np.max(rep)), "height_z": hz,
+            "cleared_grasp": cleared, "reached": len(reached)}
+        print(f"  {ARM_LABEL[arm]:18s} bearing repeatability (same spot, 2 tries) "
+              f"median {np.median(rep):5.2f}°  max {np.max(rep):5.2f}°")
+        print(f"  {'':18s} height error vs demos                    {hz:5.2f} sd")
+        print(f"  {'':18s} cleared the grasp stage                  {cleared}/{len(reached)} "
+              f"= {100*cleared/len(reached):.0f}%")
+
     OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "r2_grasp_axes.json").write_text(json.dumps(grasp, indent=2))
+    demo_row = {"arm": "D1_DEMOS", "n": len(demo_base), "successes": -1,
+                **{c: float(demo_base[c].mean()) for c in
+                   ["jitter_frac", "stuck_frac", "pause_frac", "speed_moving"]}}
+    pd.DataFrame([demo_row]).to_csv(OUT / "r2_demo_baseline.csv", index=False)
     df.to_csv(OUT / "r2_per_trial.csv", index=False)
     per_arm.to_csv(OUT / "r2_summary_per_arm.csv", index=False)
     if bright is not None:
