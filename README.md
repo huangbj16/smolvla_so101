@@ -83,9 +83,12 @@ Run from the repo root (`python scripts/<name>.py`). Each file's docstring says 
 call it.
 
 - **Data:** `verify_phase07_dataset.py`, `make_trimmed_dataset.py`, `push_dataset.sh`,
-  `fix_grasp_detector.py`, `check_d1_divergence.py`
+  `fix_grasp_detector.py`, `check_d1_divergence.py`, `merge_d0_d1.py` (D0 + D1 → one 100-episode
+  set for the π0.5 round-2 run)
 - **Training:** `train_camera_ablation.sh`, `resume_training.sh`, `push_models.sh`,
-  `patch_act_camera_embed.py`, `make_r2_notebook.py`, `eval_checkpoints_heldout.py`
+  `patch_act_camera_embed.py`, `make_r2_notebook.py`, `eval_checkpoints_heldout.py`,
+  `make_gpufree_probe_notebook.py` (generates the env-probe notebook; edit the script, not the
+  notebook)
 - **Robot eval:** `make_eval_schedule.py` (0.6), `make_phase07_eval_schedule.py`,
   `joint_offset_check.py`, `bench_rollout_latency.py`, `analyze_phase07_eval.py`,
   `analyze_phase07_positions.py`, `eval_checkpoint_metrics.py` (chunk jerk + per-stage held-out loss,
