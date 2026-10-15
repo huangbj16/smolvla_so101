@@ -52,6 +52,7 @@ ARMS = [
     ("sv20k_d1", "outputs/train/smolvla_tray_cylinder_s1000_d1_resumed", "020000"),
 ]
 TOP, WRIST = "observation.images.top", "observation.images.wrist"
+STATE = "observation.state"
 # Mean top-camera luminance measured in the bright-lighting rollouts, against 138 in the normal
 # session and the D1 training data (results/phase07_eval/r2_brightness_per_block.csv).
 BRIGHT_TARGET = 198.0 / 255.0
@@ -83,8 +84,24 @@ def perturbations(mean_img: dict[str, torch.Tensor]):
             o[cam] = mean_img[cam].to(b[cam].device).expand_as(b[cam]).clone()
         return o
 
+    def state_blank(b):
+        # "Open-loop with respect to vision" and "open-loop" are different diagnoses. If the
+        # action barely moves when BOTH cameras go but collapses when proprioception goes, the
+        # policy is predicting the next action from the current joint configuration - the
+        # classic imitation-learning shortcut, since actions are smooth and the previous state
+        # predicts the next action far better than any pixel does.
+        o = dict(b)
+        o[STATE] = mean_img[STATE].to(b[STATE].device).expand_as(b[STATE]).clone()
+        return o
+
+    def all_blank(b):
+        o = both(b)
+        o[STATE] = mean_img[STATE].to(b[STATE].device).expand_as(b[STATE]).clone()
+        return o
+
     return {"top_blank": blank(TOP), "wrist_blank": blank(WRIST),
-            "top_bright": bright(TOP), "both_blank": both}
+            "top_bright": bright(TOP), "both_blank": both,
+            "state_blank": state_blank, "everything_blank": all_blank}
 
 
 @torch.no_grad()
@@ -152,14 +169,15 @@ def main() -> int:
         # Mean image per camera over the probed frames: destroying a camera by replacing it with
         # the dataset mean removes its information while staying closer to the training
         # distribution than a flat grey would.
-        acc, cnt = {TOP: 0.0, WRIST: 0.0}, 0
+        acc, cnt = {TOP: 0.0, WRIST: 0.0, STATE: 0.0}, 0
         for b in loader:
             for cam in (TOP, WRIST):
                 x = b[cam]
                 x = x.to(torch.float32) / 255.0 if x.dtype == torch.uint8 else x.to(torch.float32)
                 acc[cam] = acc[cam] + x.sum(dim=0, keepdim=True)
+            acc[STATE] = acc[STATE] + b[STATE].to(torch.float32).sum(dim=0, keepdim=True)
             cnt += b[TOP].shape[0]
-        mean_img = {c: (acc[c] / cnt).to(device) for c in (TOP, WRIST)}
+        mean_img = {c: (acc[c] / cnt).to(device) for c in (TOP, WRIST, STATE)}
 
         perts = perturbations(mean_img)
         conds = ["seed_repeat", *perts]

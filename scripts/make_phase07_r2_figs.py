@@ -166,7 +166,7 @@ def fig_diagnosis(d, path):
     # ---- A: how much does the output depend on the cameras? ---------------------------------
     ax = fig.add_subplot(gs[0, 0])
     conds = [("top_blank", "top camera\nremoved"), ("wrist_blank", "wrist camera\nremoved"),
-             ("both_blank", "BOTH cameras\nremoved")]
+             ("both_blank", "BOTH cameras\nremoved"), ("state_blank", "proprioception\nremoved")]
     xs = np.arange(len(conds))
     for i, arm in enumerate(ARMS):
         v = [d["cam"][arm][k]["mean"] for k, _ in conds]
@@ -185,13 +185,19 @@ def fig_diagnosis(d, path):
                                 shrinkB=2))
     ax.set_xticks(xs); ax.set_xticklabels([l for _, l in conds], fontsize=8.6)
     ax.set_ylabel("change in predicted action  (σ)", color=INK2, fontsize=9)
-    ax.set_ylim(0, 1.13)
+    ax.set_ylim(0, 1.18)
     _style(ax)
     leg = ax.legend(frameon=False, fontsize=8.8, loc="upper left", handletextpad=0.5)
     for t in leg.get_texts():
         t.set_color(INK2)
-    _title(ax, "A · SmolVLA barely looks at its cameras",
-           "destroy both and its action moves 0.23σ — ACT's moves 0.96σ")
+    # The ratio is the finding, so state it rather than leaving it to be read off the bars.
+    rv = {a: d["cam"][a]["both_blank"]["mean"] / d["cam"][a]["state_blank"]["mean"] for a in ARMS}
+    ax.text(0.5, -0.33, f"vision : proprioception  —  ACT {rv['act40k_d1']:.1f} : 1"
+            f"        SmolVLA 1 : {1/rv['sv20k_d1']:.1f}",
+            transform=ax.transAxes, ha="center", va="top", fontsize=10, color=INK,
+            fontweight="700")
+    _title(ax, "A · The two policies read opposite inputs",
+           "ACT is driven by its cameras · SmolVLA by where its joints already are")
 
     # ---- B: the grasp, decomposed -----------------------------------------------------------
     sub = gs[0, 1].subgridspec(2, 1, hspace=0.95)

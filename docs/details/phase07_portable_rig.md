@@ -2098,16 +2098,53 @@ demonstrator pauses a fifth of the time.
 
 ![round-2 diagnosis](figs/phase07_r2_diagnosis.png)
 
-**SmolVLA is largely running open-loop — this is the finding that explains the rest.** Destroy
-*both* its cameras and its predicted action moves **0.23σ**; ACT's moves **0.96σ**, and ACT has no
-sampling noise at all. Worse, SmolVLA's own sample-to-sample spread on *identical* input is
-**0.078σ**, which is **more than the effect of over-exposing its top camera (0.042σ)**. Its tremor,
-its refusal to pause and its unpredictability are what a policy looks like when the noise it
-samples outweighs the image it conditions on.
+**SmolVLA is driving on proprioception, not on its cameras. This is the finding that explains
+the rest.** Ablating each input in turn, in units of the training action σ:
 
-> **This is the answer to "why did more data not help".** More varied images cannot help a policy
-> that is barely reading images. It also means **no SmolVLA checkpoint will fix it** — the §12.8
-> selection question is downstream of a conditioning problem, not the cause of one.
+| ablate | ACT | SmolVLA |
+|---|---|---|
+| top camera | 0.24 | 0.11 |
+| wrist camera | 0.23 | 0.18 |
+| **both cameras** | **0.96** | **0.23** |
+| **proprioception** | **0.19** | **0.69** |
+| *(its own sampling noise, identical input)* | *0.000* | *0.078* |
+| **vision : proprioception** | **5.0 : 1** | **1 : 3.0** |
+
+**The two policies read opposite inputs, and the weighting differs 15-fold.** ACT is driven by what
+it sees; SmolVLA by where its joints already are. That is the **copycat shortcut** of behaviour
+cloning: actions are smooth and strongly autocorrelated, so "continue from the current joint
+configuration" explains most of the per-frame loss, and the harder "find the cylinder, then go
+there" mapping never has to be learned.
+
+**And it collapses exactly where the task needs it.** Per stage, SmolVLA's dependence on the top
+camera against its own noise floor:
+
+| | reach | **grasp** | transport | insert |
+|---|---|---|---|---|
+| SmolVLA, kill top | 0.196 | **0.061** | 0.079 | 0.093 |
+| *its sampling floor* | *0.099* | ***0.063*** | *0.070* | *0.074* |
+| ACT, kill top | **0.492** | 0.239 | 0.094 | 0.206 |
+| ACT, kill wrist | 0.156 | 0.230 | **0.344** | 0.192 |
+
+**At the grasp, destroying SmolVLA's top camera moves its action less than re-sampling with the
+camera untouched.** It is the stage it fails at 8 times in 18. ACT, by contrast, uses the top
+camera to reach and the wrist to transport — the right camera for each job.
+
+> **This is the answer to "why did more data not help", and it is structural.** A shortcut is the
+> easiest loss minimiser at *any* dataset size, so more data does not dislodge it — and more
+> *varied* data makes it worse, because the variation it cannot condition on becomes variance it
+> samples. SmolVLA's grasp-height spread is **1.42× the human demonstrations'** (ACT's is 0.94×):
+> not mode-averaging, which would be narrower, but an **over-dispersed draw** from a distribution
+> it is not conditioning on. "The gripper tip hits the cap" is a draw from the high side of it.
+>
+> It also means **no SmolVLA checkpoint will fix this** — §12.8's selection question is downstream
+> of the conditioning problem, not the cause of one.
+
+> **Not a misconfiguration.** `freeze_vision_encoder=true` and `train_expert_only=true` are
+> SmolVLA's *defaults*, in lerobot 0.6.1 and in the published `lerobot/smolvla_base`. The entire
+> SmolVLM2 backbone was frozen by design and only the action expert trained. Whether those frozen
+> features even resolve the cylinder is untested — §12.7's probe answered exactly that question for
+> π0.5 (R² 0.83) and has not been run for SmolVLA.
 
 **The grasp fails on a different axis for each**, which reconciles two measurements that first
 looked contradictory:
@@ -2160,7 +2197,7 @@ and speed-while-moving returns to **2.25** against the demonstrations' 2.24. Smo
 
 | # | Observation | Verdict |
 |---|---|---|
-| 1 | SmolVLA no better, jerkier, unexplainable behaviour; "weighted average?" | **Confirmed, mechanism found.** Jerkier is unverifiable across rounds (below), but SmolVLA is 2× ACT within the session, and the cause is that it is largely open-loop |
+| 1 | SmolVLA no better, jerkier, unexplainable behaviour; "weighted average?" | **Confirmed, mechanism found.** Jerkier is unverifiable across rounds (below), but SmolVLA is 2× ACT within the session. Not averaging — **over-dispersed sampling** (1.42× the demos' grasp-height spread) from a distribution it is barely conditioning on |
 | 2 | ACT similar rate, much better grasp accuracy | **Confirmed on outcome and height** (69% vs 56%, 0.49 vs 1.02 sd); **reversed on bearing**, where SmolVLA is 4× more repeatable |
 | 3a | Block 6 was brighter | **Refuted** — 1.5% session range, b6 mid-range |
 | 3b | Embedding shift D1 → eval | **Refuted** — 7% outside vs a 6% control |
@@ -2177,14 +2214,22 @@ and speed-while-moving returns to **2.25** against the demonstrations' 2.24. Smo
 
 ### What round 3 should do differently
 
-1. **Fix SmolVLA's conditioning before spending another session on it.** Check whether the vision
-   encoder is frozen and whether the action expert can see enough of it; 0.23σ for both cameras is
-   the number to move. More data is not the lever.
-2. **Test the deadlock hypothesis on ACT** — inference-time image dither, no retraining, no robot
-   time beyond one block.
-3. **Keep every rollout recording.**
-4. **Collect at consistent speed** (observation 5's own suggestion) — D1's 1.9× speed spread buys
-   variation the policies did not convert into robustness.
+**Stop collecting data until SmolVLA's conditioning is fixed.** Three rounds of evidence now say
+the dataset is not the binding constraint: D1 doubled the data and varied it deliberately, and the
+success rate did not move because the policy is not reading the images in the first place.
+
+| # | Do | Cost | Decides |
+|---|---|---|---|
+| 1 | **Run §12.7's frozen-feature probe on SmolVLA's VLM** — can frozen SmolVLM2 features predict cylinder position, as frozen SigLIP could for π0.5? | ~30 min, no training | Whether `freeze_vision_encoder=false` is *mandatory* or merely optional |
+| 2 | **Break the shortcut: state dropout.** Randomly zero `observation.state` during training so the expert cannot ride proprioception. lerobot has no such knob — it is a few lines in the preprocessor | ~1 h to patch, one training run | The direct test of the copycat diagnosis. Target: move SmolVLA's 0.23σ |
+| 3 | **Test ACT's deadlock** — add mild image dither at inference and re-measure the stuck fraction | one block, no training | Whether ACT's freezes are a feedback fixed point (predicted) or top-camera specific |
+| 4 | **Cut SmolVLA's sampling noise** — raise `num_steps` above 10, or average several sampled chunks | minutes | How much of the 95% jitter is sampler noise rather than the policy |
+| 5 | **Keep every rollout recording** (`push_to_hub=true`) | free | Makes the round-2 → round-3 comparison possible at all |
+
+**On collection speed** (observation 5's own suggestion): consistent speed would help, but the
+diagnosis reframes *why*. The problem is not variation — it is variation the policy cannot condition
+on, which becomes variance it samples. Fix the conditioning first; otherwise consistent speed just
+narrows the distribution a blind sampler draws from, which is a smaller version of the same patch.
 
 ## 12.10 — Deferred, and why each is safe to defer
 
