@@ -13,10 +13,12 @@ Written 2026-10-03, last revised 2026-10-14.
 
 ![dataset lineage and status](figs/phase07_lineage.png)
 
-**Where this stands (2026-10-14).** D0 and round 1 are finished and analysed (§10, §11). D1 is
-recorded, verified and trimmed (§12.1–§12.5). Round-2 training is the live item: **ACT finished its
-40,000 steps on 2026-10-14**; **SmolVLA is at ~10.3k of 20,000** and resumes when the GPU is free
-(§12.6). Round-2 rollouts, D1-perturb (§12.3) and D2 (§12.4) are not started.
+**Where this stands (2026-10-15).** D0 and round 1 are finished and analysed (§10, §11). D1 is
+recorded, verified and trimmed (§12.1–§12.5), and **round-2 training is complete** — ACT at 40,000
+steps and SmolVLA at 20,000, both pushed (§12.6). The two offline metrics are measured: **chunk jerk
+reproduces the robot's ordering, per-stage loss does not** (§11.3a). **Next: pick SmolVLA's D1
+checkpoint by jerk rather than by loss, then run the round-2 rollouts.** π0.5 is gated on §12.7's
+probe; D1-perturb (§12.3) and D2 (§12.4) are not started.
 
 ---
 
@@ -1019,7 +1021,7 @@ not on measurement.**
 | 1 | **Pre-register the divergence prediction** (§12.1) | ✅ committed 2026-10-12, before collection |
 | 2 | **D1: 50 full-task episodes, continuously randomised** (§12.2) | ✅ 2026-10-13 · 50 ep / 38,389 fr · **P4 PASS** |
 | 3 | **Processing: head trim + 2 s tail cap** (§12.5) | ✅ 33,337 fr (87%), 35.7 min · detector rewritten |
-| 4 | **Continue ACT and SmolVLA from the round-1 checkpoints** (§12.6) | ◐ **ACT done 10-14** · SmolVLA at ~10.3k of 20k |
+| 4 | **Continue ACT and SmolVLA from the round-1 checkpoints** (§12.6) | ✅ **both done** — ACT 40k 10-14, SmolVLA 20k 10-15 · both on the Hub |
 | 5 | **Two offline metrics: chunk jerk and per-stage held-out loss** (§11.3a, §12.5) | ✅ 2026-10-14, 5 of 6 arms · **jerk 2.39× confirmed · per-stage prediction wrong** |
 | 6 | **π0.5 frozen-feature probe** (§12.7) | — ~30 min, no training |
 | 7 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | — ~1.5 h |
@@ -1443,9 +1445,12 @@ the final confirmation that it was never a placement outlier.
 | New-data coverage | 320,000 samples · **10.6 epochs** of D1 | 1,280,000 samples · 42.5 epochs |
 | Learning rate | **1e-5, unchanged** | **1e-5 — lowered 10×** (see below) |
 | Checkpoints | every 10k → 4 | every 5k → 4 |
-| Measured | **5.4 it/s · 3.79 GiB peak** | **1.83 s/step · 14.32 GiB peak** |
-| Runtime | **2 h 13 min — done 2026-10-14** | **~5.0 h left** of the 20,000 (at 10.3k now) |
+| Measured | **5.4 it/s · 3.79 GiB peak** | **1.82 s/step · 14.59 GiB peak** |
+| Runtime | **2 h 13 min — done 2026-10-14** | **5 h 10 min for the last 10k — done 2026-10-15** |
 | Output repo | `act_tray_cylinder_s1000_d1` | `smolvla_tray_cylinder_s1000_d1` |
+
+**Both finished and both are complete on the Hub** — 4 checkpoints plus the root model each. SmolVLA's
+end-of-training push went through on its own; ACT's needed the manual recovery below.
 
 > **What the warm start costs.** §12.1 pre-registered P1–P3 against *fresh* training on D1. Continuing
 > instead means the round-2 policy has seen D0 **and** D1, so a change in the ACT−SmolVLA gap can no
@@ -1538,7 +1543,39 @@ even though the root holds nothing but `.gitattributes`. Observed: `checkpoints/
 same step**. It resumes into the **same wandb run** (`n20v7gxh`), so the curve stays continuous across
 the machine change.
 
-**Two things the partial run already settles.**
+**Finished 2026-10-15 at 04:57**, 5 h 10 min for the last 10,000 steps, ending at **42.53 epochs of
+D1**, train loss 0.061, `lr: 2.5e-6` — the cosine annealed exactly onto `decay_lr`, which is what
+§12.6's learning-rate argument was for. `Model pushed to ...smolvla_tray_cylinder_s1000_d1`.
+
+**The overfitting that defined round 1 is gone — and the loss minimum did not move.**
+
+| step | D0, round 1 (fresh, lr 1e-4) | **D1, round 2 (warm, lr 1e-5)** |
+|---|---|---|
+| 5,000 | **0.1258** (min) | **0.1358** (min) |
+| 10,000 | 0.1695 | 0.1367 |
+| 15,000 | 0.2029 | 0.1386 |
+| 20,000 | — | 0.1416 |
+| **5k → 15k** | **+61%** | **+2.1%** |
+
+At matched steps the rise is **29× smaller**. But the curve still climbs monotonically, so **5,000 is
+still the loss-optimal checkpoint** — the answer to the question this section left open ("if the curve
+is still flat there, SmolVLA's best checkpoint may be its last for the first time") is **no**: nearly
+flat, but not flat enough to move the minimum.
+
+**That is exactly the case where the loss should not be believed.** Round 1's SmolVLA minimum was also
+5k, and the robot preferred 20k (§11.3). The metric that got that right is now validated
+([§11.3a](#113a--measuring-chunk-smoothness-offline--measured-2026-10-14)), so **pick the D1 checkpoint
+by chunk jerk, not by this curve** — 11 min per checkpoint over `checkpoints/{010000,015000,020000}`:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && python scripts/eval_checkpoint_metrics.py --output-dir outputs/train/smolvla_tray_cylinder_s1000_d1_resumed --dataset HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed
+```
+
+**Still confounded as evidence for the data.** The warm start and the 10× lower peak LR each reduce
+overfitting independently, and both changed at the same time as the dataset. Only the fresh-on-D1 arm
+§12.1 originally specified would separate them.
+
+**Two things the run settles about the hardware.**
 
 **SmolVLA fits a 16 GB card after all** — `mem_gb: 14.68` peak at batch 64, against the **16.5 GiB**
 this doc previously quoted from round 1. That earlier figure is what sent SmolVLA to Colab; it was
@@ -1546,20 +1583,6 @@ wrong for this configuration. Locally it measures **14.32 GiB of 15.92**, ~1.2 G
 but thin enough that fragmentation matters, hence `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`
 and an otherwise idle GPU. Throughput is **1.83 s/step against the L4's 2.00**, so the 5080 is ~9%
 faster.
-
-**The held-out loss is flat where round 1's rose steeply:**
-
-| step | D0, round 1 (fresh, lr 1e-4) | **D1, round 2 (warm, lr 1e-5)** |
-|---|---|---|
-| 5,000 | 0.1258 | 0.1358 |
-| 10,000 | 0.1695 | **0.1367** |
-| change | **+34.7%** | **+0.7%** |
-
-A near-total suppression of the overfitting that defined round 1's SmolVLA — and **confounded two
-ways**, so not yet evidence for the data. The warm start and the 10× lower peak LR each independently
-reduce overfitting, and both changed at the same time as the dataset. What would separate them is the
-fresh-on-D1 arm §12.1 originally specified. Worth watching to 20k regardless: if the curve is still
-flat there, SmolVLA's best checkpoint may be its last for the first time.
 
 > **`ALL_PROXY=socks://...` breaks every Hub call — unset it.** GNOME's network proxy is set to
 > *manual* with a SOCKS host at `127.0.0.1:7897`, and the desktop exports that as
@@ -1651,6 +1674,40 @@ linear regression from features to the cylinder's position (recoverable from the
 | They do not | **No amount of action-expert training can fix the reach** — the information is not in the representation. Unfreeze the encoder, or drop π0.5 for this phase |
 
 Either way it converts "π0.5 needs more steps" from an assumption into a decision.
+
+### What "more steps" would actually cost
+
+The gate matters because the bill is large. π0.5 trains **action-expert-only** — 693 M trainable of
+4.14 B, `freeze_vision_encoder=true`, `gradient_checkpointing=true` — at **batch 16**, and what has run
+is **10,000 steps = 160,000 samples = 6.0 epochs** of D0's 26,721-frame train split.
+
+| | π0.5, as run | SmolVLA, both rounds | **π0.5 matched to SmolVLA** |
+|---|---|---|---|
+| Batch × steps | 16 × 10,000 | 64 × 20,000 | 16 × **80,000** |
+| Samples | 160,000 | **1,280,000** | **1,280,000** |
+| Epochs | 6.0 of D0 | 47.9 of D0 · 42.53 of D1 | same as whichever set it trains on |
+| Wall clock @ 2.06 s/step | 5.7 h | — | **~46 h** (~40 h still to go) |
+| Peak VRAM | **18.2 GiB** of an A100's 40 | 14.6 of 15.9 | unchanged — batch is unchanged |
+
+**80,000 steps, i.e. 70,000 more.** The number is the same whichever SmolVLA run you match to, because
+both moved exactly 1,280,000 samples.
+
+Three things that follow:
+
+- **It cannot run on the 5080.** 18.2 GiB at batch 16 — already *with* gradient checkpointing — against
+  15.92 GiB available. π0.5 stays on an A100-class card.
+- **A smaller batch does not rescue that.** The run is compute-bound, not data-bound
+  (`updt_s: 1.949` against `data_s: 0.442`), so halving the batch roughly halves the step time and
+  doubles the steps needed for the same samples — the wall clock barely moves while the memory saving
+  is modest.
+- **Disk needs planning.** 11.55 GB per checkpoint × 16 at `save_freq=5000` is **185 GB**. Reap as you
+  go, as the round-1 notebook already does.
+
+**So the probe above is worth its 30 minutes before committing ~40 h of A100 time** — and note it is
+not only a budget question. §11.3a measured π0.5 5k at the **lowest held-out loss and a lower jerk than
+either SmolVLA arm**, yet 0/9 excluding luck. Neither offline metric sees whatever is wrong, which is
+what §11.4 predicts if the failure is in the frozen representation. If it is, 80,000 steps buys
+nothing.
 
 ## 12.8 — Deferred, and why each is safe to defer
 

@@ -301,7 +301,7 @@ def fig_lineage(path: pathlib.Path) -> None:
         ("Round 2", 1.45, [
             ("D1 · 50 ep", "38,389 fr · randomised", DONE),
             ("D1 trimmed", "33,337 fr · 2 s tail kept", DONE),
-            ("2 policies continued", "ACT 40k done\nSmolVLA 10.3k of 20k", ACTIVE),
+            ("2 policies continued", "ACT 40k · SmolVLA 20k\nboth pushed", DONE),
             ("Round 2 eval", "per position, per family", PENDING),
         ]),
         ("Planned", 0.35, [
