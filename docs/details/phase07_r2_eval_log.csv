@@ -1,37 +1,37 @@
 block,arm,policy,checkpoint,pass,half,episode_in_block,tray_spot,episode_index,duration_s,success,fail_stage,notes
-1,act40k_d1,act,040000,1,A,1,T2,,,,,
-1,act40k_d1,act,040000,1,A,2,T4,,,,,
-1,act40k_d1,act,040000,1,A,3,T5,,,,,
-1,act40k_d1,act,040000,1,A,4,T6,,,,,
-1,act40k_d1,act,040000,1,A,5,T8,,,,,
-2,sv20k_d1,smolvla,020000,1,A,1,T2,,,,,
-2,sv20k_d1,smolvla,020000,1,A,2,T4,,,,,
-2,sv20k_d1,smolvla,020000,1,A,3,T5,,,,,
-2,sv20k_d1,smolvla,020000,1,A,4,T6,,,,,
-2,sv20k_d1,smolvla,020000,1,A,5,T8,,,,,
-3,sv20k_d1,smolvla,020000,1,B,1,T1,,,,,
-3,sv20k_d1,smolvla,020000,1,B,2,T3,,,,,
-3,sv20k_d1,smolvla,020000,1,B,3,T7,,,,,
-3,sv20k_d1,smolvla,020000,1,B,4,T9,,,,,
-4,act40k_d1,act,040000,1,B,1,T1,,,,,
-4,act40k_d1,act,040000,1,B,2,T3,,,,,
-4,act40k_d1,act,040000,1,B,3,T7,,,,,
-4,act40k_d1,act,040000,1,B,4,T9,,,,,
-5,sv20k_d1,smolvla,020000,2,A,1,T1,,,,,
-5,sv20k_d1,smolvla,020000,2,A,2,T5,,,,,
-5,sv20k_d1,smolvla,020000,2,A,3,T6,,,,,
-5,sv20k_d1,smolvla,020000,2,A,4,T8,,,,,
-5,sv20k_d1,smolvla,020000,2,A,5,T9,,,,,
-6,act40k_d1,act,040000,2,A,1,T1,,,,,
-6,act40k_d1,act,040000,2,A,2,T5,,,,,
-6,act40k_d1,act,040000,2,A,3,T6,,,,,
-6,act40k_d1,act,040000,2,A,4,T8,,,,,
-6,act40k_d1,act,040000,2,A,5,T9,,,,,
-7,act40k_d1,act,040000,2,B,1,T2,,,,,
-7,act40k_d1,act,040000,2,B,2,T3,,,,,
-7,act40k_d1,act,040000,2,B,3,T4,,,,,
-7,act40k_d1,act,040000,2,B,4,T7,,,,,
-8,sv20k_d1,smolvla,020000,2,B,1,T2,,,,,
-8,sv20k_d1,smolvla,020000,2,B,2,T3,,,,,
-8,sv20k_d1,smolvla,020000,2,B,3,T4,,,,,
-8,sv20k_d1,smolvla,020000,2,B,4,T7,,,,,
+1,act40k_d1,act,040000,1,A,1,T2,0,23.3,n,insert,hesitate at insertion no opening gripper
+1,act40k_d1,act,040000,1,A,2,T4,1,20.8,y,,smooth
+1,act40k_d1,act,040000,1,A,3,T5,2,27.6,n,insert,grasp fails first try then made it insert just stopped
+1,act40k_d1,act,040000,1,A,4,T6,3,20.3,n,grasp,to the left
+1,act40k_d1,act,040000,1,A,5,T8,4,27.1,n,insert,to the left
+2,sv20k_d1,smolvla,020000,1,A,1,T2,0,36.6,y,,multiple grasp attempts until made it long task time
+2,sv20k_d1,smolvla,020000,1,A,2,T4,1,35.0,n,insert,hesitate at grasp try multi times insert to the bottom
+2,sv20k_d1,smolvla,020000,1,A,3,T5,2,15.7,n,grasp,gripper tip hit the cap of the cylinder and cannot grasp
+2,sv20k_d1,smolvla,020000,1,A,4,T6,3,17.1,n,grasp,gripper tip hit the cap of the cylinder and cannot grasp
+2,sv20k_d1,smolvla,020000,1,A,5,T8,4,36.5,y,,succeed but very jerky also hesitate at insertion
+3,sv20k_d1,smolvla,020000,1,B,1,T1,0,28.3,n,grasp,grasp to the left pick it up and drop it then the gripper just drifts away randomly
+3,sv20k_d1,smolvla,020000,1,B,2,T3,1,25.0,y,,slow and a bit jerky
+3,sv20k_d1,smolvla,020000,1,B,3,T7,2,22.0,y,,smooth
+3,sv20k_d1,smolvla,020000,1,B,4,T9,3,36.0,n,insert,grasp tries many times and insert shifts to bottom
+4,act40k_d1,act,040000,1,B,1,T1,0,18.2,n,grasp,
+4,act40k_d1,act,040000,1,B,2,T3,1,24.9,n,grasp,
+4,act40k_d1,act,040000,1,B,3,T7,2,28.3,n,insert,insert shifts to bottom
+4,act40k_d1,act,040000,1,B,4,T9,3,28.8,n,reach,trapped in mid air keep going back and forth
+5,sv20k_d1,smolvla,020000,2,A,1,T1,0,17.5,n,grasp,left
+5,sv20k_d1,smolvla,020000,2,A,2,T5,1,16.8,n,grasp,hit cynlinder 
+5,sv20k_d1,smolvla,020000,2,A,3,T6,2,17.5,y,,smooth
+5,sv20k_d1,smolvla,020000,2,A,4,T8,3,16.2,n,insert,jerky and drop to the wrong hole on the right
+5,sv20k_d1,smolvla,020000,2,A,5,T9,4,14.1,n,grasp,shift to center of the tray
+6,act40k_d1,act,040000,2,A,1,T1,0,26.4,y,,fail first try of grasp
+6,act40k_d1,act,040000,2,A,2,T5,1,23.6,y,,fail first try of grasp
+6,act40k_d1,act,040000,2,A,3,T6,2,34.7,n,insert,stop at insertion point
+6,act40k_d1,act,040000,2,A,4,T8,3,18.7,y,,nice move
+6,act40k_d1,act,040000,2,A,5,T9,4,27.1,n,reach,stuck in mid air
+7,act40k_d1,act,040000,2,B,1,T2,0,19.7,n,grasp,shift to left
+7,act40k_d1,act,040000,2,B,2,T3,1,20.9,y,,smooth
+7,act40k_d1,act,040000,2,B,3,T4,2,23.9,n,insert,shift to right
+7,act40k_d1,act,040000,2,B,4,T7,3,20.0,n,grasp,stuck in corner
+8,sv20k_d1,smolvla,020000,2,B,1,T2,0,22.5,n,insert,grasp at weird post and dont drop at insert
+8,sv20k_d1,smolvla,020000,2,B,2,T3,1,26.6,n,grasp,shift to left
+8,sv20k_d1,smolvla,020000,2,B,3,T4,2,20.0,n,grasp,shift to bottom
+8,sv20k_d1,smolvla,020000,2,B,4,T7,3,20.0,y,,

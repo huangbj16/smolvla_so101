@@ -1,0 +1,97 @@
+{
+  "dataset": "HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed",
+  "holdout": [
+    9,
+    19,
+    29,
+    39,
+    49
+  ],
+  "bright_target_255": 198.0,
+  "arms": {
+    "act40k_d1": {
+      "seed_repeat": {
+        "mean": 0.0,
+        "sd": 0.0,
+        "stage_reach": 0.0,
+        "stage_grasp": 0.0,
+        "stage_transport": 0.0,
+        "stage_insert": 0.0
+      },
+      "top_blank": {
+        "mean": 0.2403678447008133,
+        "sd": 0.225874125957489,
+        "stage_reach": 0.49226492643356323,
+        "stage_grasp": 0.23934943974018097,
+        "stage_transport": 0.09353440999984741,
+        "stage_insert": 0.20612114667892456
+      },
+      "wrist_blank": {
+        "mean": 0.23410825431346893,
+        "sd": 0.15507762134075165,
+        "stage_reach": 0.15568026900291443,
+        "stage_grasp": 0.23015323281288147,
+        "stage_transport": 0.3440285921096802,
+        "stage_insert": 0.19236283004283905
+      },
+      "top_bright": {
+        "mean": 0.05663197115063667,
+        "sd": 0.07383405417203903,
+        "stage_reach": 0.12430825084447861,
+        "stage_grasp": 0.04825902730226517,
+        "stage_transport": 0.025998683646321297,
+        "stage_insert": 0.04200250655412674
+      },
+      "both_blank": {
+        "mean": 0.9553448557853699,
+        "sd": 0.4565544128417969,
+        "stage_reach": 1.074052095413208,
+        "stage_grasp": 1.25071120262146,
+        "stage_transport": 1.379715085029602,
+        "stage_insert": 0.45898130536079407
+      }
+    },
+    "sv20k_d1": {
+      "seed_repeat": {
+        "mean": 0.07760445773601532,
+        "sd": 0.04414796829223633,
+        "stage_reach": 0.09907007217407227,
+        "stage_grasp": 0.06335384398698807,
+        "stage_transport": 0.07008533179759979,
+        "stage_insert": 0.07386457920074463
+      },
+      "top_blank": {
+        "mean": 0.10980696976184845,
+        "sd": 0.10479175299406052,
+        "stage_reach": 0.1957075297832489,
+        "stage_grasp": 0.06126740202307701,
+        "stage_transport": 0.07927373796701431,
+        "stage_insert": 0.09321249276399612
+      },
+      "wrist_blank": {
+        "mean": 0.17666251957416534,
+        "sd": 0.15626922249794006,
+        "stage_reach": 0.11210503429174423,
+        "stage_grasp": 0.11040192097425461,
+        "stage_transport": 0.31600746512413025,
+        "stage_insert": 0.11647264659404755
+      },
+      "top_bright": {
+        "mean": 0.04200715571641922,
+        "sd": 0.03285112977027893,
+        "stage_reach": 0.06218015030026436,
+        "stage_grasp": 0.029595980420708656,
+        "stage_transport": 0.03765369579195976,
+        "stage_insert": 0.03600466623902321
+      },
+      "both_blank": {
+        "mean": 0.23127460479736328,
+        "sd": 0.1412806659936905,
+        "stage_reach": 0.24938787519931793,
+        "stage_grasp": 0.13783149421215057,
+        "stage_transport": 0.3110548257827759,
+        "stage_insert": 0.1756257712841034
+      }
+    }
+  }
+}
