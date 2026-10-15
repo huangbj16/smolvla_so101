@@ -42,6 +42,11 @@ METRICS = ROOT / "results/phase07_eval/checkpoint_metrics.json"
 PER_ARM = ROOT / "results/phase07_eval/summary_per_arm.csv"
 # The training run writes this under the gitignored outputs/; a copy is committed beside the
 # round-1 metrics so the figure is reproducible from a fresh clone. Prefer the copy.
+D1_ACT_METRICS = next(
+    (q for q in (ROOT / "results/phase07_eval/checkpoint_metrics_d1_act.json",
+                 ROOT / "outputs/train/act_tray_cylinder_s1000_d1/checkpoint_metrics.json")
+     if q.is_file()),
+    ROOT / "results/phase07_eval/checkpoint_metrics_d1_act.json")
 D1_METRICS = next(
     (q for q in (ROOT / "results/phase07_eval/checkpoint_metrics_d1_smolvla.json",
                  ROOT / "outputs/train/smolvla_tray_cylinder_s1000_d1_resumed"
@@ -173,31 +178,26 @@ def fig_metrics(m, roll, path: pathlib.Path) -> None:
     print(f"  wrote {path.name}")
 
 
-def fig_d1_selection(path: pathlib.Path) -> None:
-    """Section 12.6's selection: jerk and loss move in opposite directions at every step."""
-    d = json.loads(D1_METRICS.read_text())["results"]
-    steps = sorted(int(k) for k in d)
-    jerk = np.array([d[str(s)]["jerk"]["mean"] for s in steps])
-    jerr = np.array([d[str(s)]["jerk"]["std"] for s in steps])
-    loss = np.array([d[str(s)]["loss_pooled"]["mean"] for s in steps])
-    lerr = np.array([d[str(s)]["loss_pooled"]["std"] for s in steps])
+def _divergence_panel(ax, rows, fam, title, subtitle, assert_loss_rises):
+    """One family's D1 checkpoints: jerk on the left axis, held-out loss on the right."""
+    steps = [s for s, _ in rows]
+    jerk = np.array([v["jerk"]["mean"] for _, v in rows])
+    jerr = np.array([v["jerk"]["std"] for _, v in rows])
+    loss = np.array([v["loss_pooled"]["mean"] for _, v in rows])
+    lerr = np.array([v["loss_pooled"]["std"] for _, v in rows])
 
-    # The claim the figure makes. If a re-measurement breaks the monotonicity, fail loudly rather
-    # than ship a figure whose caption no longer describes it.
-    assert all(a > b for a, b in zip(jerk, jerk[1:])), f"jerk no longer falls monotonically: {jerk}"
-    assert all(a < b for a, b in zip(loss, loss[1:])), f"loss no longer rises monotonically: {loss}"
+    # The claim the panel makes. Jerk falling is the selection rule's premise for both families;
+    # loss rising is SmolVLA's alone, so it is only asserted where it is being claimed.
+    assert all(a > b for a, b in zip(jerk, jerk[1:])), f"{fam} jerk no longer falls: {jerk}"
+    if assert_loss_rises:
+        assert all(a < b for a, b in zip(loss, loss[1:])), f"{fam} loss no longer rises: {loss}"
 
-    fig = plt.figure(figsize=(12.6, 4.5), facecolor=SURFACE)
-    gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 1], wspace=0.34)
-
-    # ---- left: the divergence ----------------------------------------------------------
-    ax = fig.add_subplot(gs[0, 0])
     ks = np.array(steps) / 1000.0
-    ax.errorbar(ks, jerk, yerr=jerr, color=C["smolvla"], lw=2.4, marker="o", markersize=8,
+    ax.errorbar(ks, jerk, yerr=jerr, color=C[fam], lw=2.4, marker="o", markersize=8,
                 markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4)
     ax.set_xlabel("training step  (thousands)", color=INK2, fontsize=9)
-    ax.set_ylabel("chunk jerk  (D1 units · s⁻²)", color=C["smolvla"], fontsize=9)
-    ax.tick_params(axis="y", colors=C["smolvla"])
+    ax.set_ylabel("chunk jerk  (D1 units · s⁻²)", color=C[fam], fontsize=9)
+    ax.tick_params(axis="y", colors=C[fam])
     ax.set_xticks(ks)
     ax.set_xticklabels([f"{int(k)}k" for k in ks])
     _style(ax)
@@ -212,48 +212,72 @@ def fig_d1_selection(path: pathlib.Path) -> None:
     ax2.spines["right"].set_color(GRID)
     ax2.set_facecolor("none")
 
-    # Pad both axes so the two series read as a divergence, not as one crossing the other.
-    ax.set_ylim(jerk.min() - 2.6, jerk.max() + 2.6)
-    ax2.set_ylim(loss.min() - 0.0035, loss.max() + 0.0035)
+    pad_j = max((jerk.max() - jerk.min()) * 0.42, 0.4)
+    pad_l = max((loss.max() - loss.min()) * 0.42, 1e-4)
+    ax.set_ylim(jerk.min() - pad_j, jerk.max() + pad_j)
+    ax2.set_ylim(loss.min() - pad_l, loss.max() + pad_l)
 
-    ax.annotate("jerk ↓  smoother", (ks[1], jerk[1]), textcoords="offset points", xytext=(6, 13),
-                fontsize=9, color=C["smolvla"], fontweight="600")
-    ax2.annotate("loss ↑  'worse'", (ks[2], loss[2]), textcoords="offset points", xytext=(-4, -22),
-                 fontsize=9, color=INK3, fontweight="600")
-
-    # The two checkpoints each metric would pick.
-    ax.scatter([ks[-1]], [jerk[-1]], s=320, facecolor="none", edgecolor=GOOD, linewidth=2.2,
+    # Selected = lowest jerk. Mark what the loss curve would have picked only when it differs.
+    sel = int(np.argmin(jerk))
+    # Offset away from the nearer edge: the selected point is usually the last one, where a
+    # centred label overruns the right spine.
+    dx = -34 if sel == len(jerk) - 1 else (34 if sel == 0 else 0)
+    ax.scatter([ks[sel]], [jerk[sel]], s=320, facecolor="none", edgecolor=GOOD, linewidth=2.2,
                zorder=6)
-    ax.annotate("selected\n20k", (ks[-1], jerk[-1]), textcoords="offset points", xytext=(-8, 26),
-                ha="center", fontsize=9, color=GOOD, fontweight="700", linespacing=1.4)
-    ax2.scatter([ks[0]], [loss[0]], s=320, facecolor="none", edgecolor=CRITICAL, linewidth=2.2,
-                zorder=6)
-    ax2.annotate("the loss curve\nwould pick 5k", (ks[0], loss[0]), textcoords="offset points",
-                 xytext=(16, 20), ha="left", va="center", fontsize=9, color=CRITICAL,
-                 fontweight="700", linespacing=1.4)
+    ax.annotate(f"selected\n{steps[sel] // 1000}k", (ks[sel], jerk[sel]),
+                textcoords="offset points", xytext=(dx, 20), ha="center", fontsize=9,
+                color=GOOD, fontweight="700", linespacing=1.4)
+    lpick = int(np.argmin(loss))
+    if lpick != sel:
+        ax2.scatter([ks[lpick]], [loss[lpick]], s=320, facecolor="none", edgecolor=CRITICAL,
+                    linewidth=2.2, zorder=6)
+        ax2.annotate(f"the loss curve\nwould pick {steps[lpick] // 1000}k",
+                     (ks[lpick], loss[lpick]), textcoords="offset points", xytext=(16, 20),
+                     ha="left", va="center", fontsize=9, color=CRITICAL, fontweight="700",
+                     linespacing=1.4)
+    _title(ax, title, subtitle)
+    return jerk, jerr, loss, lerr
 
-    _title(ax, "Round-2 SmolVLA on D1 — the two metrics disagree at every step",
-           "rank correlation −1.00 over four checkpoints · error bars = sd over 3 fixed-seed repeats")
-    # Resolution differs by two orders of magnitude between the two series; say so, below the
-    # axes rather than inside them, where it collided with the 5k error bar.
-    gaps = np.abs(np.diff(jerk)) / jerr.mean()
-    ax.text(0.0, -0.235, f"jerk steps are {gaps.min():.0f}–{gaps.max():.0f}× their spread, the "
-                         f"loss end-to-end gap only {(loss[-1] - loss[0]) / lerr.mean():.1f}× its "
-                         f"own:\nthe loss direction is resolved, the per-step size is not",
-            transform=ax.transAxes, ha="left", va="top", fontsize=8.2, color=INK3,
-            linespacing=1.5)
 
-    # ---- right: how much milder than round 1 -------------------------------------------
-    ax = fig.add_subplot(gs[0, 1])
+def fig_d1_selection(path: pathlib.Path) -> None:
+    """Section 12.8's selection, both families: jerk falls for both, the loss does not agree."""
+    def rows(p):
+        return sorted((int(k), v) for k, v in json.loads(p.read_text())["results"].items())
+
+    sv, act = rows(D1_METRICS), rows(D1_ACT_METRICS)
+
+    fig = plt.figure(figsize=(17.4, 4.6), facecolor=SURFACE)
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.3, 1.3, 1.0], wspace=0.55)
+
+    j_sv, je_sv, l_sv, le_sv = _divergence_panel(
+        fig.add_subplot(gs[0, 0]), sv, "smolvla",
+        "A · SmolVLA on D1 — the metrics disagree",
+        "jerk ↓ and loss ↑ at every step · ρ = −1.00", assert_loss_rises=True)
+
+    j_ac, je_ac, l_ac, le_ac = _divergence_panel(
+        fig.add_subplot(gs[0, 1]), act, "act",
+        "B · ACT on D1 — only jerk moves",
+        "jerk ↓ at every step · loss wanders 2.5%, non-monotonically", assert_loss_rises=False)
+
+    # The contrast is the point: for ACT the loss MINIMUM lands on the same checkpoint, so jerk
+    # overrules nothing there. Say so, rather than letting two similar-looking panels imply the
+    # inversion is general.
+    same = int(np.argmin(l_ac)) == int(np.argmin(j_ac))
+    fig.text(0.40, -0.09, "No inversion for ACT: its loss minimum is the same checkpoint, so jerk "
+             "breaks a tie rather than overruling one.\nThe §11.3a inversion is so far a SmolVLA "
+             "phenomenon — seen twice there, never on ACT." if same else "",
+             ha="center", va="top", fontsize=8.6, color=INK3, linespacing=1.6)
+
+    # ---- C: how much milder than round 1 (SmolVLA, the only family with a round-1 pair) -------
+    ax = fig.add_subplot(gs[0, 2])
     r1 = json.loads(METRICS.read_text())["arms"]
     labels = ["jerk 5k→20k\n(ratio)", "pooled loss 5k→20k\n(% change)"]
     d0 = [r1["sv5k"]["jerk"]["mean"] / r1["sv20k"]["jerk"]["mean"],
           100 * (r1["sv20k"]["loss_pooled"]["mean"] / r1["sv5k"]["loss_pooled"]["mean"] - 1)]
-    d1 = [jerk[0] / jerk[-1], 100 * (loss[-1] / loss[0] - 1)]
+    d1 = [j_sv[0] / j_sv[-1], 100 * (l_sv[-1] / l_sv[0] - 1)]
 
     # Two different units on one panel, so each pair is normalised to its own round-1 bar and the
     # real values are printed on the bars. The comparison is "how much milder", nothing else.
-    x = np.arange(2)
     for i, (a, b) in enumerate(zip(d0, d1)):
         ax.bar(i - 0.2, 1.0, width=0.38, color=INK3, alpha=0.45, zorder=3, linewidth=0)
         ax.bar(i + 0.2, b / a, width=0.38, color=C["smolvla"], zorder=3, linewidth=0)
@@ -261,7 +285,7 @@ def fig_d1_selection(path: pathlib.Path) -> None:
         ax.text(i - 0.2, 1.02, fmt(a), ha="center", va="bottom", fontsize=9, color=INK2)
         ax.text(i + 0.2, b / a + 0.02, fmt(b), ha="center", va="bottom", fontsize=9,
                 color=C["smolvla"], fontweight="700")
-    ax.set_xticks(x)
+    ax.set_xticks(np.arange(2))
     ax.set_xticklabels(labels, fontsize=8.8)
     ax.set_ylabel("relative to round 1", color=INK2, fontsize=9)
     ax.set_ylim(0, 1.3)
@@ -270,7 +294,8 @@ def fig_d1_selection(path: pathlib.Path) -> None:
     ax.text(0.985, 0.955, "grey = round 1 (D0, fresh, lr 1e-4)\norange = round 2 (D1, warm, lr 1e-5)",
             transform=ax.transAxes, ha="right", va="top", fontsize=8.5, color=INK2,
             linespacing=1.4)
-    _title(ax, "Round 2 drifts far less", "same metrics, same held-out protocol")
+    _title(ax, "C · Round 2 drifts far less",
+           "SmolVLA — the only family with a round-1 pair")
 
     fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=SURFACE)
     plt.close(fig)
@@ -283,7 +308,7 @@ def main() -> int:
     m, roll = load()
     OUT.mkdir(parents=True, exist_ok=True)
     fig_metrics(m, roll, OUT / "phase07_offline_metrics.png")
-    if D1_METRICS.is_file():
+    if D1_METRICS.is_file() and D1_ACT_METRICS.is_file():
         fig_d1_selection(OUT / "phase07_d1_selection.png")
     else:
         print(f"  skipped phase07_d1_selection.png - {D1_METRICS} not found")

@@ -57,7 +57,7 @@ Plan docs stay short and link here for tables, commands and caveats.
 | [phase07_portable_rig.md](docs/details/phase07_portable_rig.md) | Phase 0.7: portable rig, new dataset, round-1 eval, round-2 plan |
 | [phase07_data_verification.md](docs/details/phase07_data_verification.md) | Phase 0.7: is the new dataset fit to train on? |
 | [phase07_training.md](docs/details/phase07_training.md) | Phase 0.7: ACT, SmolVLA and π0.5 trained on the same data |
-| `phase0*_eval_log.csv` | Per-rollout eval logs, scored by hand |
+| `phase0*_eval_log.csv` | Per-rollout eval logs, scored by hand (`phase07_r2_eval_log.csv` is round 2) |
 | `figs/` | Figures used by the docs above |
 
 ## Notebooks — `notebooks/`
@@ -90,6 +90,8 @@ call it.
   `make_gpufree_probe_notebook.py` (generates the env-probe notebook; edit the script, not the
   notebook)
 - **Robot eval:** `make_eval_schedule.py` (0.6), `make_phase07_eval_schedule.py`,
+  `make_phase07_r2_eval_schedule.py` (round-2: two D1 arms, two passes; also emits the rollout
+  commands so the doc cannot drift from the schedule),
   `joint_offset_check.py`, `bench_rollout_latency.py`, `analyze_phase07_eval.py`,
   `analyze_phase07_positions.py`, `eval_checkpoint_metrics.py` (chunk jerk + per-stage held-out loss,
   post-hoc on saved checkpoints)

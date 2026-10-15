@@ -91,7 +91,7 @@ clean test would mount the third-person camera on the same board and record both
 
 > **Never filled in.** The table below is still blank, and that is a real gap: it is the only thing
 > that would let the rig be rebuilt after it is knocked over, and it is a prerequisite for the
-> second-location test (§12.8) that the whole portability claim rests on. Fill it before moving the
+> second-location test (§12.9) that the whole portability claim rests on. Fill it before moving the
 > board.
 
 | Item | Value |
@@ -488,6 +488,11 @@ Phase 0.6 `shoulder_pan` drift was caught.
 ```bash
 cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_portable_20261003_211912 --dataset.episode=0
 ```
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --dataset.repo_id=HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911 --dataset.episode=0
+```
+
 
 Arm at home, cylinder at **the spot episodes 0–4 used**, fixture on its outline. Watch **the grasp**
 and **the insertion** against the recorded video. **The raw dataset, not the trimmed one** — episode 0
@@ -1603,9 +1608,7 @@ All four, 3 repeats each, ~13 min per checkpoint (~53 min total):
 | 15,000 | 37.12 ± 0.06 | 0.1393 | 0.1725 | 0.1120 | 0.1207 | 0.1349 |
 | **20,000** | **36.04 ± 0.05** ← best | 0.1410 ← worst | 0.1756 | 0.1081 | 0.1260 | 0.1344 |
 
-![round-2 SmolVLA checkpoint selection on D1](figs/phase07_d1_selection.png)
-
-**Jerk falls at every step, loss rises at every step — rank correlation −1.00 across four points.**
+**Jerk falls at every step, loss rises at every step — rank correlation −1.00 across four points.** (Plotted beside ACT's in [§12.8](#128--round-2-eval-two-arms-checkpoints-chosen-before-the-robot-is-touched).)
 Round 1's inversion was a two-point comparison and could have been an artefact of its endpoints; this
 is a monotone trend. The two series are not equally well resolved: jerk steps are **16–45×** the
 repeat spread, while the loss's end-to-end gap is only **3.9×** its own, so the loss *direction* is
@@ -1866,7 +1869,172 @@ either SmolVLA arm**, yet 0/9 excluding luck. Neither offline metric sees whatev
 what §11.4 predicts if the failure is in the frozen representation. If it is, 80,000 steps buys
 nothing.
 
-## 12.8 — Deferred, and why each is safe to defer
+## 12.8 — Round 2 eval: two arms, checkpoints chosen before the robot is touched
+
+**Two arms, not six.** Round 1 needed six because the question was *which checkpoint per policy*.
+[§11.3a](#113a--measuring-chunk-smoothness-offline--measured-2026-10-14) validated chunk jerk as a
+checkpoint selector, so that question is now answered offline for the price of some GPU time, and
+round 2 spends the saved session on trials instead.
+
+| arm | policy | checkpoint | chosen because |
+|---|---|---|---|
+| `act40k_d1` | ACT | `040000` | lowest jerk of four — measured below |
+| `sv20k_d1` | SmolVLA | `020000` | lowest jerk of four, monotone (§12.6) |
+
+### ACT's checkpoint was an open question — measured 2026-10-15
+
+SmolVLA's monotone jerk fall is a **SmolVLA** result, and two things said not to carry it across:
+
+- **Round 1 is a counterexample.** ACT's lower-jerk checkpoint was its *worse* one on the robot:
+  `act60k` had jerk 22.04 against `act40k`'s 24.96, and mean progress 2.11 against 2.33. On clean
+  successes they tied 2–2. "Smoother is better" has never been shown for ACT.
+- **ACT's loss cannot break the tie either.** Its D1 eval loss is flat to ±2.6% across the whole
+  run (§12.6), so where SmolVLA's loss pointed the *wrong* way, ACT's points nowhere at all. Jerk is
+  the only selector here with any resolution.
+
+All four D1 checkpoints, 3 repeats each, ~7 min per checkpoint:
+
+| checkpoint | chunk jerk | pooled held-out loss | reach | grasp | transport | insert |
+|---|---|---|---|---|---|---|
+| 10,000 | 14.26 ± 0.00 | 0.2234 | 0.3514 | 0.1777 | 0.2015 | 0.1715 |
+| 20,000 | 13.57 ± 0.00 | 0.2222 | 0.3312 | 0.1764 | 0.2098 | 0.1734 |
+| 30,000 | 12.28 ± 0.00 | 0.2242 | 0.3403 | 0.1825 | 0.2121 | 0.1706 |
+| 40,000 | 11.97 ± 0.00 ← lowest | 0.2188 | 0.3383 | 0.1796 | 0.1925 | 0.1739 |
+
+**Jerk falls at every step and 40,000 is the lowest — so for ACT the answer is the same as SmolVLA's.** Worth the half hour to establish rather than assume, for the two reasons above.
+
+**But note what did *not* happen: there is no inversion here.** ACT's loss minimum is also 40,000, so jerk overrules nothing — it is breaking a tie the loss could not break, rather than contradicting it. With the loss wandering 2.5% non-monotonically, that agreement is close to coincidence and should not be read as the loss having been right. **The §11.3a inversion remains a SmolVLA phenomenon**, now seen twice there (round 1's pair, round 2's monotone four) and never on ACT.
+
+> **Comparable to §12.6's SmolVLA numbers** — same held-out episodes, same D1 normaliser — **but not
+> to §11.3a's round-1 values**, which used D0's action σ. Across *families* they are not comparable
+> at all: ACT's 12–14 band sits far below SmolVLA's 36–42 because an L1-trained chunk of 100 and a
+> flow-matching chunk of 50 are different objects. Jerk ranks checkpoints within a run; it does not
+> rank policies.
+
+![round-2 checkpoint selection on D1, both families](figs/phase07_d1_selection.png)
+
+### The schedule — the same mirror as round 1, two passes
+
+| block | arm | pass | half | spots |
+|---|---|---|---|---|
+| 1 | 1 | A | T2 | T4 T5 T6 T8 |
+| 2 | 1 | A | T2 | T4 T5 T6 T8 |
+| 3 | 1 | B | T1 | T3 T7 T9 |
+| 4 | 1 | B | T1 | T3 T7 T9 |
+| 5 | 2 | A | T1 | T5 T6 T8 T9 |
+| 6 | 2 | A | T1 | T5 T6 T8 T9 |
+| 7 | 2 | B | T2 | T3 T4 T7 |
+| 8 | 2 | B | T2 | T3 T4 T7 |
+
+Generated and **property-checked** by
+[`make_phase07_r2_eval_schedule.py`](../../scripts/make_phase07_r2_eval_schedule.py), which asserts
+rather than assumes:
+
+- **Each arm sees each of the nine spots exactly twice**, so tray spot is a within-arm constant and
+  cannot confound one arm against the other.
+- **Both arms have mean session position 4.5 of 8**, so drift linear in session time — lighting,
+  servo warm-up, operator fatigue — cancels out of the comparison instead of landing on whichever arm
+  ran last. The arm order mirrors within each pass *and* the leading arm alternates between passes,
+  so the pattern is ABBA–BAAB rather than ABBA twice.
+- **Every block is one contiguous `lerobot-rollout` call**, so the session costs 8 process starts
+  rather than 36.
+
+Halves are reshuffled between passes, so no spot is locked to the same session position.
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && python3 scripts/make_phase07_r2_eval_schedule.py --passes 2 > docs/details/phase07_r2_eval_log.csv
+```
+
+### Why two passes and not one
+
+Round 1's best arm was 3/9. One pass sets an absurd bar for beating it:
+
+| trials per arm | needed to beat round-1's 3/9 at p<0.05 | smallest detectable ACT↔SmolVLA gap |
+|---|---|---|
+| 9 (one pass) | **8/9 — 89%** | 56 points |
+| **18 (two passes)** | **14/18 — 78%** | **28 points** |
+| 27 (three passes) | 20/27 — 74% | 22 points |
+
+Two-sided Fisher exact. A jump from 33% to 67% — a real and large improvement — comes out at
+**p = 0.35 on one pass**, p = 0.13 on two. Neither is significant, which is worth saying plainly:
+**this session is powered to rank, not to measure.** Two passes is where the within-session
+ACT↔SmolVLA comparison starts to be worth something, at ~1.5 h against round 1's ~2.5 h. The baseline
+is itself stuck at n=9, so further passes buy little against *round 1* — their value is in the
+within-session comparison and the per-position breakdown. [§13](#13--the-deferred-success-rate-design-for-when-a-policy-earns-it)
+is what measuring actually costs, and stays deferred until an arm clears ~50%.
+
+### Before the first rollout
+
+Both hard stops from [§10.5](#105--during-the-session-and-scoring) apply unchanged and are not
+optional: **replay D0 episode 0** to prove the calibration frame physically, and **compare the top
+camera against §3's reference still**. A rig shift and a policy failure are indistinguishable
+afterwards.
+
+### The eight commands
+
+### block 1 — act40k_d1 — pass 1 half A — 5 trials at T2 T4 T5 T6 T8
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/act_tray_cylinder_s1000_d1/checkpoints/040000/pretrained_model && NAME=rollout_phase07_r2_act40k_d1_p1a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 2 — sv20k_d1 — pass 1 half A — 5 trials at T2 T4 T5 T6 T8
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed/checkpoints/020000/pretrained_model && NAME=rollout_phase07_r2_sv20k_d1_p1a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 3 — sv20k_d1 — pass 1 half B — 4 trials at T1 T3 T7 T9
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed/checkpoints/020000/pretrained_model && NAME=rollout_phase07_r2_sv20k_d1_p1b && NEP=4 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 4 — act40k_d1 — pass 1 half B — 4 trials at T1 T3 T7 T9
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/act_tray_cylinder_s1000_d1/checkpoints/040000/pretrained_model && NAME=rollout_phase07_r2_act40k_d1_p1b && NEP=4 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 5 — sv20k_d1 — pass 2 half A — 5 trials at T1 T5 T6 T8 T9
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed/checkpoints/020000/pretrained_model && NAME=rollout_phase07_r2_sv20k_d1_p2a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 6 — act40k_d1 — pass 2 half A — 5 trials at T1 T5 T6 T8 T9
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/act_tray_cylinder_s1000_d1/checkpoints/040000/pretrained_model && NAME=rollout_phase07_r2_act40k_d1_p2a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 7 — act40k_d1 — pass 2 half B — 4 trials at T2 T3 T4 T7
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/act_tray_cylinder_s1000_d1/checkpoints/040000/pretrained_model && NAME=rollout_phase07_r2_act40k_d1_p2b && NEP=4 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 8 — sv20k_d1 — pass 2 half B — 4 trials at T2 T3 T4 T7
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/smolvla_tray_cylinder_s1000_d1_resumed/checkpoints/020000/pretrained_model && NAME=rollout_phase07_r2_sv20k_d1_p2b && NEP=4 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### Scoring
+
+As [§10.5](#105--during-the-session-and-scoring): **from video, blind to arm**, into
+[phase07_r2_eval_log.csv](phase07_r2_eval_log.csv). `success` is `y`/`n` (the round-1 log's actual
+convention, not the `1` that §10.5's table says); `fail_stage` is one of `reach` · `grasp` ·
+`transport` · `insert` · `retreat` · `stall`; every grasp attempt gets its `shoulder_pan` in `notes`.
+Leave `episode_index` and `duration_s` blank — both are recoverable from the recordings and are
+filled by the analyzer rather than typed.
+
+**`fail_stage` still carries the result, not `success`.** At 18 trials a rate has a ±11 point
+standard error, but the stage an arm fails at is a per-trial observation: round 1's six arms failed
+**0 times out of 54 at transport**, so a single transport failure in round 2 is information on its own.
+
+### What this session answers, and what it does not
+
+- **Does a jerk-selected checkpoint actually work on the robot?** The first real test of the rule —
+  §12.6 picked SmolVLA 20k *against* the loss curve, and the robot is the arbiter.
+- **ACT vs SmolVLA trained on the same data** — the cleanest comparison available, both arms
+  interleaved within one session.
+- **Did D1 help?** Only if the effect is large; see the power table.
+- **It does not settle π0.5**, which remains training-bound (§12.7).
+
+## 12.9 — Deferred, and why each is safe to defer
 
 - **Second location.** Still the only direct test of the portability claim this whole phase is built on
   (§9 item 3), and still untested. Deferred because D1 must stay mergeable with D0 and a location change
