@@ -1565,11 +1565,28 @@ flat, but not flat enough to move the minimum.
 **That is exactly the case where the loss should not be believed.** Round 1's SmolVLA minimum was also
 5k, and the robot preferred 20k (§11.3). The metric that got that right is now validated
 ([§11.3a](#113a--measuring-chunk-smoothness-offline--measured-2026-10-14)), so **pick the D1 checkpoint
-by chunk jerk, not by this curve** — 11 min per checkpoint over `checkpoints/{010000,015000,020000}`:
+by chunk jerk, not by this curve.**
+
+**Fetch 005000 first.** The local output dir only holds 010000–020000, because the run resumed from
+Colab at 10k — and 005000 is the loss minimum, so leaving it out would skip the one checkpoint the
+comparison is about. It is on the Hub; dropping it beside the others is enough for the script to find
+all four:
 
 ```bash
-cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && python scripts/eval_checkpoint_metrics.py --output-dir outputs/train/smolvla_tray_cylinder_s1000_d1_resumed --dataset HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && hf download HALDijkstraaa/smolvla_tray_cylinder_s1000_d1 --include "checkpoints/005000/pretrained_model/*" --local-dir outputs/train/smolvla_tray_cylinder_s1000_d1_resumed
 ```
+
+Then measure all four — **~11 min each, ~45 min total** at the default 3 repeats:
+
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && python scripts/eval_checkpoint_metrics.py --output-dir outputs/train/smolvla_tray_cylinder_s1000_d1_resumed --dataset HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed
+```
+
+> **These jerk values are comparable to each other, not to §11.3a's.** Jerk is normalised per joint by
+> the training set's action σ, and D1's differs from D0's — mean 38.19 against 31.83, and `wrist_roll`
+> 16.96 against 5.07, a 3.3× difference that the varied approaches of §12.2 put there on purpose. All
+> four checkpoints here share one normaliser, which is what checkpoint selection needs; **do not read
+> the absolute number against round 1's 67.08 / 28.04.**
 
 **Still confounded as evidence for the data.** The warm start and the 10× lower peak LR each reduce
 overfitting independently, and both changed at the same time as the dataset. Only the fresh-on-D1 arm
