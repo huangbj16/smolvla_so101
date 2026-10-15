@@ -91,7 +91,7 @@ call it.
   post-hoc on saved checkpoints)
 - **Figures:** `make_phase07_eval_figs.py` and `make_phase07_position_figs.py` are imported by the two
   analyzers; `make_phase07_doc_figs.py` (run book explainers) and `make_phase07_metric_figs.py`
-  (offline-metric results) are run on their own
+  (offline-metric results, round 1 and the round-2 checkpoint selection) are run on their own
 
 ## Setup
 

@@ -16,9 +16,11 @@ Written 2026-10-03, last revised 2026-10-14.
 **Where this stands (2026-10-15).** D0 and round 1 are finished and analysed (§10, §11). D1 is
 recorded, verified and trimmed (§12.1–§12.5), and **round-2 training is complete** — ACT at 40,000
 steps and SmolVLA at 20,000, both pushed (§12.6). The two offline metrics are measured: **chunk jerk
-reproduces the robot's ordering, per-stage loss does not** (§11.3a). **Next: pick SmolVLA's D1
-checkpoint by jerk rather than by loss, then run the round-2 rollouts.** π0.5 is gated on §12.7's
-probe; D1-perturb (§12.3) and D2 (§12.4) are not started.
+reproduces the robot's ordering, per-stage loss does not** (§11.3a). SmolVLA's D1 checkpoint is
+selected: **20,000 by jerk, against the loss curve, and the inversion is monotonic over all four**
+(§12.6). §12.7's gate is **cleared** — frozen SigLIP predicts cylinder position at R² 0.83, so π0.5 is
+undertrained rather than blind, and its 80,000-step run is sized and sequenced. **Next: the round-2
+rollouts.** D1-perturb (§12.3) and D2 (§12.4) are not started.
 
 ---
 
@@ -1023,10 +1025,11 @@ not on measurement.**
 | 3 | **Processing: head trim + 2 s tail cap** (§12.5) | ✅ 33,337 fr (87%), 35.7 min · detector rewritten |
 | 4 | **Continue ACT and SmolVLA from the round-1 checkpoints** (§12.6) | ✅ **both done** — ACT 40k 10-14, SmolVLA 20k 10-15 · both on the Hub |
 | 5 | **Two offline metrics: chunk jerk and per-stage held-out loss** (§11.3a, §12.5) | ✅ 2026-10-14, 5 of 6 arms · **jerk 2.39× confirmed · per-stage prediction wrong** |
-| 6 | **π0.5 frozen-feature probe** (§12.7) | — ~30 min, no training |
+| 5b | **Select SmolVLA's D1 checkpoint by jerk** (§12.6) | ✅ 2026-10-15 · **20,000** · jerk ↓ and loss ↑ at every step, ρ = −1.00 |
+| 6 | **π0.5 frozen-feature probe** (§12.7) | ✅ 2026-10-15 · **gate cleared** — R² 0.83 vs 0.36 pixel control |
 | 7 | **D1-perturb: ~30 perturbed / recovery episodes** (§12.3) | — ~1.5 h |
 | 8 | **D2: compositional collection, 130 stage episodes** (§12.4) | — to be timed |
-| 9 | **Round-2 rollouts**, scored per position and per family | — |
+| 9 | **Round-2 rollouts**, scored per position and per family | — **next** · ACT 40k + SmolVLA 20k |
 
 > **Step 5's outcome, in one line each.** **Jerk works**: 2.39× between SmolVLA's two checkpoints
 > against the robot's 1.96×, and the rollout jerk ordering reproduced exactly on all five measured
@@ -1039,7 +1042,8 @@ not on measurement.**
 >
 > **π0.5 10k is the one arm left**, at ~67 min against SmolVLA's 11 and ACT's 3 — worth finishing when
 > the GPU is idle, but it changes no conclusion: π0.5's problem is reach (§11.4), which neither metric
-> is sensitive to.
+> is sensitive to. **Step 6 since confirmed why**: the reach failure is an undertrained action expert,
+> not a representation either metric could see.
 
 **Changed since the plan was agreed:** the stage split came back as **§12.4**, run as its own
 experiment with a time-and-performance hypothesis attached rather than as a replacement for §12.3's
@@ -1588,6 +1592,53 @@ cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforg
 > four checkpoints here share one normaliser, which is what checkpoint selection needs; **do not read
 > the absolute number against round 1's 67.08 / 28.04.**
 
+### The selection — 20,000, and the inversion is monotonic · measured 2026-10-15
+
+All four, 3 repeats each, ~13 min per checkpoint (~53 min total):
+
+| checkpoint | chunk jerk | pooled held-out loss | reach | grasp | transport | insert |
+|---|---|---|---|---|---|---|
+| 5,000 | 42.10 ± 0.07 | **0.1322** ← best | 0.1715 | 0.1048 | **0.1090** | **0.1297** |
+| 10,000 | 39.14 ± 0.08 | 0.1373 | **0.1701** | 0.1092 | 0.1214 | 0.1321 |
+| 15,000 | 37.12 ± 0.06 | 0.1393 | 0.1725 | 0.1120 | 0.1207 | 0.1349 |
+| **20,000** | **36.04 ± 0.05** ← best | 0.1410 ← worst | 0.1756 | 0.1081 | 0.1260 | 0.1344 |
+
+![round-2 SmolVLA checkpoint selection on D1](figs/phase07_d1_selection.png)
+
+**Jerk falls at every step, loss rises at every step — rank correlation −1.00 across four points.**
+Round 1's inversion was a two-point comparison and could have been an artefact of its endpoints; this
+is a monotone trend. The two series are not equally well resolved: jerk steps are **16–45×** the
+repeat spread, while the loss's end-to-end gap is only **3.9×** its own, so the loss *direction* is
+solid but adjacent loss points are not individually separated. That asymmetry is itself the argument —
+the metric being used to choose has two orders of magnitude more resolution than the one being
+overruled.
+**→ `checkpoints/020000` is the round-2 SmolVLA arm**, chosen by the metric that reproduced the robot's
+jerk ordering on all five round-1 arms, and rejected by the loss curve.
+
+**A fourth check that the eval loop is right.** These pooled losses were measured post-hoc, through a
+different code path from training, and land within 0.004 of the logged curve above at every step
+(0.1322/0.1358, 0.1373/0.1367, 0.1393/0.1386, 0.1410/0.1416).
+
+**Round 2 is far better behaved than round 1**, which is the clearest signal yet that the warm start
+plus the new data did what §12.1 wanted:
+
+| | round 1 (D0, fresh, lr 1e-4) | round 2 (D1, warm, lr 1e-5) |
+|---|---|---|
+| jerk 5k → 20k | 67.08 → 28.04 = **2.39×** | 42.10 → 36.04 = **1.17×** |
+| pooled loss 5k → 20k | **+82%** | **+6.6%** |
+
+D1 starts at 42 where D0 started at 67 — it inherits round 1's 20k, so most of the smoothing is already
+done and there is far less room to drift. **The drift that remains is concentrated in transport**
+(+15.5%, against +2–4% for the other three), and transport is the one stage with **zero failures across
+all six round-1 arms** (§11.4). The loss is degrading on the segment that was never the problem, which
+is a sharper version of §11.3a's finding than the pooled number could give.
+
+> **The selection rule, stated honestly.** Jerk earned this job by reproducing the *rollout jerk*
+> ordering exactly. "Lower jerk → more progress" is weaker: it holds inside SmolVLA (5k jerk 63.45 →
+> progress 1.78; 20k 32.35 → 2.56) but ACT and π0.5 each tilt the other way by a small margin
+> (§11.1). So the rule is **prefer lower jerk within one SmolVLA run** — one rollout pair plus this
+> monotone sweep behind it, not a cross-family law. The round-2 rollouts are what test it.
+
 **Still confounded as evidence for the data.** The warm start and the 10× lower peak LR each reduce
 overfitting independently, and both changed at the same time as the dataset. Only the fresh-on-D1 arm
 §12.1 originally specified would separate them.
@@ -1692,6 +1743,41 @@ linear regression from features to the cylinder's position (recoverable from the
 
 Either way it converts "π0.5 needs more steps" from an assumption into a decision.
 
+### Result — the representation is fine · measured 2026-10-15
+
+[`probe_pi05_vision.py`](../../scripts/probe_pi05_vision.py), 400 frames from all 50 episodes, ridge
+with leave-one-episode-out CV over a λ grid, target = `grasp_pan` (the cylinder's angular position,
+recovered from the grasp pose per §11.6). ~35 min including the SigLIP pass; no training.
+
+| feature view (top camera) | features | R² | RMSE |
+|---|---|---|---|
+| semantic — mean over 256 patches | 2048 | 0.826 | **1.72°** |
+| spatial — mean over 2048 channels | 256 | 0.706 | 2.23° |
+| both concatenated | 2304 | **0.827** | **1.72°** |
+| **raw 16×16 pixels (control)** | 256 | **0.358** | 3.30° |
+
+Target spread is **sd 4.12°** and the tray spots sit **4.1–5.8° apart**, so 1.72° resolves which spot
+the cylinder is on. The frozen features beat a pixel control that itself works — the gain is the
+encoder's, not the regressor's.
+
+**→ The representation carries cylinder position. π0.5's reach failure is not a blind encoder, so the
+action expert is undertrained and more steps is the right fix.** This clears §12.7's gate.
+
+> **Three feature views, because the target is a position.** Pooling the 256 patches away could hide
+> position even when it is plainly there; pooling the channels away keeps position but discards what is
+> at each one. Both views and their concatenation are reported so a *negative* result could not have
+> been an artefact of one pooling choice. Here it did not matter — semantic alone already gets 0.826,
+> i.e. *which* patches are active is enough.
+
+**The wrist camera returns nothing — R² −0.014, pixels −0.017.** Read carefully: the control failed
+too, so these numbers **on their own** cannot separate "the wrist does not see the cylinder before the
+grasp" from "the probe is mis-built", and they license no claim about the encoder. What makes them
+usable is that the *same probe, same episodes, same target, same λ grid* returned 0.827 on the top
+camera ~10 minutes earlier. Against that, the wrist null is a **negative control that strengthens the
+top result** — the pipeline finds no signal where there is none to find — and independent support for
+§2's reason for mounting a bird's-eye view. It is not evidence that the wrist camera is useless, which
+would need a probe at a later stage, when the cylinder is actually in its field of view.
+
 ### What "more steps" would actually cost
 
 The gate matters because the bill is large. π0.5 trains **action-expert-only** — 693 M trainable of
@@ -1713,12 +1799,66 @@ Three things that follow:
 
 - **It cannot run on the 5080.** 18.2 GiB at batch 16 — already *with* gradient checkpointing — against
   15.92 GiB available. π0.5 stays on an A100-class card.
-- **A smaller batch does not rescue that.** The run is compute-bound, not data-bound
-  (`updt_s: 1.949` against `data_s: 0.442`), so halving the batch roughly halves the step time and
-  doubles the steps needed for the same samples — the wall clock barely moves while the memory saving
-  is modest.
+- **Batch size is the wrong knob in both directions.** The run is compute-bound, not data-bound
+  (`updt_s: 1.949` against `data_s: 0.442` — 82% of the step is the update), so trading batch against
+  steps at constant samples barely moves the wall clock either way. Derivation below.
 - **Disk needs planning.** 11.55 GB per checkpoint × 16 at `save_freq=5000` is **185 GB**. Reap as you
   go, as the round-1 notebook already does.
+
+### Sizing the 80,000-step run — batch, card, and the one setting that must change
+
+**Can a bigger batch with fewer steps cut the wall clock? No.** Where the 18.2 GiB actually goes:
+
+| at batch 16 | GiB |
+|---|---|
+| frozen 3.45 B @ bf16 | 6.43 |
+| trainable 0.69 B @ fp32 | 2.58 |
+| gradients fp32 | 2.58 |
+| AdamW m + v | 5.17 |
+| **static subtotal** | **16.76** |
+| measured peak | **18.18** |
+| **→ activations** | **≈1.42** (~0.09 GiB/sample) |
+
+**92% of the footprint is batch-independent.** Batch 64 would add only ~4.3 GiB of activations — it
+*fits* on a 48 GB card and buys nothing, because the compute per sample is unchanged and the step time
+scales with it. 80,000 × 16 and 40,000 × 32 are the same 1,280,000 samples and very nearly the same
+hours. Raising the batch also rescales the step-defined warmup and decay horizons and would want a new
+LR, so it changes the optimisation for no throughput gain. **Keep batch 16.**
+
+**The real lever is `gradient_checkpointing`, and it picks the card.** Checkpointing is *why* the step
+is compute-heavy — it recomputes activations instead of storing them. Turning it off is the one change
+with real time in it, and it needs memory the 24 GB card does not have:
+
+| | RTX 4090 24 GB | **L40S 48 GB** |
+|---|---|---|
+| batch 16, checkpointing **on** | 18.18 GiB ✅ | ✅ |
+| batch 16, checkpointing **off** | ✗ no headroom | **✅ ~30 GiB spare** |
+| speed knob available | **none** | **yes** |
+
+**Take the L40S** — not for the batch, but because it is the only one of the two where the throughput
+setting can be touched at all. On the 4090, `gradient_checkpointing=true` is not optional.
+
+> ### ⚠️ `--steps=80000` alone would waste 7/8 of the run
+>
+> The saved config carries `scheduler_warmup_steps: 1000`, **`scheduler_decay_steps: 10000`**,
+> `optimizer_lr: 2.5e-5`, `scheduler_decay_lr: 2.5e-6`.
+> `CosineDecayWithWarmupSchedulerConfig` auto-scales the horizon **only downward**
+> (`if num_training_steps < self.num_decay_steps`, `lerobot/optim/schedulers.py:132-180`), and the
+> lambda clamps with `step = min(current_step, actual_decay_steps)`.
+>
+> So raising `--steps` without raising the horizon gives: warmup to 2.5e-5, cosine to 2.5e-6 by step
+> 10,000, then **70,000 steps pinned flat at the floor LR** — seven-eighths of a ~40 h run at a tenth
+> of the peak rate. Pass both:
+>
+> ```bash
+> --steps=80000 --policy.scheduler_decay_steps=80000
+> ```
+
+**Ladder it rather than buying 80,000 up front.** Smoke-test `gradient_checkpointing=false` first
+(~15 min settles the real s/step on the actual card), then run **30,000** with `save_freq=5000`, read
+the eval curve and one rollout, and extend only if it is still improving. The eval loss was still
+falling at 10,000, so the decision arrives early and cheaply — and §11.3a's lesson applies here too:
+score the extension on jerk as well as loss.
 
 **So the probe above is worth its 30 minutes before committing ~40 h of A100 time** — and note it is
 not only a budget question. §11.3a measured π0.5 5k at the **lowest held-out loss and a lower jerk than

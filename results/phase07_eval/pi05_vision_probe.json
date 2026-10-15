@@ -1,0 +1,38 @@
+{
+  "checkpoint": "/home/bj/Documents/bingjian/robot_learning/smolvla_so101/outputs/hub/pi05_tray_cylinder_s1000_trim_A100/checkpoints/010000/pretrained_model",
+  "dataset": "HALDijkstraaa/so101_tray_cylinder_varied_20261013_082911_trimmed",
+  "camera": "top",
+  "n_episodes": 50,
+  "n_frames": 400,
+  "siglip_shape": [
+    256,
+    2048
+  ],
+  "target_sd_deg": 4.12321784098182,
+  "grasp_pan": {
+    "semantic (mean over 256 patches)": {
+      "n_features": 2048,
+      "best_lambda": 0.1,
+      "r2": 0.8262504387171049,
+      "rmse_deg": 1.7186923294852374
+    },
+    "spatial (mean over 1152 channels)": {
+      "n_features": 256,
+      "best_lambda": 0.01,
+      "r2": 0.7063934497587,
+      "rmse_deg": 2.234185096873102
+    },
+    "both concatenated": {
+      "n_features": 2304,
+      "best_lambda": 0.1,
+      "r2": 0.8267463879101966,
+      "rmse_deg": 1.7162376665879375
+    },
+    "pixels": {
+      "n_features": 256,
+      "best_lambda": 0.01,
+      "r2": 0.35827308931387847,
+      "rmse_deg": 3.303021542885767
+    }
+  }
+}

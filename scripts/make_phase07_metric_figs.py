@@ -13,6 +13,11 @@ Three panels, answering three questions in order:
   C. Which of the two offline numbers tracks what the robot did? Rollout mean progress against each,
      within family, since that is the only comparison the units support.
 
+A second figure covers the round-2 selection (section 12.6): the four D1 SmolVLA checkpoints, where
+jerk falls and loss rises at every step. It is drawn separately rather than as a fourth panel because
+its x-axis is training steps within one run, not a set of arms, and its jerk is normalised by D1's
+action sigma - not comparable to the first figure's numbers.
+
     python scripts/make_phase07_metric_figs.py
 """
 from __future__ import annotations
@@ -29,11 +34,19 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from make_phase07_doc_figs import C, GRID, INK, INK2, INK3, POLICY_LABEL, SURFACE, _style, _title
+from make_phase07_doc_figs import (C, CRITICAL, GOOD, GRID, INK, INK2, INK3, POLICY_LABEL,
+                                   SURFACE, _style, _title)
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 METRICS = ROOT / "results/phase07_eval/checkpoint_metrics.json"
 PER_ARM = ROOT / "results/phase07_eval/summary_per_arm.csv"
+# The training run writes this under the gitignored outputs/; a copy is committed beside the
+# round-1 metrics so the figure is reproducible from a fresh clone. Prefer the copy.
+D1_METRICS = next(
+    (q for q in (ROOT / "results/phase07_eval/checkpoint_metrics_d1_smolvla.json",
+                 ROOT / "outputs/train/smolvla_tray_cylinder_s1000_d1_resumed"
+                        "/checkpoint_metrics.json") if q.is_file()),
+    ROOT / "results/phase07_eval/checkpoint_metrics_d1_smolvla.json")
 OUT = ROOT / "docs/details/figs"
 
 STAGES = ["reach", "grasp", "transport", "insert"]
@@ -160,12 +173,120 @@ def fig_metrics(m, roll, path: pathlib.Path) -> None:
     print(f"  wrote {path.name}")
 
 
+def fig_d1_selection(path: pathlib.Path) -> None:
+    """Section 12.6's selection: jerk and loss move in opposite directions at every step."""
+    d = json.loads(D1_METRICS.read_text())["results"]
+    steps = sorted(int(k) for k in d)
+    jerk = np.array([d[str(s)]["jerk"]["mean"] for s in steps])
+    jerr = np.array([d[str(s)]["jerk"]["std"] for s in steps])
+    loss = np.array([d[str(s)]["loss_pooled"]["mean"] for s in steps])
+    lerr = np.array([d[str(s)]["loss_pooled"]["std"] for s in steps])
+
+    # The claim the figure makes. If a re-measurement breaks the monotonicity, fail loudly rather
+    # than ship a figure whose caption no longer describes it.
+    assert all(a > b for a, b in zip(jerk, jerk[1:])), f"jerk no longer falls monotonically: {jerk}"
+    assert all(a < b for a, b in zip(loss, loss[1:])), f"loss no longer rises monotonically: {loss}"
+
+    fig = plt.figure(figsize=(12.6, 4.5), facecolor=SURFACE)
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.45, 1], wspace=0.34)
+
+    # ---- left: the divergence ----------------------------------------------------------
+    ax = fig.add_subplot(gs[0, 0])
+    ks = np.array(steps) / 1000.0
+    ax.errorbar(ks, jerk, yerr=jerr, color=C["smolvla"], lw=2.4, marker="o", markersize=8,
+                markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4)
+    ax.set_xlabel("training step  (thousands)", color=INK2, fontsize=9)
+    ax.set_ylabel("chunk jerk  (D1 units · s⁻²)", color=C["smolvla"], fontsize=9)
+    ax.tick_params(axis="y", colors=C["smolvla"])
+    ax.set_xticks(ks)
+    ax.set_xticklabels([f"{int(k)}k" for k in ks])
+    _style(ax)
+
+    ax2 = ax.twinx()
+    ax2.errorbar(ks, loss, yerr=lerr, color=INK3, lw=2.4, ls="--", marker="s", markersize=7,
+                 markeredgecolor=SURFACE, markeredgewidth=1.6, capsize=3, zorder=4)
+    ax2.set_ylabel("pooled held-out loss", color=INK3, fontsize=9)
+    ax2.tick_params(axis="y", colors=INK3, labelsize=9, length=0)
+    for sp in ("top", "left", "bottom"):
+        ax2.spines[sp].set_visible(False)
+    ax2.spines["right"].set_color(GRID)
+    ax2.set_facecolor("none")
+
+    # Pad both axes so the two series read as a divergence, not as one crossing the other.
+    ax.set_ylim(jerk.min() - 2.6, jerk.max() + 2.6)
+    ax2.set_ylim(loss.min() - 0.0035, loss.max() + 0.0035)
+
+    ax.annotate("jerk ↓  smoother", (ks[1], jerk[1]), textcoords="offset points", xytext=(6, 13),
+                fontsize=9, color=C["smolvla"], fontweight="600")
+    ax2.annotate("loss ↑  'worse'", (ks[2], loss[2]), textcoords="offset points", xytext=(-4, -22),
+                 fontsize=9, color=INK3, fontweight="600")
+
+    # The two checkpoints each metric would pick.
+    ax.scatter([ks[-1]], [jerk[-1]], s=320, facecolor="none", edgecolor=GOOD, linewidth=2.2,
+               zorder=6)
+    ax.annotate("selected\n20k", (ks[-1], jerk[-1]), textcoords="offset points", xytext=(-8, 26),
+                ha="center", fontsize=9, color=GOOD, fontweight="700", linespacing=1.4)
+    ax2.scatter([ks[0]], [loss[0]], s=320, facecolor="none", edgecolor=CRITICAL, linewidth=2.2,
+                zorder=6)
+    ax2.annotate("the loss curve\nwould pick 5k", (ks[0], loss[0]), textcoords="offset points",
+                 xytext=(16, 20), ha="left", va="center", fontsize=9, color=CRITICAL,
+                 fontweight="700", linespacing=1.4)
+
+    _title(ax, "Round-2 SmolVLA on D1 — the two metrics disagree at every step",
+           "rank correlation −1.00 over four checkpoints · error bars = sd over 3 fixed-seed repeats")
+    # Resolution differs by two orders of magnitude between the two series; say so, below the
+    # axes rather than inside them, where it collided with the 5k error bar.
+    gaps = np.abs(np.diff(jerk)) / jerr.mean()
+    ax.text(0.0, -0.235, f"jerk steps are {gaps.min():.0f}–{gaps.max():.0f}× their spread, the "
+                         f"loss end-to-end gap only {(loss[-1] - loss[0]) / lerr.mean():.1f}× its "
+                         f"own:\nthe loss direction is resolved, the per-step size is not",
+            transform=ax.transAxes, ha="left", va="top", fontsize=8.2, color=INK3,
+            linespacing=1.5)
+
+    # ---- right: how much milder than round 1 -------------------------------------------
+    ax = fig.add_subplot(gs[0, 1])
+    r1 = json.loads(METRICS.read_text())["arms"]
+    labels = ["jerk 5k→20k\n(ratio)", "pooled loss 5k→20k\n(% change)"]
+    d0 = [r1["sv5k"]["jerk"]["mean"] / r1["sv20k"]["jerk"]["mean"],
+          100 * (r1["sv20k"]["loss_pooled"]["mean"] / r1["sv5k"]["loss_pooled"]["mean"] - 1)]
+    d1 = [jerk[0] / jerk[-1], 100 * (loss[-1] / loss[0] - 1)]
+
+    # Two different units on one panel, so each pair is normalised to its own round-1 bar and the
+    # real values are printed on the bars. The comparison is "how much milder", nothing else.
+    x = np.arange(2)
+    for i, (a, b) in enumerate(zip(d0, d1)):
+        ax.bar(i - 0.2, 1.0, width=0.38, color=INK3, alpha=0.45, zorder=3, linewidth=0)
+        ax.bar(i + 0.2, b / a, width=0.38, color=C["smolvla"], zorder=3, linewidth=0)
+        fmt = (lambda v: f"{v:.2f}×") if i == 0 else (lambda v: f"+{v:.0f}%")
+        ax.text(i - 0.2, 1.02, fmt(a), ha="center", va="bottom", fontsize=9, color=INK2)
+        ax.text(i + 0.2, b / a + 0.02, fmt(b), ha="center", va="bottom", fontsize=9,
+                color=C["smolvla"], fontweight="700")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=8.8)
+    ax.set_ylabel("relative to round 1", color=INK2, fontsize=9)
+    ax.set_ylim(0, 1.3)
+    ax.set_yticks([0, 0.5, 1.0])
+    _style(ax)
+    ax.text(0.985, 0.955, "grey = round 1 (D0, fresh, lr 1e-4)\norange = round 2 (D1, warm, lr 1e-5)",
+            transform=ax.transAxes, ha="right", va="top", fontsize=8.5, color=INK2,
+            linespacing=1.4)
+    _title(ax, "Round 2 drifts far less", "same metrics, same held-out protocol")
+
+    fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=SURFACE)
+    plt.close(fig)
+    print(f"  wrote {path.name}")
+
+
 def main() -> int:
     if not METRICS.is_file():
         raise SystemExit(f"{METRICS} not found - run scripts/eval_checkpoint_metrics.py --all-round1")
     m, roll = load()
     OUT.mkdir(parents=True, exist_ok=True)
     fig_metrics(m, roll, OUT / "phase07_offline_metrics.png")
+    if D1_METRICS.is_file():
+        fig_d1_selection(OUT / "phase07_d1_selection.png")
+    else:
+        print(f"  skipped phase07_d1_selection.png - {D1_METRICS} not found")
 
     # The numbers the doc quotes, printed so they are copied rather than retyped.
     print("\n  arm        offline jerk      rollout jerk   pooled loss     grasp     insert")
