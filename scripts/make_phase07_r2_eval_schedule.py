@@ -32,6 +32,8 @@ to 28. One pass ranks; two passes can begin to measure.
 """
 import argparse
 import csv
+import json
+import pathlib
 import random
 import sys
 
@@ -52,6 +54,30 @@ WRIST = "/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0"
 # ACT predicts a chunk of 100 and SmolVLA 50, but both executed 25 steps per inference in round 1.
 # Keeping it identical is what makes the round-1 and round-2 jerk numbers comparable.
 N_ACTION_STEPS = 25
+
+
+def rename_map_for(output_dir: str, ckpt: str) -> dict[str, str]:
+    """The camera rename map, read from the checkpoint's OWN saved preprocessor.
+
+    A VLA checkpoint carries the feature names of the base it was fine-tuned from, and those win
+    over the dataset's: SmolVLA wants `camera1`/`camera2` while the robot produces `top`/`wrist`,
+    so without the map `lerobot-rollout` dies on a feature mismatch. ACT trained on the robot's own
+    names and needs no map at all.
+
+    Read rather than hardcoded, because a map that is merely *wrong* - top and wrist swapped - does
+    not raise. It produces a policy quietly driving on the wrong camera for a whole block.
+    """
+    cfg = pathlib.Path(output_dir) / "checkpoints" / ckpt / "pretrained_model" / \
+        "policy_preprocessor.json"
+    if not cfg.is_file():
+        raise SystemExit(
+            f"cannot read the rename map: {cfg} is missing.\n"
+            "Refusing to emit a rollout command without it - a missing map fails at the robot "
+            "after the block is set up, and a wrong one fails silently.")
+    for step in json.loads(cfg.read_text()).get("steps", []):
+        if "rename" in step.get("registry_name", ""):
+            return dict(step.get("config", {}).get("rename_map", {}))
+    return {}
 
 
 def build(passes: int, spots: int, seed: int):
@@ -118,15 +144,20 @@ def emit_commands(blocks, out=sys.stdout):
            "source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot")
     for b_no, (arm, _pol, ckpt, odir), half, spot_list, p in blocks:
         name = ds_name(arm, p, half)
+        rmap = rename_map_for(odir, ckpt)
+        # Single quotes around the JSON so the shell leaves its braces and double quotes alone.
+        rename_assign = (f"RENAME='{json.dumps(rmap)}' && " if rmap else "")
+        rename_flag = ('--rename_map="$RENAME" ' if rmap else "")
         print(f"\n### block {b_no} — {arm} — pass {p} half {half} — "
-              f"{len(spot_list)} trials at {' '.join(spot_list)}", file=out)
+              f"{len(spot_list)} trials at {' '.join(spot_list)}"
+              f"{'' if rmap else '  (no rename map needed)'}", file=out)
         print("```bash", file=out)
         print(f"{pre} && "
               f"POLICY={odir}/checkpoints/{ckpt}/pretrained_model && "
               f"NAME={name} && NEP={len(spot_list)} && "
-              f"TOP={TOP} && WRIST={WRIST} && "
+              f"TOP={TOP} && WRIST={WRIST} && {rename_assign}"
               f"lerobot-rollout --strategy.type=episodic --policy.path=$POLICY "
-              f"--policy.n_action_steps={N_ACTION_STEPS} "
+              f"--policy.n_action_steps={N_ACTION_STEPS} {rename_flag}"
               f"--robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower "
               f'--robot.cameras="{{ top: {{type: opencv, index_or_path: $TOP, width: 640, '
               f"height: 480, fps: 30, fourcc: MJPG}}, wrist: {{type: opencv, "
@@ -157,6 +188,11 @@ def main() -> int:
     if a.emit == "summary":
         print(f"{len(rows)} trials · {len(blocks)} blocks · {a.passes} pass(es) over "
               f"{a.spots} spots · mean session position {means}")
+        for arm, _pol, ckpt, odir in ARMS:
+            m = rename_map_for(odir, ckpt)
+            print(f"  {arm:11s} {ckpt}  rename_map: "
+                  + (", ".join(f"{k.split('.')[-1]}->{v.split('.')[-1]}" for k, v in m.items())
+                     if m else "<none needed>"))
         for b_no, (arm, *_), half, sl, p in blocks:
             print(f"  block {b_no:2d}  pass {p}  half {half}  {arm:11s}  {' '.join(sl)}")
         return 0
