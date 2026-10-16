@@ -23,7 +23,7 @@ import traceback
 EXP_TOTAL_B = 4.1434
 EXP_F32_B = 0.5336
 EXP_BF16_B = 3.6099
-EXP_TRAINABLE_B = 0.691  # gemma_expert + the action/time projections
+EXP_TRAINABLE_B = 0.6934  # gemma_expert + the action/time projections
 
 BAR = "=" * 78
 
@@ -236,7 +236,7 @@ def section_model(base: str) -> None:
         policy.to("cuda")
         w = torch.cuda.memory_allocated() / 2**30
         free, _ = torch.cuda.mem_get_info()
-        out(f"\n  weights on card   {w:.2f} GiB   (A100: 6.43 frozen bf16 + 2.58 trainable fp32 = 9.01)")
+        out(f"\n  weights on card   {w:.2f} GiB   (measured on the laptop: 8.72)")
         out(f"  free after        {free / 2**30:.2f} GiB   "
             f"-> gradients 2.58 + AdamW 5.17 + activations ~1.42 = {ok(free / 2**30 > 9.2)} "
             f"{free / 2**30 - 9.17:+.2f} GiB spare at batch 16")
