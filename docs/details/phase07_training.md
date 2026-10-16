@@ -12,7 +12,7 @@ Rig: [phase07_portable_rig.md](phase07_portable_rig.md) · wandb project `phase0
 |---|---|---|
 | **ACT** | [colab_phase07_act_gpufree.ipynb](../../notebooks/colab_phase07_act_gpufree.ipynb) | ✅ **done 2026-10-05** |
 | **SmolVLA** | [colab_phase07_smolvla_gpufree.ipynb](../../notebooks/colab_phase07_smolvla_gpufree.ipynb) | ✅ **done 2026-10-08** — but **overfits**; use the 5k checkpoint (§3) |
-| **π0.5** | [Colab](../../notebooks/colab_phase07_pi05_Colab.ipynb) · [4090](../../notebooks/colab_phase07_pi05_gpufree.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
+| **π0.5** | [Colab](../../notebooks/colab_phase07_pi05_Colab.ipynb) · [4090](../../notebooks/phase07_gpufree_pi05_train.ipynb) | ✅ **done 2026-10-09** — 10k steps on a Colab **A100**, verified on the Hub; eval curve read 2026-10-12 — **does not overfit, still falling at 10k** (§4) |
 
 ---
 
