@@ -1871,6 +1871,54 @@ either SmolVLA arm**, yet 0/9 excluding luck. Neither offline metric sees whatev
 what §11.4 predicts if the failure is in the frozen representation. If it is, 80,000 steps buys
 nothing.
 
+### Launched on a rented 4090 — 2.9 days · measured 2026-10-17
+
+The box could not run the recipe as shipped: lerobot **0.4.1** on Python 3.11.13, whose `PI05Config`
+has neither `train_expert_only` nor `freeze_vision_encoder` — and without them the card carries a
+full 4.14 B fine-tune (~50 GiB against 23.1 free). lerobot ≥0.5 needs Python ≥3.12, so the version
+we need cannot go into the image's interpreter at all. A separate 3.12 env
+([`gpufree_setup_py312.sh`](../../scripts/gpufree_setup_py312.sh), 6.4 GB) gets 0.6.1 and round 1's
+recipe unchanged.
+
+| | A100, round 1 | **RTX 4090, this run** |
+|---|---|---|
+| s/step (`updt_s` + `data_s`) | 1.949 + 0.442 = 2.391 | **2.660 + 0.482 = 3.142** |
+| peak VRAM | 18.18 GiB of 40 | **18.52 GiB of 23.5** — ~4.6 spare |
+| 80,000 steps | ~46 h | **69.8 h ≈ 2.9 days**, a checkpoint every 8.7 h |
+| checkpoint on disk | — | **9.354 GB**, exactly the predicted size |
+
+31% slower per step, and no batch step-down was needed. `gradient_checkpointing=false` — the one
+real speed lever — stays unavailable: 24 GB cannot afford it.
+
+**Three things the probe deleted from the plan**, none of which were work after all. The models ship
+*on the image* (`/data/models/pi05_base`, `paligemma-3b-pt-224`), so the ~25 GB laptop→server upload
+does not exist; HF is unreachable, so there is nothing to push; and wandb **is** reachable, so the
+curves are live. Only the 1.37 GB merged dataset travels.
+
+**One trap, found by reading the source rather than by running it.** `processor_pi05.py` asks for the
+paligemma tokenizer by **hub id**, not by path — so the files being on disk is not enough, the id has
+to resolve out of the hub cache or training dies at step 0 with the weights sitting three directories
+away. Stage 5 of the setup script seeds a snapshot symlink. Two smaller ones: lerobot prints
+`step:{format_big_number(step)}`, which renders both 1,500 and 2,500 as `"2K"`, so the exact step is
+*not* recoverable from the log (the notebook derives it from the line count and takes exact steps
+from the `eval_loss` lines); and `rsync` is absent from the gpufree image.
+
+### Checkpoint `010000` — intact · verified 2026-10-17
+
+| check | result |
+|---|---|
+| `model.safetensors` size | 9,354,050,752 B — byte-identical to the A100 checkpoint's |
+| header vs file length | declared data end **== file size**, so nothing was truncated |
+| tensors / params | 813 / **4.1434 B** — 558 fp32 (0.5336 B) + 255 bf16 (3.6099 B), matching round 1 |
+| non-finite values | **none**, across all 4.1434 B elements read back |
+| saved rename step | present: `top→base_0_rgb`, `wrist→left_wrist_0_rgb` |
+| recipe in `train_config.json` | `steps 80000` · **`scheduler_decay_steps 80000`** · `eval_split 0.1` · holdout = last 10 · `train_expert_only` · `dtype bfloat16` · fresh from `/data/models/pi05_base` |
+
+`scheduler_decay_steps 80000` is the one worth checking by eye — the warning above is about exactly
+the config that would have pinned 70,000 steps at the floor LR. And the rename step being *inside the
+saved preprocessor* is what stops this checkpoint hitting the camera-key `ValueError` that SmolVLA's
+rollouts hit in §12.8.
+
 ## 12.8 — Round 2 eval: two arms, checkpoints chosen before the robot is touched
 
 **Two arms, not six.** Round 1 needed six because the question was *which checkpoint per policy*.

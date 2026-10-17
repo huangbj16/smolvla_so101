@@ -11,13 +11,19 @@ reproduce that recipe rather than something near it.
 
 from __future__ import annotations
 
-import argparse
-import importlib
-import importlib.metadata as md
 import os
-import pathlib
-import sys
-import traceback
+
+# Set before any import: transformers and huggingface_hub latch this at import time, and this box
+# has no route to huggingface.co, so a hub lookup made without it retries until it gives up.
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+import argparse  # noqa: E402
+import importlib  # noqa: E402
+import importlib.metadata as md  # noqa: E402
+import pathlib  # noqa: E402
+import sys  # noqa: E402
+import traceback  # noqa: E402
 
 # Expected, measured from the A100 checkpoint's safetensors header.
 EXP_TOTAL_B = 4.1434
@@ -38,6 +44,18 @@ def out(s: str) -> None:
 
 def ok(cond: bool) -> str:
     return "OK  " if cond else "FAIL"
+
+
+def readable(*parts) -> bool:
+    """is_file() that treats an unreadable path as absent instead of raising.
+
+    A PermissionError here would take the whole section down, which is how the first probe lost
+    two sections to one inaccessible directory.
+    """
+    try:
+        return pathlib.Path(*parts).is_file()
+    except OSError:
+        return False
 
 
 def section_env() -> None:
@@ -160,20 +178,34 @@ def section_video() -> None:
 
 def section_tokenizer() -> None:
     head("5 - the offline tokenizer (hardcoded hub id in processor_pi05.py)")
-    os.environ.setdefault("HF_HUB_OFFLINE", "1")
     from transformers import AutoTokenizer
-    targets = ["google/paligemma-3b-pt-224"]
-    targets += [c for c in ("/data/models/paligemma-3b-pt-224",
-                            "/root/data/models/paligemma-3b-pt-224")
-                if pathlib.Path(c, "tokenizer.json").is_file()]
-    for target in targets:
+
+    for target in ("/data/models/paligemma-3b-pt-224", "/root/data/models/paligemma-3b-pt-224"):
+        if not readable(target, "tokenizer.json"):
+            continue
         try:
             tk = AutoTokenizer.from_pretrained(target)
             out(f"  OK   {target}  vocab {len(tk)}")
         except Exception as e:
             out(f"  FAIL {target}\n         {type(e).__name__}: {str(e)[:160]}")
-    out("\n  The hub id is what matters: processor_pi05.py asks for it by name, so a FAIL on the")
-    out("  first line means training dies at step 0 even though the files are on disk.")
+
+    # processor_pi05.py asks for the hub id by NAME, not by path, so the files being on disk is not
+    # enough - the id has to resolve out of the hub cache. Checked with try_to_load_from_cache,
+    # which is a pure cache lookup: no request is made, so it cannot retry against an unreachable
+    # host the way AutoTokenizer.from_pretrained(<hub id>) does on this box.
+    out("")
+    try:
+        from huggingface_hub import try_to_load_from_cache
+        hits = {f: try_to_load_from_cache("google/paligemma-3b-pt-224", f)
+                for f in ("tokenizer.json", "config.json")}
+        for f, where in hits.items():
+            good = isinstance(where, str) and readable(where)
+            out(f"  {ok(good)} hub id resolves {f:16s} {where if good else '<not in cache>'}")
+        if not all(isinstance(w, str) and readable(w) for w in hits.values()):
+            out("\n  >>> training would die at step 0. Re-run stage 5 of gpufree_setup_py312.sh,")
+            out("  >>> and make sure HF_HOME points at the cache it seeded.")
+    except Exception as e:
+        out(f"  FAIL cache lookup: {type(e).__name__}: {str(e)[:120]}")
 
 
 def section_model(base: str) -> None:

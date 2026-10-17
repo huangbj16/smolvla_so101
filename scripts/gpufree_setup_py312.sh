@@ -14,18 +14,16 @@ set -uo pipefail
 ENV_PREFIX=${ENV_PREFIX:-/root/gpufree-data/envs/lr312}
 CACHE_ROOT=${CACHE_ROOT:-/root/gpufree-data/cache}
 PYPI=${PYPI:-https://pypi.tuna.tsinghua.edu.cn/simple}
+ENV_FILE=${ENV_FILE:-/root/gpufree-data/env.sh}
 CONDA=${CONDA:-/opt/conda/bin/conda}
 BASE_PY=${BASE_PY:-/opt/conda/bin/python3.11}
 
-# Pin set A - parity with this box's own proven stack. The image already runs torch 2.7.1+cu128 on
-# driver 575.57.08 (= CUDA 12.9), and lerobot 0.6.1 accepts torch>=2.7,<2.12, so this is the pairing
-# with no driver risk in it. torchcodec 0.5 is the version the image pairs with torch 2.7.1.
-A_TORCH="torch==2.7.1 torchvision==0.22.1"
-A_CODEC="torchcodec==0.5"
-# Pin set B - parity with the laptop, tried only if A fails. Note the laptop's torch 2.11.0 wheel is
-# +cu130, which driver 575 CANNOT load, so B must come from a cu128 index or it will not work here.
-B_TORCH="torch==2.11.0 torchvision==0.26.0"
-B_CODEC="torchcodec==0.11.1"
+# Confirmed on this box: torch 2.7.1 + torchcodec 0.5 ran the pi0.5 recipe at 2.66 s/step and
+# 18.52 GiB peak. The image itself runs 2.7.1+cu128 on driver 575.57.08 (= CUDA 12.9), and lerobot
+# 0.6.1 accepts torch>=2.7,<2.12, so there is no reason to reach for anything newer - and the
+# laptop's 2.11.0 wheel is +cu130, which this driver cannot load at all.
+PIN_TORCH="torch==2.7.1 torchvision==0.22.1"
+PIN_CODEC="torchcodec==0.5"
 
 PY="$ENV_PREFIX/bin/python"
 say() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
@@ -41,6 +39,15 @@ export UV_PYTHON_INSTALL_DIR="$CACHE_ROOT/uv-python"
 export HF_HUB_OFFLINE=1
 
 df -h "$ENV_PREFIX" "$CACHE_ROOT" /root /data 2>/dev/null | sort -u
+
+# rsync is NOT in the gpufree image, and it is how the 1.37 GB dataset gets in and the 9.35 GB
+# checkpoints get out. Install it now rather than discovering it is missing mid-transfer.
+if ! command -v rsync >/dev/null; then
+    echo "--- installing rsync"
+    (apt-get update -qq && apt-get install -y -qq rsync) \
+        || echo "WARNING: rsync install failed - fall back to scp or the Jupyter file browser"
+fi
+echo "rsync    $(command -v rsync || echo '<absent>')"
 echo "conda    $([ -x "$CONDA" ] && "$CONDA" --version || echo '<absent>')"
 echo "base py  $("$BASE_PY" --version 2>&1)"
 
@@ -120,21 +127,14 @@ x = torch.randn(512, 512, device="cuda", dtype=torch.bfloat16)
 print(f"  matmul OK on {torch.cuda.get_device_name(0)}  bf16 sum={(x@x).float().sum().item():.1f}")
 PYEOF
 }
-say "3 - torch (pin set A: $A_TORCH)"
-PINNED_TORCH="$A_TORCH"; PINNED_CODEC="$A_CODEC"
-install_torch "$A_TORCH" || die "could not install $A_TORCH from any index"
-if ! cuda_ok; then
-    say "3b - pin set A cannot talk to this driver; retrying with pin set B: $B_TORCH"
-    "$PY" -m pip uninstall -y torch torchvision >/dev/null 2>&1
-    PINNED_TORCH="$B_TORCH"; PINNED_CODEC="$B_CODEC"
-    install_torch "$B_TORCH" || die "could not install $B_TORCH either"
-    cuda_ok || die "neither pin set gives a working CUDA build - stop and report the output above"
-fi
+say "3 - torch ($PIN_TORCH)"
+install_torch "$PIN_TORCH" || die "could not install $PIN_TORCH from any index"
+cuda_ok || die "torch cannot reach the GPU - stop and report the output above"
 
 # ---------------------------------------------------------------- 4 - lerobot 0.6.1
 say "4 - lerobot[pi,training]==0.6.1"
 CONSTRAINTS="$CACHE_ROOT/constraints.txt"
-{ tr ' ' '\n' <<<"$PINNED_TORCH"; echo "$PINNED_CODEC"; echo "numpy==2.2.6"; } | grep . > "$CONSTRAINTS"
+{ tr ' ' '\n' <<<"$PIN_TORCH"; echo "$PIN_CODEC"; echo "numpy==2.2.6"; } | grep . > "$CONSTRAINTS"
 echo "--- constraints (stop pip from swapping the verified torch stack):"; sed 's/^/    /' "$CONSTRAINTS"
 "$PY" -m pip install --index-url "$PYPI" -c "$CONSTRAINTS" "lerobot[pi,training]==0.6.1" \
     || die "lerobot install failed - paste the resolver output back"
@@ -160,18 +160,64 @@ ln -s "$PALI" "$REPO/snapshots/$SHA"
 echo "  HF_HOME=$HF_HOME"
 echo "  snapshot $SHA -> $PALI"
 
-say "6 - done"
+# ---------------------------------------------------------------- 6 - a Jupyter kernel for this env
+# The notebook's cells shell out to $PY explicitly, so they work under any kernel - but having the
+# 3.12 env as a selectable kernel makes ad-hoc inspection of checkpoints possible from the browser.
+say "6 - registering a Jupyter kernel"
+"$PY" -m pip install -q --index-url "$PYPI" ipykernel || die "cannot install ipykernel"
+"$PY" -m ipykernel install --user --name lr312 \
+    --display-name "lerobot 0.6.1 (py3.12)" || echo "WARNING: kernelspec install failed"
+echo "  kernels now visible to Jupyter:"
+ls -1 "$HOME/.local/share/jupyter/kernels" 2>/dev/null | sed 's/^/    /'
+
+# ---------------------------------------------------------------- 7 - env file, and wandb
+# Every later shell needs HF_HOME and HF_HUB_OFFLINE, and the training notebook decides whether to
+# log to wandb from the environment. One file to source rather than four exports to remember.
+say "7 - $ENV_FILE"
+umask 077
+cat > "$ENV_FILE" <<EOF
+# source this before anything else: . $ENV_FILE
+export PATH=$ENV_PREFIX/bin:\$PATH
+export HF_HOME=$HF_HOME
+export HF_HUB_OFFLINE=1
+export TOKENIZERS_PARALLELISM=false
+EOF
+
+if [ -n "${WANDB_API_KEY:-}" ]; then
+    # Written to the env file (mode 600) and to ~/.netrc, because the notebook reads the variable
+    # while the wandb client prefers the netrc. The key is never echoed.
+    printf 'export WANDB_API_KEY=%s\n' "$WANDB_API_KEY" >> "$ENV_FILE"
+    "$PY" -m wandb login --relogin "$WANDB_API_KEY" >/dev/null 2>&1 \
+        && echo "  wandb: logged in, key recorded in $ENV_FILE (mode 600)" \
+        || echo "  wandb: login call failed, but the key is in $ENV_FILE - the notebook will use it"
+else
+    cat <<EOF
+  wandb: NO KEY SET. wandb IS reachable from this box, so this is the only thing standing between
+  you and live curves. Before running the training notebook:
+
+      echo 'export WANDB_API_KEY=<your key from wandb.ai/authorize>' >> $ENV_FILE
+      chmod 600 $ENV_FILE
+      . $ENV_FILE && python -m wandb login --relogin "\$WANDB_API_KEY"
+
+  Without it the run still logs the held-out loss to its own log file, and section 7 of the
+  notebook turns that into a CSV - but you will not see it until you look.
+EOF
+fi
+chmod 600 "$ENV_FILE"
+umask 022
+
+say "8 - done"
 cat <<EOF
   interpreter   $PY
-  torch pins    $PINNED_TORCH  $PINNED_CODEC
+  torch pins    $PIN_TORCH  $PIN_CODEC
   env size      $(du -sh "$ENV_PREFIX" 2>/dev/null | cut -f1)
   free after    $(df -h "$ENV_PREFIX" | awk 'NR==2{print $4}') at $(df -h "$ENV_PREFIX" | awk 'NR==2{print $6}')
+  rsync         $(command -v rsync || echo '<absent>')
+  jupyter kernel  lr312
 
-Every later command needs these three lines:
-  export HF_HOME=$HF_HOME
-  export HF_HUB_OFFLINE=1
-  export PATH=$ENV_PREFIX/bin:\$PATH
+Start every later shell with:
+  . $ENV_FILE
 
 Now run the verifier and paste its report back:
-  $PY $(dirname "$0")/gpufree_verify_py312.py
+  $PY $(dirname "$0")/gpufree_verify_py312.py --load
 EOF

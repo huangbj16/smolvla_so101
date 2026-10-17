@@ -45,11 +45,15 @@ fine-tune (~50 GiB against 23.1 GiB free). lerobot ≥0.5 needs Python ≥3.12, 
 
 ```bash
 bash gpufree_setup_py312.sh 2>&1 | tee /root/gpufree-data/setup_py312.log
+. /root/gpufree-data/env.sh
 python /root/gpufree-data/gpufree_verify_py312.py --load
 ```
 
-Then start Jupyter's kernel from `/root/gpufree-data/envs/lr312`, or just run the cells below —
-they shell out to that interpreter explicitly and do not care what the kernel is.
+That also installs `rsync` (absent from the gpufree image), registers a **`lerobot 0.6.1 (py3.12)`**
+Jupyter kernel, and writes `env.sh` with `HF_HOME`, `HF_HUB_OFFLINE` and — if you set one — the
+wandb key. Pick that kernel, or don't: the cells below shell out to the 3.12 interpreter explicitly
+and do not care what the kernel is. **Set the wandb key before section 5**, since a run launched
+without it logs nowhere but its own log file.
 
 ### The three things that differ from the A100 run
 
@@ -131,7 +135,8 @@ python scripts/merge_d0_d1.py --verify-only
 ```
 
 Then upload. Either the platform's Jupyter file browser, or — much faster for 1.37 GB — `rsync`
-from the laptop, filling in the host and port from the instance's SSH panel:
+from the laptop (the setup script installs it on the box; the gpufree image has no `rsync`), filling
+in the host and port from the instance's SSH panel:
 
 ```bash
 rsync -avP --no-perms --no-owner --no-group \
@@ -197,9 +202,19 @@ assert SAVE_FREQ % EVAL_STEPS == 0, "every checkpoint must land on an eval step"
 RENAME = {"observation.images.top":   "observation.images.base_0_rgb",
           "observation.images.wrist": "observation.images.left_wrist_0_rgb"}
 
-# wandb is reachable from this box (the probe got HTTP 404, i.e. routed). Logging is on if a key is
-# in the environment; otherwise it is off and section 7 recovers the curves from the log file.
-WANDB = bool(os.environ.get("WANDB_API_KEY"))
+# wandb is reachable from this box (the probe got HTTP 404, i.e. routed). The setup script puts the
+# key in /root/gpufree-data/env.sh AND in ~/.netrc via `wandb login`, so check both: a netrc-only
+# login would otherwise be silently ignored and the run would log nowhere.
+def _wandb_ready() -> bool:
+    if os.environ.get("WANDB_API_KEY"):
+        return True
+    try:
+        return "api.wandb.ai" in pathlib.Path.home().joinpath(".netrc").read_text()
+    except OSError:
+        return False
+
+
+WANDB = _wandb_ready()
 PROJECT = "phase07-policy-transfer"
 
 
@@ -240,7 +255,7 @@ def train_cmd(job=None, steps=None, batch=None, out=None, save_freq=None, eval_s
 
 
 print("\n".join(train_cmd()))
-print(f"\nwandb: {'on' if WANDB else 'OFF - set WANDB_API_KEY before launching if you want it'}")
+print(f"\nwandb: {'on' if WANDB else 'OFF - see stage 7 of gpufree_setup_py312.sh to set a key'}")
 ''')
 
 # =================================================================================================
@@ -251,9 +266,13 @@ Measures the two numbers that decide whether to commit: **seconds per step** and
 also writes one real checkpoint, which is the only way to find out that a 9.35 GB save works on this
 disk before discovering it 10,000 steps into a multi-day run.
 
-The A100 ran **2.06 s/step**. A 4090 is slower per step for this workload, so expect the
-extrapolation to land somewhere around **55–75 hours** — read the number this cell prints, not that
-guess, before going on.
+**Measured on this box, 2026-10-17:** `updt_s 2.660 + data_s 0.482 = 3.142 s/step`, **peak 18.52
+GiB** (A100: 2.391 s/step, 18.18 GiB), checkpoint written at exactly 9.354 GB. That extrapolates to
+**69.8 h ≈ 2.9 days**, with a checkpoint every 8.7 h. If `data_s` falls at steady state the update
+cost alone puts the floor at 59 h — section 6 settles which.
+
+The card is 1.9 GiB over the A100's slower-per-step pace and 0.34 GiB over its peak, with ~4.6 GiB
+still spare. Nothing here needed a batch step-down.
 """)
 
 code(r'''
