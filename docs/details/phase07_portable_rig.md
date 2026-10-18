@@ -1988,6 +1988,34 @@ pass `HF_HUB_OFFLINE=1` only where the network is the hazard:
 HF_HUB_OFFLINE=1 python scripts/eval_checkpoint_metrics.py ...   # long runs, no downloads wanted
 ```
 
+### 12.7b — Replaying 15,000, and proof that it worked · 2026-10-18
+
+`save_freq=10000` left the held-out minimum at 15k with no checkpoint. It was **replayed** rather
+than approximated — resumed from `010000`'s `training_state/`, which carries the optimizer moments,
+scheduler, RNG state and dataloader offset. Three checks say the replay retraced the original
+trajectory rather than making a new one:
+
+| check | result |
+|---|---|
+| `model.safetensors` | 9,354,050,752 B · header end == EOF · 813 tensors · 558 fp32 + 255 bf16 · no non-finite values |
+| LR at step 15,000 | **2.310403e-05**, exactly the 80,000-step cosine. `--steps=15000` would have given **2.5e-06** — the floor, 9.2× lower |
+| `eval_loss` at 15,000 | **0.0650** — the original run's value, reproduced |
+
+The LR row is the one that matters. `CosineDecayWithWarmupSchedulerConfig` rescales its horizon
+whenever `num_training_steps < num_decay_steps`, so the obvious `--steps=15000` would have run steps
+10,001–15,000 at a tenth of the right rate and produced a plausible checkpoint that was *not* the one
+the eval curve measured — silently. Keeping `--steps=80000` and passing `--save_freq=5000` is what
+avoids it; [§7b of the notebook](../../notebooks/phase07_gpufree_pi05_train.ipynb) documents the
+whole procedure.
+
+**A storage correction while measuring it:** `training_state/` is **2.195 GB**, not the 5.55 GB that
+fp32 moments over 0.693 B trainable parameters would cost. AdamW keeps each moment in its
+parameter's own dtype, so the bf16 half of the expert gets bf16 moments. Full checkpoint 11.55 GB,
+which is what §12.7 assumed all along.
+
+**15k's chunk jerk is not measured.** The round-3 plan picks 10k on a jerk comparison against 20k
+only; 15k lies between them in training and would cost ~53 min of local GPU to place.
+
 ## 12.8 — Round 2 eval: two arms, checkpoints chosen before the robot is touched
 
 **Two arms, not six.** Round 1 needed six because the question was *which checkpoint per policy*.

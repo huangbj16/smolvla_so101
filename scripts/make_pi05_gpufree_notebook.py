@@ -418,7 +418,7 @@ def status():
     u = shutil.disk_usage(DATA)
     saved = sorted(p.name for p in (OUT / "checkpoints").glob("0*")) if (OUT / "checkpoints").is_dir() else []
     print(f"  disk         {u.free/1e9:.1f} GB free; {len(saved)} checkpoints {saved}")
-    print(f"  projected    {len(saved)} kept x 9.35 GB; 8 of them need 74.8 GB + 5.5 for the "
+    print(f"  projected    {len(saved)} kept x 9.354 GB; 8 of them need 74.8 GB + 2.2 for the "
           f"newest optimizer state")
     for line in text.splitlines()[-3:]:
         print(f"  | {line[:150]}")
@@ -430,9 +430,11 @@ status()
 md(r"""
 ## 7 — Reap optimizer state, and recover the curves
 
-**Reaping.** Each checkpoint is `pretrained_model/` (9.354 GB) plus `training_state/` (5.53 GB of
-AdamW moments). Only the newest needs its optimizer state — that is what `--resume` reads. Dropping
-the rest takes eight checkpoints from 119 GB to **80 GB**.
+**Reaping.** Each checkpoint is `pretrained_model/` (9.354 GB) plus `training_state/`
+(**2.195 GB**, measured). AdamW keeps its moments in each parameter's own dtype, so the bf16 half of
+the expert gets bf16 moments — which is why this is 2.195 GB and not the 5.55 GB that fp32 moments
+over 0.693 B trainable would cost. Only the newest needs its optimizer state, since that is what
+`--resume` reads; dropping the rest takes eight checkpoints from **92.4 GB to 77.0 GB**.
 
 Run this whenever section 6 shows a new checkpoint. It never touches the newest.
 """)
@@ -579,7 +581,7 @@ assert (SRC / "training_state").is_dir(), (
     f"{SRC}/training_state is missing. Without the optimizer moments, scheduler and RNG state this "
     f"would be a fresh run from {FROM_STEP:,}, not a replay - do not reap it before this runs.")
 assert RECOVER_STEP % GRAIN == 0, "RECOVER_STEP must land on a save boundary"
-assert shutil.disk_usage(DATA).free / 1e9 > 20, "needs ~15 GB for the checkpoint + optimizer state"
+assert shutil.disk_usage(DATA).free / 1e9 > 18, "needs ~11.6 GB for the checkpoint + optimizer state"
 
 rec_cmd = [f"{pathlib.Path(PY).parent}/lerobot-train",
     f"--config_path={SRC}/pretrained_model/train_config.json",
@@ -631,6 +633,24 @@ rsync -avP -e 'ssh -p <PORT>' \
   root@<HOST>:/root/gpufree-data/outputs/pi05_d0d1_80k/checkpoints/080000/pretrained_model/ \
   ~/Documents/bingjian/robot_learning/smolvla_so101/outputs/train/pi05_d0d1_80k/080000/
 ```
+
+The small files first — name them, do not pattern-match the tree. `--include='*/'` recurses
+everywhere and `--include='*.json'` then matches the conda package cache, which is how a 4 MB pull
+became 533 MB:
+
+```bash
+DEST=~/Documents/bingjian/robot_learning/smolvla_so101/outputs/train/pi05_d0d1_80k/server
+mkdir -p $DEST
+# No --include='*/', so rsync never descends: top-level files only.
+rsync -avP -e 'ssh -p <PORT>' \
+  --include='*.log' --include='*.csv' --include='train_cmd.json' --exclude='*' \
+  root@<HOST>:/root/gpufree-data/ $DEST/
+# wandb's offline history, named explicitly
+rsync -avP -e 'ssh -p <PORT>' \
+  root@<HOST>:/root/gpufree-data/outputs/pi05_d0d1_80k/wandb/ $DEST/wandb/
+```
+
+`env.sh` is deliberately not in that list — it holds the wandb key.
 
 Take `pi05_d0d1_80k_curves.csv` and the log first — they are kilobytes and they decide which
 checkpoints are worth the bandwidth at all.
