@@ -93,7 +93,7 @@ clean test would mount the third-person camera on the same board and record both
 
 > **Never filled in.** The table below is still blank, and that is a real gap: it is the only thing
 > that would let the rig be rebuilt after it is knocked over, and it is a prerequisite for the
-> second-location test (§12.10) that the whole portability claim rests on. Fill it before moving the
+> second-location test (§12.11) that the whole portability claim rests on. Fill it before moving the
 > board.
 
 | Item | Value |
@@ -1919,7 +1919,7 @@ the config that would have pinned 70,000 steps at the floor LR. And the rename s
 saved preprocessor* is what stops this checkpoint hitting the camera-key `ValueError` that SmolVLA's
 rollouts hit in §12.8.
 
-### The run peaked before its first checkpoint · measured 2026-10-18
+### 12.7a — The run peaked before its first checkpoint · measured 2026-10-18
 
 ![π0.5 round-2 checkpoints](figs/phase07_pi05_r2.png)
 
@@ -2348,7 +2348,108 @@ diagnosis reframes *why*. The problem is not variation — it is variation the p
 on, which becomes variance it samples. Fix the conditioning first; otherwise consistent speed just
 narrows the distribution a blind sampler draws from, which is a smaller version of the same patch.
 
-## 12.10 — Deferred, and why each is safe to defer
+## 12.10 — Round 3 eval: π0.5 10k on the robot
+
+**One arm, nine spots, two passes — 18 trials, ~45 min.** The checkpoint is `010000`, chosen by
+[§12.7a](#127a--the-run-peaked-before-its-first-checkpoint--measured-2026-10-18): it beats 20k by 30.6% on
+chunk jerk against a 0.02 repeat-to-repeat std, and on pooled held-out loss too. Not the wandb
+minimum at 15k, which has no checkpoint and sits inside the eval's own jitter.
+
+π0.5 runs locally without trouble: **8.87 GiB of 15.5**, worst-case inference **316 ms** against the
+833 ms that `n_action_steps=25` buys — 2.6× headroom, so plain sync inference and no
+`--inference.type=rtc` ([§10.3](#103--inference-latency-and-vram-on-the-5080)).
+
+> ### ⚠️ This arm cannot be cleanly compared to ACT and SmolVLA
+>
+> Those two were scored **together on 2026-10-15**, so their comparison is within-session and the
+> mirror cancels drift between them. π0.5 runs on a different day, which makes every π0.5-vs-them
+> statement **between-session** — and session is not a hypothetical confound here, since
+> [§12.9 obs 3](#129--round-2-results--run-and-scored-2026-10-15) found both policies tracking
+> top-camera brightness, ACT reaching 3/5 under deliberately bright light.
+>
+> A second arm re-running ACT 40k today would have fixed this: its score against Thursday's 5/18
+> measures the session shift directly. That was declined for session length, so the comparison rests
+> on the assumption that today's rig matches Thursday's. **Record the lighting**, and treat any gap
+> under ~3 trials in 18 as unattributable.
+
+### What a result would have to be to mean anything
+
+Two-sided Fisher, 18 v 18 against the round-2 scores:
+
+| π0.5 must beat | to reach p < 0.05 |
+|---|---|
+| ACT 5/18 (28%) | **12/18 — 67%** |
+| SmolVLA 6/18 (33%) | **13/18 — 72%** |
+| round-1 best 3/9 (33%) | **14/18 — 78%** |
+
+Wilson 95% intervals at 18 trials are wide — 6/18 is [16%, 56%], 9/18 is [29%, 71%] — so as in round
+2, **this session is powered to rank, not to measure.** The honest outcomes are "π0.5 is clearly in
+front" (≥12), "indistinguishable from the other two" (1–11), or "clearly behind" — and that
+last one needs a **shutout**: 0/18 reaches p = 0.045 against ACT, while 1/18 is p = 0.177.
+
+What makes it worth running anyway: π0.5 has the **lowest held-out loss at every stage** of the three
+families, 2.5× better than ACT pooled, and round 1 scored it **0/9**. That gap between offline and
+on-robot is the open question in §11.4, and 18 trials settles whether twice the data has closed any
+of it.
+
+### The schedule
+
+| block | pass | half | spots |
+|---|---|---|---|
+| 1 | 1 | A | T8 T6 T2 T4 T5 |
+| 2 | 1 | B | T3 T1 T9 T7 |
+| 3 | 2 | A | T3 T1 T4 T9 T7 |
+| 4 | 2 | B | T2 T5 T6 T8 |
+
+Generated and property-checked by
+[`make_phase07_r3_pi05_eval_schedule.py`](../../scripts/make_phase07_r3_pi05_eval_schedule.py).
+With one arm there is no second arm to mirror against, so what it asserts instead is: **each spot
+runs exactly twice**, **once in each pass** — so no spot is sampled twice from the same part of the
+session — and the halves are **reshuffled between passes**, which the checker verifies leaves no
+spot holding the same within-pass position twice. Four blocks, so four process starts for 18 trials.
+
+```bash
+python3 scripts/make_phase07_r3_pi05_eval_schedule.py --emit csv > docs/details/phase07_r3_pi05_eval_log.csv
+python3 scripts/make_phase07_r3_pi05_eval_schedule.py --emit commands
+```
+
+### The commands
+
+`--rename_map` is **not optional**: π0.5 was pretrained on `base_0_rgb`/`left_wrist_0_rgb` while the
+robot produces `top`/`wrist`. The generator reads the map out of the checkpoint's own saved
+preprocessor rather than hardcoding it — a *missing* map fails loudly at the robot, but a *wrong*
+one (top and wrist swapped) does not raise at all, and would quietly drive a whole block on the
+wrong camera.
+
+### block 1 — pass 1 half A — 5 trials at T8 T6 T2 T4 T5
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/pi05_d0d1_80k/010000 && NAME=rollout_phase07_r3_pi05_10k_p1a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && RENAME='{"observation.images.top": "observation.images.base_0_rgb", "observation.images.wrist": "observation.images.left_wrist_0_rgb"}' && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --rename_map="$RENAME" --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 2 — pass 1 half B — 4 trials at T3 T1 T9 T7
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/pi05_d0d1_80k/010000 && NAME=rollout_phase07_r3_pi05_10k_p1b && NEP=4 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && RENAME='{"observation.images.top": "observation.images.base_0_rgb", "observation.images.wrist": "observation.images.left_wrist_0_rgb"}' && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --rename_map="$RENAME" --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 3 — pass 2 half A — 5 trials at T3 T1 T4 T9 T7
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/pi05_d0d1_80k/010000 && NAME=rollout_phase07_r3_pi05_10k_p2a && NEP=5 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && RENAME='{"observation.images.top": "observation.images.base_0_rgb", "observation.images.wrist": "observation.images.left_wrist_0_rgb"}' && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --rename_map="$RENAME" --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### block 4 — pass 2 half B — 4 trials at T2 T5 T6 T8
+```bash
+cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && POLICY=outputs/train/pi05_d0d1_80k/010000 && NAME=rollout_phase07_r3_pi05_10k_p2b && NEP=4 && TOP=/dev/v4l/by-id/usb-046d_HD_Pro_Webcam_C920_A8C83F4F-video-index0 && WRIST=/dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_5B3ADD8F-video-index0 && RENAME='{"observation.images.top": "observation.images.base_0_rgb", "observation.images.wrist": "observation.images.left_wrist_0_rgb"}' && lerobot-rollout --strategy.type=episodic --policy.path=$POLICY --policy.n_action_steps=25 --rename_map="$RENAME" --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_follower --robot.cameras="{ top: {type: opencv, index_or_path: $TOP, width: 640, height: 480, fps: 30, fourcc: MJPG}, wrist: {type: opencv, index_or_path: $WRIST, width: 640, height: 480, fps: 30, fourcc: MJPG} }" --dataset.repo_id=HALDijkstraaa/$NAME --dataset.no_stamp=true --dataset.single_task="Pick up the white cylinder from the green tray and place it in the top left blue hole of the black fixture" --dataset.num_episodes=$NEP --dataset.episode_time_s=60 --dataset.reset_time_s=10 --dataset.fps=30 --dataset.push_to_hub=false --display_data=true
+```
+
+### Scoring
+
+Fill [`phase07_r3_pi05_eval_log.csv`](phase07_r3_pi05_eval_log.csv) — same columns as round 2, so
+`analyze_phase07_r2_eval.py` reads it unchanged. `success` is `y`/`n`; `fail_stage` is one of
+`reach` / `grasp` / `transport` / `insert`, and progress is derived from it rather than scored
+separately. Keep the rollout recordings this time: round 2's were lost to `push_to_hub=false` plus a
+cleared disk, which is why its jerk could not be compared across rounds.
+
+## 12.11 — Deferred, and why each is safe to defer
 
 - **Second location.** Still the only direct test of the portability claim this whole phase is built on
   (§9 item 3), and still untested. Deferred because D1 must stay mergeable with D0 and a location change
