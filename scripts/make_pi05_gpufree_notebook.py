@@ -520,6 +520,51 @@ Three more things the replay depends on, each of which would spoil it quietly:
 is a single downward spike between two higher neighbours on a curve that jitters ±0.002 point to
 point. Read the repeat-to-repeat std in `checkpoint_metrics.json` first: if it is comparable to
 0.0012, that minimum is eval noise and there is nothing there to recover.
+
+### Running it from a terminal instead
+
+The cells above pass `ENV` to `Popen`, so they carry `HF_HOME` and `HF_HUB_OFFLINE`. **A bare shell
+does not.** `processor_pi05.py` asks for the paligemma tokenizer by hub id, and without those two
+variables the hub client falls back to `HF_ENDPOINT`, which the image presets to `hf-mirror.com` —
+unreachable from here. It then retries for five minutes and looks like a hang, not a missing
+variable. Check first, in the shell you are about to launch from:
+
+```bash
+. /root/gpufree-data/env.sh
+env | grep -E 'HF_HOME|HF_HUB_OFFLINE|HF_ENDPOINT'
+python -c "from transformers import AutoTokenizer as T; print(len(T.from_pretrained('google/paligemma-3b-pt-224')))"
+```
+
+That must print `257153` **instantly**. Any pause at all means the cache is not seeded and it is
+reaching for the network — re-run stage 5 of `gpufree_setup_py312.sh`.
+
+Then launch with the environment inline, so sourcing cannot be forgotten:
+
+```bash
+cd /root/gpufree-data
+setsid env -u HF_ENDPOINT HF_HOME=/root/gpufree-data/cache/hf HF_HUB_OFFLINE=1 \
+  TOKENIZERS_PARALLELISM=false \
+  nohup lerobot-train \
+    --config_path=outputs/pi05_d0d1_80k/checkpoints/010000/pretrained_model/train_config.json \
+    --resume=true --output_dir=/root/gpufree-data/outputs/pi05_recover_15000 \
+    --steps=80000 --save_freq=5000 --wandb.enable=false \
+    > recover_15000.log 2>&1 &
+echo $! > recover.pid
+```
+
+**Finding it again if the pid is stale.** Inside the container `nvidia-smi` shows VRAM in use but
+lists no processes — it cannot see across the PID namespace — so a Ctrl-C'd run that leaked its CUDA
+context looks like a ghost. Ask `/proc` instead:
+
+```bash
+for p in /proc/[0-9]*; do
+  ls -l $p/fd 2>/dev/null | grep -q /dev/nvidia && \
+    echo "$(basename $p)  $(tr '\0' ' ' < $p/cmdline | cut -c1-90)"
+done
+```
+
+Kill what that names, then confirm VRAM actually drops before relaunching — a new run needs 18.5 GiB
+and will OOM against a process that has not let go.
 """)
 
 code(r'''

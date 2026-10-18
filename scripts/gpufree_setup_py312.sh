@@ -181,6 +181,10 @@ export PATH=$ENV_PREFIX/bin:\$PATH
 export HF_HOME=$HF_HOME
 export HF_HUB_OFFLINE=1
 export TOKENIZERS_PARALLELISM=false
+# The image presets this to a mirror the box cannot reach. Harmless while HF_HUB_OFFLINE=1 is set,
+# but if that is ever lost the hub client retries against hf-mirror.com for five minutes before
+# failing, which looks like a hang rather than a missing variable.
+unset HF_ENDPOINT
 EOF
 
 if [ -n "${WANDB_API_KEY:-}" ]; then
