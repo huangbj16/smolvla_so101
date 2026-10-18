@@ -38,18 +38,28 @@ HOLDOUT = [9, 19, 29, 39, 49]
 
 
 def find_checkpoints(output_dir: Path) -> list[tuple[int, Path]]:
-    d = output_dir / "checkpoints"
-    if not d.is_dir():
-        raise SystemExit(f"no checkpoints directory under {output_dir}")
+    """Step -> model directory, for either layout.
+
+    A training run writes `<dir>/checkpoints/<step>/pretrained_model/`. Pulling single checkpoints
+    off a remote box with rsync usually lands them flat, as `<dir>/<step>/`, because copying the
+    intermediate directories costs a round trip for nothing. Accept both rather than making the
+    caller reshuffle files.
+    """
     out = []
-    for p in sorted(d.iterdir()):
-        if p.is_dir() and not p.is_symlink() and p.name.isdigit():
-            pm = p / "pretrained_model"
-            if (pm / "config.json").exists():
-                out.append((int(p.name), pm))
-    if not out:
-        raise SystemExit(f"no usable checkpoints in {d} (looked for */pretrained_model/config.json)")
-    return out
+    for root in (output_dir / "checkpoints", output_dir):
+        if not root.is_dir():
+            continue
+        for p in sorted(root.iterdir()):
+            if not (p.is_dir() and not p.is_symlink() and p.name.isdigit()):
+                continue
+            for pm in (p / "pretrained_model", p):
+                if (pm / "config.json").exists():
+                    out.append((int(p.name), pm))
+                    break
+        if out:
+            return out
+    raise SystemExit(f"no usable checkpoints under {output_dir} "
+                     f"(looked for <step>/pretrained_model/config.json and <step>/config.json)")
 
 
 def build_eval_loader(dataset_repo: str, policy_cfg, batch_size: int, num_workers: int):

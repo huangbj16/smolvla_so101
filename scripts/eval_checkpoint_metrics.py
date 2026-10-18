@@ -311,9 +311,18 @@ def main() -> int:
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--steps", type=int, nargs="*", default=None)
     ap.add_argument("--skip-stages", action="store_true", help="jerk and pooled loss only")
+    ap.add_argument("--holdout", type=int, nargs="*", default=None,
+                    help="held-out episode indices; default is D0's [9,19,29,39,49]. The merged "
+                         "D0+D1 set keeps both sources' holdouts: 9 19 29 39 49 59 69 79 89 99")
     ap.add_argument("--out", type=pathlib.Path, default=None,
                     help="combined JSON for --all-round1 (default results/phase07_eval/)")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore an existing results file instead of resuming into it")
     args = ap.parse_args()
+    if args.holdout:
+        # Rebound before anything reads it. Every use in this module resolves the global at call
+        # time, so this reaches the loader, the stage labeller and the written JSON alike.
+        globals()["HOLDOUT"] = list(args.holdout)
 
     print(f"dataset : {args.dataset}  (held-out episodes {HOLDOUT})")
     labels = stage_labels(args.dataset)
@@ -341,12 +350,39 @@ def main() -> int:
 
     if not args.output_dir:
         ap.error("pass --output-dir or --all-round1")
-    res, counts = measure(args.output_dir, args.dataset, args.steps, args.repeats,
-                          args.batch_size, args.num_workers, labels, args.skip_stages)
-    out = args.output_dir / "checkpoint_metrics.json"
-    out.write_text(json.dumps({"dataset": args.dataset, "holdout": HOLDOUT,
-                               "repeats": args.repeats, "stage_frames": counts,
-                               "results": res}, indent=2))
+
+    # One checkpoint per measure() call, writing after each. pi0.5 costs ~an hour an arm, so a
+    # single write at the end means a dead battery or a stopped kernel discards the lot - which is
+    # exactly what happened on 2026-10-17. Re-running now skips whatever is already in the file,
+    # provided the dataset and holdout still match; a changed holdout invalidates the old numbers,
+    # so it starts clean rather than mixing two eval sets in one file.
+    out = args.out or args.output_dir / "checkpoint_metrics.json"
+    want = [s for s, _ in find_checkpoints(args.output_dir)
+            if not args.steps or s in set(args.steps)]
+    done, counts = {}, None
+    if out.is_file() and not args.fresh:
+        prev = json.loads(out.read_text())
+        if prev.get("holdout") == HOLDOUT and prev.get("dataset") == args.dataset \
+                and prev.get("repeats") == args.repeats:
+            done = {int(k): v for k, v in prev.get("results", {}).items()}
+            counts = prev.get("stage_frames")
+            if done:
+                print(f"resuming: {sorted(done)} already measured in {out}")
+        else:
+            print(f"{out} was built with a different dataset/holdout/repeats - starting clean")
+
+    for step in want:
+        if step in done:
+            continue
+        res, c = measure(args.output_dir, args.dataset, [step], args.repeats,
+                         args.batch_size, args.num_workers, labels, args.skip_stages)
+        done.update(res)
+        counts = c or counts
+        out.write_text(json.dumps({"dataset": args.dataset, "holdout": HOLDOUT,
+                                   "repeats": args.repeats, "stage_frames": counts,
+                                   "results": {str(k): done[k] for k in sorted(done)}}, indent=2))
+        print(f"  -> {out} now holds {sorted(done)}", flush=True)
+
     print(f"\nwrote {out}")
     return 0
 
