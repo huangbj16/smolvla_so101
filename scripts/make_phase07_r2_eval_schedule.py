@@ -140,8 +140,12 @@ def ds_name(arm: str, p: int, half: str) -> str:
 
 
 def emit_commands(blocks, out=sys.stdout):
+    # Clash Verge in TUN mode needs no proxy variables but still exports
+    # all_proxy=socks://127.0.0.1:7897, and httpx under huggingface_hub rejects a bare `socks://`
+    # scheme. Harmless for ACT, fatal for any policy that resolves a tokenizer by hub id.
     pre = ("cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && "
-           "source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot")
+           "source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && "
+           "unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY")
     for b_no, (arm, _pol, ckpt, odir), half, spot_list, p in blocks:
         name = ds_name(arm, p, half)
         rmap = rename_map_for(odir, ckpt)

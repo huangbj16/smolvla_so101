@@ -122,8 +122,14 @@ def emit_csv(blocks, out=sys.stdout):
 
 
 def emit_commands(blocks, out=sys.stdout):
+    # The proxy unset is not optional. Clash Verge in TUN mode routes at the network layer and
+    # needs no proxy variables, but it still exports all_proxy=socks://127.0.0.1:7897 - and httpx,
+    # under huggingface_hub, rejects a bare `socks://` scheme outright ("Unknown scheme for proxy
+    # URL"). pi0.5's processor asks for the paligemma tokenizer by hub id on every block start, so
+    # that abort lands AFTER the robot is set up and the block is lost.
     pre = ("cd /home/bj/Documents/bingjian/robot_learning/smolvla_so101 && "
-           "source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot")
+           "source ~/miniforge3/etc/profile.d/conda.sh && conda activate lerobot && "
+           "unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY")
     rmap = rename_map_for(MODEL_DIR)
     for b_no, half, chunk, p in blocks:
         name = ds_name(p, half)
