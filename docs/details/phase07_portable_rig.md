@@ -1975,14 +1975,18 @@ on a scale that has already been shown not to predict the robot.
 
 30k was not measured: the arm died on a tokenizer lookup (`processor_pi05.py` asks for
 `google/paligemma-3b-pt-224` **by hub id**, so each checkpoint triggers a HEAD revalidation, and a
-momentary network drop killed it rather than falling back to the cache it already had). The script
-now forces `HF_HUB_OFFLINE` before import. 10k and 20k survived only because the incremental write
-added that morning had already persisted them — 106 minutes of GPU that would otherwise have been
-lost with them.
+momentary network drop killed it rather than falling back to the cache it already had). 10k and 20k
+survived only because the incremental write added that morning had already persisted them —
+106 minutes of GPU that would otherwise have been lost with them.
 
 The hub-id indirection has now caused **three** separate failures: training would have died at step 0
-without the seeded cache, the 15k replay died from a bare shell, and this. Anything that loads a
-π0.5 policy needs `HF_HOME` and `HF_HUB_OFFLINE` set before import, not after.
+without the seeded cache, the 15k replay died from a bare shell, and this. The variables belong in
+the **invocation**, not in the scripts — this laptop can reach the hub and should be allowed to, so
+pass `HF_HUB_OFFLINE=1` only where the network is the hazard:
+
+```bash
+HF_HUB_OFFLINE=1 python scripts/eval_checkpoint_metrics.py ...   # long runs, no downloads wanted
+```
 
 ## 12.8 — Round 2 eval: two arms, checkpoints chosen before the robot is touched
 
