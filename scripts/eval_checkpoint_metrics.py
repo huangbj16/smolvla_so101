@@ -35,9 +35,19 @@ Writes `<output-dir>/checkpoint_metrics.json`. Run `--all-round1` to do all six 
 """
 from __future__ import annotations
 
-import argparse
-import json
-import pathlib
+import os
+
+# Offline by default, set before any import because transformers and huggingface_hub latch it at
+# import time. Everything this script reads is already local - the checkpoints, the dataset cache,
+# and the paligemma tokenizer the pi0.5 processor asks for BY HUB ID. Left online, that tokenizer
+# triggers a HEAD revalidation per checkpoint, and a momentary network drop kills the arm outright
+# rather than falling back to the cache: that is how the 30k arm died on 2026-10-18 after 10k and
+# 20k had already cost 53 minutes each. Export HF_HUB_OFFLINE=0 to allow a first-time download.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
+import argparse  # noqa: E402
+import json  # noqa: E402
+import pathlib  # noqa: E402
 import sys
 import time
 
