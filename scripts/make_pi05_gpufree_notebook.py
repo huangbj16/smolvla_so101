@@ -486,6 +486,90 @@ if rows:
 
 # =================================================================================================
 md(r"""
+## 7b — Recovering a step between two saves
+
+`save_freq=10000` means the held-out minimum at **15,000** has no checkpoint. There is no 15k state
+hiding anywhere — a checkpoint *is* the state, and nothing else is retained.
+
+It can be **replayed**, though, not merely approximated. `checkpoints/010000/training_state/` holds
+the optimizer moments, the scheduler, the RNG state and the dataloader offset, and lerobot's resume
+is sample-exact (`lerobot_train.py:455`), so re-running 10k → 15k retraces the original trajectory
+rather than making a new one. It costs those 5,000 steps again: **~3.7 h** at the measured
+2.66 s/step. (Exact to within CUDA nondeterminism — this run has `cudnn_deterministic: false`.)
+
+> ### ⚠️ `--steps=15000` would silently hand you a *different* 15k
+>
+> `CosineDecayWithWarmupSchedulerConfig.build()` rescales the horizon whenever
+> `num_training_steps < num_decay_steps` (`schedulers.py:149`). `--steps=15000` compresses the whole
+> 80k cosine into 15k, so steps 10,001–15,000 would run at learning rates the original never used.
+> Restoring the scheduler state does not save you: `LambdaLR.state_dict()` carries the step counter,
+> not the lambda.
+>
+> Keep `--steps=80000`, make the saves finer with `--save_freq=5000`, and stop once `015000` is on
+> disk. `save_freq` changes nothing but when files get written.
+
+Three more things the replay depends on, each of which would spoil it quietly:
+
+| | why |
+|---|---|
+| `--output_dir=<new>` | the saved config still points at the **live run's** directory |
+| `--wandb.enable=false` | the saved config carries the live run's `run_id`; a second writer corrupts its curves |
+| `batch_size` / `num_workers` left alone | the dataloader resume offset is computed from them (`lerobot_train.py:466`) |
+
+**Worth 3.7 h?** Probably not on the loss alone. 15k is 0.0650 against 10k's 0.0662 — 1.8% — and it
+is a single downward spike between two higher neighbours on a curve that jitters ±0.002 point to
+point. Read the repeat-to-repeat std in `checkpoint_metrics.json` first: if it is comparable to
+0.0012, that minimum is eval noise and there is nothing there to recover.
+""")
+
+code(r'''
+# Set RECOVER_STEP and run this cell, then the next one.
+RECOVER_STEP = 15_000
+FROM_STEP    = 10_000
+SRC   = OUT / "checkpoints" / f"{FROM_STEP:06d}"
+REC   = DATA / f"outputs/pi05_recover_{RECOVER_STEP}"
+GRAIN = 5_000          # must divide RECOVER_STEP, and is the ONLY thing changed
+
+assert (SRC / "training_state").is_dir(), (
+    f"{SRC}/training_state is missing. Without the optimizer moments, scheduler and RNG state this "
+    f"would be a fresh run from {FROM_STEP:,}, not a replay - do not reap it before this runs.")
+assert RECOVER_STEP % GRAIN == 0, "RECOVER_STEP must land on a save boundary"
+assert shutil.disk_usage(DATA).free / 1e9 > 20, "needs ~15 GB for the checkpoint + optimizer state"
+
+rec_cmd = [f"{pathlib.Path(PY).parent}/lerobot-train",
+    f"--config_path={SRC}/pretrained_model/train_config.json",
+    "--resume=true",
+    f"--output_dir={REC}",      # the saved config points at the LIVE run's dir - must override
+    f"--steps={STEPS}",         # unchanged, or the cosine is rescaled and the LRs are wrong
+    f"--save_freq={GRAIN}",     # the only real change: makes RECOVER_STEP a save point
+    "--wandb.enable=false",     # the saved run_id belongs to the live run
+]
+print("\n".join(rec_cmd))
+''')
+
+code(r'''
+# The GPU cannot hold this AND the live 80k run at once - 18.5 GiB each against 23.5 - so run it
+# after that finishes, or on a second instance. Polls until the checkpoint lands, then stops.
+target = REC / "checkpoints" / f"{RECOVER_STEP:06d}" / "pretrained_model" / "model.safetensors"
+reclog = (DATA / f"recover_{RECOVER_STEP}.log").open("w")
+rp = subprocess.Popen(rec_cmd, env=ENV, stdout=reclog, stderr=subprocess.STDOUT,
+                      start_new_session=True)
+print(f"pid {rp.pid}  ->  {reclog.name}")
+
+while rp.poll() is None and not target.is_file():
+    time.sleep(60)
+if target.is_file():
+    time.sleep(30)                       # let the write settle before pulling the process
+    rp.terminate()
+    sz = target.stat().st_size
+    print(f"stopped at {RECOVER_STEP:,} · {sz / 1e9:.3f} GB "
+          f"({'OK' if sz == 9_354_050_752 else 'UNEXPECTED SIZE'}, expected 9.354)")
+else:
+    print(f"exited {rp.returncode} before writing {target} - read {reclog.name}")
+''')
+
+# =================================================================================================
+md(r"""
 ## 8 — Interruptions, and getting the results home
 
 **Resume** restores optimizer state and the step counter, so it continues rather than restarting.
