@@ -27,6 +27,7 @@ OUT = ROOT / "docs/details/figs"
 # project's pi0.5 green. Validated: adjacent normal-vision dE 17.7, worst CVD dE 15.9. The light
 # end sits under 3:1 on the surface, so every bar carries a direct label as relief.
 STEP_RAMP = {10000: "#8fdcc0", 20000: "#1baf7a", 30000: "#0b6245"}
+JERK_FLOOR = 0.02   # worst repeat-to-repeat std seen across the measured arms
 
 # Held-out loss every 2,500 steps, read off the run's wandb chart (eval/eval_loss). Only the three
 # decade checkpoints are SAVED, so the 15k minimum is a point we cannot evaluate on the robot.
@@ -66,6 +67,8 @@ def panel_loss_curve(ax, res):
                                 shrinkA=2, shrinkB=4))
 
     for s in sorted(res):
+        if s not in WANDB:
+            continue
         ax.scatter([s], [WANDB[s]], s=85, color=STEP_RAMP[s], zorder=6,
                    edgecolor=INK2, linewidth=1.2)
         ax.annotate(f"{s // 1000}k", (s, WANDB[s]), xytext=(0, 11),
@@ -79,7 +82,7 @@ def panel_loss_curve(ax, res):
     ax.set_xticklabels(["0", "10k", "20k", "30k", "40k"])
     _style(ax)
     _title(ax, "Held-out loss bottoms at 15k, then climbs",
-           "every 2,500 steps · filled markers are the three saved checkpoints")
+           "wandb, all 10 held-out episodes · filled markers are the saved checkpoints")
 
 
 def panel_jerk(ax, res):
@@ -102,17 +105,18 @@ def panel_jerk(ax, res):
 
     d = (ys[-1] - ys[0]) / ys[0] * 100
     # Top-right: the bottom-left corner is where the ACT reference label lives.
-    ax.text(0.985, 0.06, f"10k → 30k   {d:+.1f}%", transform=ax.transAxes, ha="right",
+    span = f"{xs[0] // 1000}k → {xs[-1] // 1000}k"
+    ax.text(0.985, 0.06, f"{span}   {d:+.1f}%", transform=ax.transAxes, ha="right",
             fontsize=9.5, color=GOOD if d < -2 else CRITICAL if d > 2 else INK2,
             fontweight="600", bbox=dict(facecolor=SURFACE, edgecolor="none", pad=2))
     ax.set_xlabel("training step", color=INK2, fontsize=9)
     ax.set_ylabel("chunk jerk  (normalised · s⁻²)", color=INK2, fontsize=9)
     ax.set_xticks(xs)
     ax.set_xticklabels([f"{x // 1000}k" for x in xs])
-    ax.set_xlim(6500, 33500)
+    ax.set_xlim(xs[0] - 3500, xs[-1] + 3500)
     _style(ax)
     _title(ax, "Chunk jerk — the selector that worked in round 1",
-           "mean ± std over 3 seeds · dashed = the two policies run on the robot")
+           "mean ± std over 2 seeds · dashed = the two policies run on the robot")
 
 
 def panel_stages(ax, res):
@@ -140,7 +144,7 @@ def panel_stages(ax, res):
         t.set_color(INK2)
     _style(ax)
     _title(ax, "Where the loss sits, and where it moved",
-           "ten held-out episodes, segmented by the gripper trace")
+           "D1's five held-out episodes — the set ACT and SmolVLA were measured on")
 
 
 def main() -> int:

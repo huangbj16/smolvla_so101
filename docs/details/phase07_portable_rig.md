@@ -1919,6 +1919,71 @@ the config that would have pinned 70,000 steps at the floor LR. And the rename s
 saved preprocessor* is what stops this checkpoint hitting the camera-key `ValueError` that SmolVLA's
 rollouts hit in §12.8.
 
+### The run peaked before its first checkpoint · measured 2026-10-18
+
+![π0.5 round-2 checkpoints](figs/phase07_pi05_r2.png)
+
+Two checkpoints measured on **D1's five held-out episodes** — the set ACT and SmolVLA were measured
+on in §12.8, so these numbers are directly comparable to theirs. 2 seeds; the run was stopped after
+20k (below).
+
+| | 10k | 20k | Δ |
+|---|---|---|---|
+| **chunk jerk** | **24.03** ± 0.02 | 31.39 ± 0.01 | **+30.6%** |
+| held-out loss, pooled | **0.0865** ± 0.0007 | 0.0887 ± 0.0012 | +2.6% |
+| reach | **0.1107** ± 0.0042 | 0.1153 ± 0.0021 | +4.2% |
+| grasp | **0.1067** ± 0.0048 | 0.1179 ± 0.0049 | **+10.5%** |
+| transport | 0.0725 ± 0.0019 | **0.0659** ± 0.0032 | −9.2% |
+| insert | **0.0860** ± 0.0008 | 0.0904 ± 0.0003 | +5.2% |
+
+**Both offline metrics move the wrong way, and the jerk move is not subtle.** +30.6% against a
+repeat-to-repeat std of 0.02 is roughly 350σ — the one measurement in this project that needs no
+hedging. §11.3a validated jerk as the selector that tracks the robot where loss does not, so this is
+the number that counts: **10k is the better checkpoint, and the extra 10,000 steps made the policy
+less smooth, not more capable.**
+
+Per stage it is worst exactly where tolerance is tightest. **Grasp degrades 10.5%**, reach and insert
+drift up, and the only improvement is **transport** — the one stage that mostly needs the arm to move
+without hitting anything.
+
+**The wandb curve agrees** (panel A, all ten held-out episodes): a minimum of 0.0650 at **15,000**,
+then a climb back to 0.0700 by 35,000 — roughly where 5,000 sat. Round 1 read π0.5's curve as *still
+falling at 10k, underfit, more steps would help* ([§10.7a](#107a)). On D0+D1 that is no longer true:
+the turn arrives at 15k, 65,000 steps short of what the run was sized for.
+
+**The 15k minimum is not worth recovering.** It beats 10k by 0.0012, against a measurement std of
+0.0007 and a curve that jitters ±0.002 point to point — a single downward spike between two higher
+neighbours. §7b of the notebook documents the replay if that changes.
+
+#### Against the two policies that have been on the robot
+
+Same five episodes, same instrument:
+
+| | jerk | pooled | reach | grasp | transport | insert |
+|---|---|---|---|---|---|---|
+| ACT 40k | **11.97** | 0.2188 | 0.3383 | 0.1796 | 0.1925 | 0.1739 |
+| SmolVLA 20k | 36.04 | 0.1410 | 0.1756 | 0.1081 | 0.1260 | 0.1344 |
+| **π0.5 10k** | 24.03 | **0.0865** | **0.1107** | **0.1067** | **0.0725** | **0.0860** |
+
+π0.5 has the lowest loss at **every** stage, by 2.5× over ACT pooled, and sits between ACT and
+SmolVLA on smoothness. **This is not evidence it would work.** Round 1 measured π0.5 5k at the lowest
+held-out loss of all six arms *and* lower jerk than either SmolVLA arm, and it scored 0/9 excluding
+luck ([§11.3a](#113a--measuring-chunk-smoothness-offline--measured-2026-10-14)). Loss ranks π0.5 first
+on a scale that has already been shown not to predict the robot.
+
+#### What was and was not measured
+
+30k was not measured: the arm died on a tokenizer lookup (`processor_pi05.py` asks for
+`google/paligemma-3b-pt-224` **by hub id**, so each checkpoint triggers a HEAD revalidation, and a
+momentary network drop killed it rather than falling back to the cache it already had). The script
+now forces `HF_HUB_OFFLINE` before import. 10k and 20k survived only because the incremental write
+added that morning had already persisted them — 106 minutes of GPU that would otherwise have been
+lost with them.
+
+The hub-id indirection has now caused **three** separate failures: training would have died at step 0
+without the seeded cache, the 15k replay died from a bare shell, and this. Anything that loads a
+π0.5 policy needs `HF_HOME` and `HF_HUB_OFFLINE` set before import, not after.
+
 ## 12.8 — Round 2 eval: two arms, checkpoints chosen before the robot is touched
 
 **Two arms, not six.** Round 1 needed six because the question was *which checkpoint per policy*.
